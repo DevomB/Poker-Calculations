@@ -1,9 +1,11 @@
 /**
- * CI / maintainer: place flat `${tuple}.napi.node` files into prebuilds/<tuple>/node.napi.node.
+ * CI / maintainer: place flat `${tuple}.napi.node` files into prebuilds/.
  *
  * Usage: node scripts/assemble-prebuilds.js <directory>
  *
- * Expects filenames like win32-x64.napi.node (one per supported platform).
+ * Expects filenames like:
+ *   win32-x64.napi.node           -> prebuilds/win32-x64/node.napi.node
+ *   linux-x64-musl.napi.node      -> prebuilds/linux-x64/node.napi.musl.node
  */
 'use strict';
 
@@ -30,16 +32,27 @@ for (const name of fs.readdirSync(abs)) {
   if (!name.endsWith(suffix)) {
     continue;
   }
-  const tuple = name.slice(0, -suffix.length);
-  if (!tuple || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(tuple)) {
+  const baseName = name.slice(0, -suffix.length);
+  if (!baseName || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(baseName)) {
     continue;
   }
+
+  let destFile;
+  if (/-musl$/i.test(baseName)) {
+    const tupleDir = baseName.replace(/-musl$/i, '');
+    if (!/^linux-/.test(tupleDir)) {
+      console.warn(`Skipping unsupported musl artifact name: ${name}`);
+      continue;
+    }
+    destFile = path.join(root, 'prebuilds', tupleDir, 'node.napi.musl.node');
+  } else {
+    destFile = path.join(root, 'prebuilds', baseName, 'node.napi.node');
+  }
+
   const from = path.join(abs, name);
-  const outDir = path.join(root, 'prebuilds', tuple);
-  fs.mkdirSync(outDir, { recursive: true });
-  const dest = path.join(outDir, 'node.napi.node');
-  fs.copyFileSync(from, dest);
-  console.log(`${from} -> ${dest}`);
+  fs.mkdirSync(path.dirname(destFile), { recursive: true });
+  fs.copyFileSync(from, destFile);
+  console.log(`${from} -> ${destFile}`);
   count++;
 }
 

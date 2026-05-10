@@ -14,7 +14,16 @@ Full TypeScript types: **[`index.d.ts`](index.d.ts)**.
 npm install poker-calculations
 ```
 
-The package tarball includes prebuilt `prebuilds/<platform>-<arch>/node.napi.node` binaries for supported platforms.
+Published tarballs include **N-API** prebuilds under `prebuilds/<platform>-<arch>/`:
+
+- **`node.napi.node`** — glibc Linux, macOS, Windows (default).
+- **`node.napi.musl.node`** — same directory on **linux-x64** / **linux-arm64** when you install on **Alpine** / musl.
+
+Linux **glibc** binaries are linked with **`-static-libstdc++`** / **`-static-libgcc`** so they do not require as new a system **`libstdc++.so`** as a binary built on the latest Ubuntu runner (this avoids **`GLIBCXX_*`** version errors on older Linux images, including many **serverless** hosts).
+
+### Bundlers and Next.js
+
+Load this package from **runtime** code paths (for example a lazy **`require()`** inside a route handler) if your bundler or **`next build`** evaluates server modules statically. That avoids optional build-time native resolution issues; you still need a **prebuild that matches** the deployment OS and libc (glibc vs musl).
 
 ## Quick start
 
@@ -75,7 +84,7 @@ npm run build:native
 node scripts/stage-prebuild.js <platform-arch>
 ```
 
-Use the `<platform-arch>` tuple [`node-gyp-build` expects](https://github.com/prebuild/node-gyp-build) (for example `win32-x64`, `linux-x64`, `darwin-arm64`). On Windows, delete a stale `build` folder if configure fails; ensure the **Windows SDK** is installed if you see resource-compiler (`rc`) or manifest (`mt`) errors.
+Use the `<platform-arch>` tuple [`node-gyp-build` expects](https://github.com/prebuild/node-gyp-build) (for example `win32-x64`, `linux-x64`, `darwin-arm64`). For **Alpine/musl**, stage with `node scripts/stage-prebuild.js linux-x64 musl` (writes `node.napi.musl.node`). On Windows, delete a stale `build` folder if configure fails; ensure the **Windows SDK** is installed if you see resource-compiler (`rc`) or manifest (`mt`) errors.
 
 Rebuild after changing C++:
 
@@ -98,7 +107,7 @@ Publishing uses [`.github/workflows/native-prebuild.yml`](.github/workflows/nati
 1. Add a repository secret **`NPM_TOKEN`** (npmjs.com → Access Tokens → classic **Automation** token, or a granular token with publish rights for `poker-calculations`).
 2. Bump **`package.json`** `version` and push to **`main`**.
 
-The workflow runs when **`package.json` changes** on `main`. It checks whether **`name@version` already exists** on the registry; if not, it builds native targets, merges them into `prebuilds/*/node.napi.node`, runs **`npm publish --provenance`**, and publishes. **No git tags** — the version field is the release input. **workflow_dispatch** is also available. If the version is already published, the workflow skips build and publish.
+The workflow runs when **`package.json` changes** on `main`. It checks whether **`name@version` already exists** on the registry; if not, it builds native targets (including **musl** artifacts as `node.napi.musl.node`), merges them under `prebuilds/`, runs **`npm publish --provenance`**, and publishes. **No git tags** — the version field is the release input. **workflow_dispatch** is also available. If the version is already published, the workflow skips build and publish.
 
 If **`--provenance`** fails, adjust the workflow step to **`npm publish --access public`** (same secret).
 

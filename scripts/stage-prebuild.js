@@ -1,15 +1,23 @@
 /**
  * After `cmake-js compile`, copy the built `poker_calculations.node` into
- * `prebuilds/<tuple>/node.napi.node` for node-gyp-build.
+ * `prebuilds/<tuple>/node.napi.node` (or `node.napi.musl.node` for Alpine/musl).
  *
  * Usage: node scripts/stage-prebuild.js win32-x64
+ *        node scripts/stage-prebuild.js linux-x64 musl
  */
 const fs = require('fs');
 const path = require('path');
 
 const tuple = process.argv[2];
+const variant = process.argv[3];
 if (!tuple) {
-  console.error('Usage: node scripts/stage-prebuild.js <platform-arch>');
+  console.error(
+    'Usage: node scripts/stage-prebuild.js <platform-arch> [musl]',
+  );
+  process.exit(1);
+}
+if (variant && variant !== 'musl') {
+  console.error('Optional second argument must be "musl" for Alpine libc.');
   process.exit(1);
 }
 
@@ -48,6 +56,7 @@ if (!built) {
 
 const outDir = path.join(root, 'prebuilds', tuple);
 fs.mkdirSync(outDir, { recursive: true });
-const dest = path.join(outDir, 'node.napi.node');
+const destName = variant === 'musl' ? 'node.napi.musl.node' : 'node.napi.node';
+const dest = path.join(outDir, destName);
 fs.copyFileSync(built, dest);
 console.log(`Staged ${built} -> ${dest}`);

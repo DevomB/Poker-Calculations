@@ -61,8 +61,12 @@ jobs:
         include:
           - os: windows-latest
             tuple: win32-x64
+          - os: windows-11-arm
+            tuple: win32-arm64
           - os: ubuntu-latest
             tuple: linux-x64
+          - os: ubuntu-24.04-arm
+            tuple: linux-arm64
           - os: macos-latest
             tuple: darwin-arm64
           # Intel macOS: avoid macos-13 (deprecated); use dedicated Intel image.
@@ -106,9 +110,55 @@ jobs:
           name: native-${{ matrix.tuple }}
           path: ${{ matrix.tuple }}.napi.node
 
+  build-musl:
+    name: Build (Alpine / musl)
+    needs: release-gate
+    if: needs.release-gate.outputs.publish == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runs-on: ubuntu-latest
+            tuple: linux-x64
+          - runs-on: ubuntu-24.04-arm
+            tuple: linux-arm64
+    runs-on: ${{ matrix.runs-on }}
+    container:
+      image: node:22-alpine
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install Alpine build dependencies
+        run: apk add --no-cache python3 make g++ cmake git bash
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile native addon (cmake-js)
+        run: node scripts/build-native.js compile
+
+      - name: Stage prebuild (node.napi.musl.node)
+        run: node scripts/stage-prebuild.js ${{ matrix.tuple }} musl
+
+      - name: Flatten artifact name for merge job
+        run: cp "prebuilds/${{ matrix.tuple }}/node.napi.musl.node" "${{ matrix.tuple }}-musl.napi.node"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native-${{ matrix.tuple }}-musl
+          path: ${{ matrix.tuple }}-musl.napi.node
+
   publish:
     name: Publish to npm
-    needs: [release-gate, build]
+    needs: [release-gate, build, build-musl]
     if: needs.release-gate.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
