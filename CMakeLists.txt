@@ -74,6 +74,10 @@ if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
     target_link_libraries(poker_calculations PRIVATE poker_lib ${CMAKE_JS_LIB})
     target_compile_definitions(poker_calculations PRIVATE NAPI_VERSION=8)
     target_compile_definitions(poker_calculations PRIVATE $<$<BOOL:${WIN32}>:NOMINMAX>)
+    # Node-API on Windows: cmake-js skips full Node download; generate node.lib from node-api-headers .def (cmake-js README).
+    if(MSVC AND CMAKE_JS_NODELIB_DEF AND CMAKE_JS_NODELIB_TARGET)
+        execute_process(COMMAND ${CMAKE_AR} /def:${CMAKE_JS_NODELIB_DEF} /out:${CMAKE_JS_NODELIB_TARGET} ${CMAKE_STATIC_LINKER_FLAGS})
+    endif()
     # Bundle libstdc++/libgcc into the .node so hosts with older GLIBCXX (e.g. many Linux serverless images) still load it.
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_link_options(poker_calculations PRIVATE -static-libgcc -static-libstdc++)
