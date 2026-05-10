@@ -19,11 +19,11 @@ inputs:
   commit-author-name:
     description: Git author name for the lockfile commit (when a commit is created)
     required: false
-    default: 'DBs-Server-Service'
+    default: 'DevomB'
   commit-author-email:
     description: Git author email for the lockfile commit
     required: false
-    default: 'Devom.hb@gmail.com'
+    default: 'Devom.hb@yahoo.com'
 
 runs:
   using: composite
