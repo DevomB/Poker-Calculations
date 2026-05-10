@@ -102,12 +102,15 @@ On Windows this expects MSVC on `PATH` like the build steps above.
 
 ## Maintainers: publishing
 
-Publishing uses [`.github/workflows/native-prebuild.yml`](.github/workflows/native-prebuild.yml).
+Publishing uses [`.github/workflows/native-prebuild.yml`](.github/workflows/native-prebuild.yml) and runs **only when you start it** (Actions → **Native prebuilds & npm publish** → **Run workflow**). Pushes to `main` do **not** automatically publish, so a failed native matrix does not “consume” the next semver before npm sees it.
 
 1. Add a repository secret **`NPM_TOKEN`** (npmjs.com → Access Tokens → classic **Automation** token, or a granular token with publish rights for `poker-calculations`).
-2. Bump **`package.json`** `version` and push to **`main`**.
+2. Bump **`package.json`** `version` and merge to **`main`**. If that edit triggers **Sync package lockfile**, wait until it completes (or run **`npm run sync-lock`** locally and push).
+3. Open **Actions** → **Native prebuilds & npm publish** → **Run workflow** (branch **`main`**).
 
-The workflow runs when **`package.json` changes** on `main`. It checks whether **`name@version` already exists** on the registry; if not, it builds native targets (including **musl** artifacts as `node.napi.musl.node`), merges them under `prebuilds/`, runs **`npm publish --provenance`**, and publishes. **No git tags** — the version field is the release input. **workflow_dispatch** is also available. If the version is already published, the workflow skips build and publish.
+The workflow refreshes the lockfile in the release gate, then checks whether **`name@version` already exists** on npm. If not, it builds native targets (including **musl** artifacts as `node.napi.musl.node`), merges them under `prebuilds/`, runs **`npm publish --provenance`**, and publishes. **No git tags** — the version field is the release input. If that version is already on npm, the workflow skips build and publish.
+
+**If publish fails:** fix the underlying issue, push commits **without** bumping `version` again, and **re-run the same workflow** until it succeeds — then increment only for the *next* release. That keeps npm version numbers from skipping.
 
 If **`--provenance`** fails, adjust the workflow step to **`npm publish --access public`** (same secret).
 

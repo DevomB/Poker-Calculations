@@ -1,8 +1,8 @@
 # npm publish when package.json version is not yet on the registry (native prebuilds matrix).
 #
-# Triggers: workflow_dispatch, or workflow_run after "Sync package lockfile" succeeds on main.
-# On workflow_dispatch only, release-gate runs the shared lock action first (main already
-# has a fresh lock after a successful Sync workflow_run).
+# Trigger: workflow_dispatch only (deliberate release). Bump package.json on main, let
+# "Sync package lockfile" finish if it runs, then run this workflow from the Actions tab.
+# This avoids burning semver numbers when the native matrix fails before publish.
 #
 # Secrets: NPM_TOKEN — npm automation/granular token with publish for this package.
 
@@ -10,11 +10,6 @@ name: Native prebuilds & npm publish
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Sync package lockfile
-    types:
-      - completed
 
 env:
   NODE_VERSION: '22'
@@ -26,7 +21,6 @@ concurrency:
 jobs:
   release-gate:
     name: Release gate
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -40,12 +34,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: ./.github/actions/sync-package-lock
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - uses: actions/setup-node@v5
-        if: ${{ github.event_name == 'workflow_run' }}
         with:
           node-version: ${{ env.NODE_VERSION }}
 

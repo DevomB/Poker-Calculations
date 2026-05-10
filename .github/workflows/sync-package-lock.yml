@@ -1,6 +1,6 @@
 # Regenerates package-lock.json when package.json changes, then verify-lock.
 # Does not run on lock-only commits (path filter), so it does not loop with its own push.
-# Downstream: Native prebuild triggers via workflow_run after this workflow completes.
+# After merging version bumps: run "Native prebuilds & npm publish" manually from Actions when ready to release.
 #
 # Fork contributors: run npm run sync-lock locally and push — this workflow only runs on pushes to this repo.
 name: Sync package lockfile
