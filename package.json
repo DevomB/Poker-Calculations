@@ -1,6 +1,6 @@
 {
   "name": "poker-calculations",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "NL Hold'em hand evaluation, Monte Carlo equity, pot-odds / SPR / MDF helpers; C++ core shipped as prebuilt native addons (no compiler needed for npm install).",
   "main": "index.js",
   "types": "index.d.ts",
