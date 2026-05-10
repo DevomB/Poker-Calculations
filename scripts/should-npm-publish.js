@@ -2,6 +2,9 @@
  * CI gate: decide whether to build + publish based only on package.json "version".
  * If npm already has that exact version, we skip the expensive native matrix and npm publish.
  *
+ * Release hygiene: if a run fails before publish, fix the code and re-run the workflow
+ * without bumping version again — only increment after the previous number is on npm.
+ *
  * Writes publish=true|false to GITHUB_OUTPUT when that env var is set (GitHub Actions).
  */
 'use strict';
