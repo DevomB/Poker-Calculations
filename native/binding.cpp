@@ -19,9 +19,7 @@
 
 namespace {
 
-constexpr const char* kHandRankNames[] = {"highCard",      "onePair",       "twoPair",    "threeOfAKind",
-                                          "straight",      "flush",         "fullHouse",  "fourOfAKind",
-                                          "straightFlush", "royalFlush"};
+constexpr const char* kHandRankNames[] = {"highCard",      "onePair",       "twoPair",    "threeOfAKind", "straight",      "flush",         "fullHouse",  "fourOfAKind", "straightFlush", "royalFlush"};
 
 [[nodiscard]] std::string trim_copy(std::string s) {
     auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
@@ -74,8 +72,7 @@ constexpr const char* kHandRankNames[] = {"highCard",      "onePair",       "two
     return true;
 }
 
-[[nodiscard]] std::vector<poker::Card> parse_card_strings(const Napi::Env& env, const Napi::Array& arr,
-                                                          std::string* err) {
+[[nodiscard]] std::vector<poker::Card> parse_card_strings(const Napi::Env& env, const Napi::Array& arr, std::string* err) {
     std::vector<poker::Card> out;
     const uint32_t n = arr.Length();
     out.reserve(n);
@@ -161,8 +158,7 @@ constexpr const char* kHandRankNames[] = {"highCard",      "onePair",       "two
     return default_val;
 }
 
-[[nodiscard]] bool parse_game_state(const Napi::Object& src, poker::PokerGameState& out,
-                                      std::string* err) {
+[[nodiscard]] bool parse_game_state(const Napi::Object& src, poker::PokerGameState& out, std::string* err) {
     out = {};
     if (!src.Has("players") || !src.Get("players").IsArray()) {
         if (err) {
@@ -427,8 +423,7 @@ Napi::Value ParallelHandSimulation(const Napi::CallbackInfo& info) {
             static_cast<std::uint32_t>(info[3].As<Napi::Number>().Uint32Value());
         const int villains = info[4].As<Napi::Number>().Int32Value();
         const std::size_t num_threads = static_cast<std::size_t>(info[5].As<Napi::Number>().Uint32Value());
-        const float eq = poker::parallel_hand_simulation(hole, board, num_sim, base_seed, villains,
-                                                         num_threads);
+        const float eq = poker::parallel_hand_simulation(hole, board, num_sim, base_seed, villains, num_threads);
         return Napi::Number::New(env, static_cast<double>(eq));
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
