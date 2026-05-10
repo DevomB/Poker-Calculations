@@ -10,4 +10,4 @@ Examples: `win32-x64`, `darwin-arm64`, `linux-x64`.
 
 These files are **not committed** to git (large binaries). They are produced in CI (`.github/workflows/native-prebuild.yml`) or locally before `npm publish`.
 
-See [README](../README.md) → **Publishing**.
+See [README](../README.md) → **Maintainers: publishing**.

@@ -20,7 +20,7 @@ const tuples = fs.readdirSync(pb).filter((n) => !n.endsWith('.md'));
 const valid = tuples.some((t) => fs.existsSync(path.join(pb, t, 'node.napi.node')));
 if (!valid) {
   console.error('No prebuilds/*/node.napi.node found.');
-  console.error('See README "Publishing". Set SKIP_PREBUILD_CHECK=1 to force pack (not recommended).');
+  console.error('See README → Maintainers: publishing. Set SKIP_PREBUILD_CHECK=1 to force pack (not recommended).');
   process.exit(1);
 }
 
