@@ -19,20 +19,20 @@ double hero_showdown_equity(const std::vector<HandEvaluation>& hands) {
     if (hands.empty()) {
         return 0.0;
     }
+    if (hands.size() == 1) {
+        return 1.0;
+    }
     HandEvaluation best = hands[0];
-    for (const auto& h : hands) {
+    int tied_at_best = 1;
+    bool hero_tied = true;
+    for (std::size_t i = 1; i < hands.size(); ++i) {
+        const HandEvaluation& h = hands[i];
         if (best < h) {
             best = h;
-        }
-    }
-    int tied_at_best = 0;
-    bool hero_tied = false;
-    for (std::size_t i = 0; i < hands.size(); ++i) {
-        if (hand_ties(hands[i], best)) {
+            tied_at_best = 1;
+            hero_tied = false;
+        } else if (hand_ties(h, best)) {
             ++tied_at_best;
-            if (i == 0) {
-                hero_tied = true;
-            }
         }
     }
     if (!hero_tied || tied_at_best <= 0) {
@@ -67,54 +67,68 @@ std::vector<Card> remaining_deck(const std::vector<bool>& used) {
     return d;
 }
 
-std::vector<Card> combine_hole_board(const std::vector<Card>& hole,
-                                     const std::vector<Card>& runout) {
-    std::vector<Card> all = hole;
-    all.insert(all.end(), runout.begin(), runout.end());
-    return all;
-}
-
-float run_chunk(const std::vector<Card>& player_hand, const std::vector<Card>& community_cards,
-                int count, std::uint32_t seed, int villains) {
-    if (count <= 0) {
+template <typename Rng>
+float accumulate_showdown_equity(Rng& rng, const std::vector<Card>& player_hand,
+                                   const std::vector<Card>& community_cards, int iterations,
+                                   int villains) {
+    if (iterations <= 0) {
         return 0.0F;
     }
     if (villains < 1) {
         villains = 1;
     }
-    std::mt19937 rng(seed);
     std::vector<bool> known(52, false);
     collect_known(player_hand, community_cards, known);
 
+    std::vector<Card> pool = remaining_deck(known);
+    std::vector<std::vector<Card>> villain_holes(static_cast<std::size_t>(villains));
+    for (auto& vh : villain_holes) {
+        vh.reserve(2);
+    }
+
     double equity_sum = 0.0;
-    std::vector<Card> pool;
     std::vector<HandEvaluation> evals;
     evals.reserve(static_cast<std::size_t>(villains) + 1);
+    std::vector<Card> combined;
+    combined.reserve(7);
+    std::vector<Card> runout;
+    runout.reserve(5);
 
-    for (int i = 0; i < count; ++i) {
-        pool = remaining_deck(known);
+    for (int i = 0; i < iterations; ++i) {
         std::shuffle(pool.begin(), pool.end(), rng);
 
         std::size_t idx = 0;
-        std::vector<std::vector<Card>> villain_holes(static_cast<std::size_t>(villains));
         for (auto& vh : villain_holes) {
+            vh.clear();
             vh.push_back(pool[idx++]);
             vh.push_back(pool[idx++]);
         }
 
-        std::vector<Card> runout = community_cards;
+        runout.assign(community_cards.begin(), community_cards.end());
         while (runout.size() < 5) {
             runout.push_back(pool[idx++]);
         }
 
         evals.clear();
-        evals.push_back(evaluate_best_hand(combine_hole_board(player_hand, runout)));
+        combined.clear();
+        combined.insert(combined.end(), player_hand.begin(), player_hand.end());
+        combined.insert(combined.end(), runout.begin(), runout.end());
+        evals.push_back(evaluate_best_hand(combined));
         for (const auto& vh : villain_holes) {
-            evals.push_back(evaluate_best_hand(combine_hole_board(vh, runout)));
+            combined.clear();
+            combined.insert(combined.end(), vh.begin(), vh.end());
+            combined.insert(combined.end(), runout.begin(), runout.end());
+            evals.push_back(evaluate_best_hand(combined));
         }
         equity_sum += hero_showdown_equity(evals);
     }
-    return static_cast<float>(equity_sum / static_cast<double>(count));
+    return static_cast<float>(equity_sum / static_cast<double>(iterations));
+}
+
+float run_chunk(const std::vector<Card>& player_hand, const std::vector<Card>& community_cards,
+                int count, std::uint32_t seed, int villains) {
+    std::mt19937 rng(seed);
+    return accumulate_showdown_equity(rng, player_hand, community_cards, count, villains);
 }
 
 }  // namespace
@@ -122,44 +136,8 @@ float run_chunk(const std::vector<Card>& player_hand, const std::vector<Card>& c
 float simulate_hand_outcome(const std::vector<Card>& player_hand,
                             const std::vector<Card>& community_cards, int num_simulations,
                             std::mt19937& rng, int villains) {
-    if (num_simulations <= 0) {
-        return 0.0F;
-    }
-    if (villains < 1) {
-        villains = 1;
-    }
-    std::vector<bool> known(52, false);
-    collect_known(player_hand, community_cards, known);
-
-    double equity_sum = 0.0;
-    std::vector<Card> pool;
-    std::vector<HandEvaluation> evals;
-    evals.reserve(static_cast<std::size_t>(villains) + 1);
-
-    for (int i = 0; i < num_simulations; ++i) {
-        pool = remaining_deck(known);
-        std::shuffle(pool.begin(), pool.end(), rng);
-
-        std::size_t idx = 0;
-        std::vector<std::vector<Card>> villain_holes(static_cast<std::size_t>(villains));
-        for (auto& vh : villain_holes) {
-            vh.push_back(pool[idx++]);
-            vh.push_back(pool[idx++]);
-        }
-
-        std::vector<Card> runout = community_cards;
-        while (runout.size() < 5) {
-            runout.push_back(pool[idx++]);
-        }
-
-        evals.clear();
-        evals.push_back(evaluate_best_hand(combine_hole_board(player_hand, runout)));
-        for (const auto& vh : villain_holes) {
-            evals.push_back(evaluate_best_hand(combine_hole_board(vh, runout)));
-        }
-        equity_sum += hero_showdown_equity(evals);
-    }
-    return static_cast<float>(equity_sum / static_cast<double>(num_simulations));
+    return accumulate_showdown_equity(rng, player_hand, community_cards, num_simulations,
+                                      villains);
 }
 
 float parallel_hand_simulation(const std::vector<Card>& player_hand,

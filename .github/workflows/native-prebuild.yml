@@ -1,15 +1,10 @@
-# Build native addons per OS and publish to npm when package.json "version" is new on the registry.
+# npm publish when package.json version is not yet on the registry (native prebuilds matrix).
 #
-# Trigger: after "Sync package lockfile" completes on main, or workflow_dispatch. No git tags
-# required — CI skips build/publish if that exact version already exists on npm.
+# Triggers: workflow_dispatch, or workflow_run after "Sync package lockfile" succeeds on main.
+# On workflow_dispatch only, release-gate runs the shared lock action first (main already
+# has a fresh lock after a successful Sync workflow_run).
 #
-# Lockfile: job `ensure-lockfile` runs first in this workflow — regenerates package-lock.json from
-# package.json, commits/pushes if needed, then verify-lock — so the registry publish never runs
-# until the lockfile version matches package.json on main (same behavior as sync-package-lock.yml,
-# but ordered strictly before release-gate / build / npm publish).
-#
-# Secrets (repository → Settings → Secrets and variables → Actions):
-#   NPM_TOKEN — npm "Automation" or "Granular Access Token" with publish permission for this package.
+# Secrets: NPM_TOKEN — npm automation/granular token with publish for this package.
 
 name: Native prebuilds & npm publish
 
@@ -21,51 +16,20 @@ on:
     types:
       - completed
 
+env:
+  NODE_VERSION: '22'
+
 concurrency:
   group: npm-publish-${{ github.workflow }}
   cancel-in-progress: false
 
 jobs:
-  ensure-lockfile:
-    name: Sync package-lock.json before release
+  release-gate:
+    name: Release gate
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: main
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: npm
-
-      - name: Regenerate lockfile and push if changed
-        run: |
-          npm install --package-lock-only
-          git add package-lock.json
-          if git diff --staged --quiet; then
-            echo "package-lock.json already matches package.json"
-            exit 0
-          fi
-          git config user.name "DBs-Server-Service"
-          git config user.email "Devom.hb@gmail.com"
-          git commit -m "chore: sync package-lock.json"
-          git push
-
-      - name: Verify committed lockfile matches package.json
-        run: npm run verify-lock
-        env:
-          CI: true
-
-  release-gate:
-    needs: ensure-lockfile
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
-    runs-on: ubuntu-latest
     outputs:
       publish: ${{ steps.gate.outputs.publish }}
     steps:
@@ -73,10 +37,17 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: ./.github/actions/sync-package-lock
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
       - uses: actions/setup-node@v5
+        if: ${{ github.event_name == 'workflow_run' }}
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
 
       - id: gate
         run: node scripts/should-npm-publish.js
@@ -94,8 +65,7 @@ jobs:
             tuple: linux-x64
           - os: macos-latest
             tuple: darwin-arm64
-          # Intel (x64) macOS: avoid macos-13 — deprecated, tiny pool, multi-hour queues / brownouts.
-          # Use the dedicated Intel image: https://github.blog/changelog/2025-09-19-github-actions-macos-13-runner-image-is-closing-down/
+          # Intel macOS: avoid macos-13 (deprecated); use dedicated Intel image.
           - os: macos-15-intel
             tuple: darwin-x64
 
@@ -109,7 +79,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: Install dependencies
@@ -158,8 +128,8 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
 
       - name: Assemble prebuilds/
         run: node scripts/assemble-prebuilds.js _native_bins

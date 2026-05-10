@@ -1,6 +1,9 @@
-# Fail fast when package.json was edited without updating package-lock.json (PRs).
-# On main, sync-package-lock.yml updates the lock and runs npm run verify-lock after push.
+# Fail PRs when package.json / package-lock.json drift; contributors must run npm run sync-lock.
+# On push to main, "Sync package lockfile" uses the same action with regenerate-and-push enabled.
 name: Package lockfile
+
+env:
+  NODE_VERSION: '22'
 
 on:
   pull_request:
@@ -14,10 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v5
+      - uses: ./.github/actions/sync-package-lock
         with:
-          node-version: '22'
-          cache: npm
-
-      - name: Verify package-lock.json matches package.json
-        run: npm run verify-lock
+          node-version: ${{ env.NODE_VERSION }}
+          regenerate-and-push: 'false'

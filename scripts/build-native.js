@@ -6,7 +6,8 @@ const { spawnSync } = require('child_process');
 const path = require('path');
 
 const cmakeJs = require.resolve('cmake-js/bin/cmake-js');
-const args = process.argv.slice(2).length ? process.argv.slice(2) : ['compile'];
+const argv = process.argv.slice(2);
+const args = argv.length ? argv : ['compile'];
 const r = spawnSync(process.execPath, [cmakeJs, ...args], {
   cwd: path.join(__dirname, '..'),
   stdio: 'inherit',

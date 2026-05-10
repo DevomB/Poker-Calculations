@@ -36,10 +36,16 @@ function effectiveStack(...stacks) {
   if (stacks.length === 0) {
     return 0;
   }
-  for (const x of stacks) {
+  let m = stacks[0];
+  assertNonNegFinite('stack', m);
+  for (let i = 1; i < stacks.length; i++) {
+    const x = stacks[i];
     assertNonNegFinite('stack', x);
+    if (x < m) {
+      m = x;
+    }
   }
-  return Math.min(...stacks);
+  return m;
 }
 
 /**
@@ -83,7 +89,8 @@ function formatPotOdds(potBeforeCall, toCall, decimals = 2) {
     return '∞:1';
   }
   const r = potBeforeCall / toCall;
-  const f = Math.round(r * 10 ** decimals) / 10 ** decimals;
+  const scale = 10 ** decimals;
+  const f = Math.round(r * scale) / scale;
   return `${f}:1`;
 }
 

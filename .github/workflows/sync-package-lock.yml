@@ -1,9 +1,8 @@
-# Regenerates package-lock.json from package.json and pushes if it changed.
-# Triggers on pushes that touch package.json only (not lock-only commits), so this
-# does not loop. Follow-up workflows (e.g. native prebuild) should use workflow_run
-# after this workflow so they see the lockfile commit on the branch.
-# Fork PRs: pushes land on the fork; this workflow runs on your repo's pushes only—
-# contributors from forks should run: npm run sync-lock and push.
+# Regenerates package-lock.json when package.json changes, then verify-lock.
+# Does not run on lock-only commits (path filter), so it does not loop with its own push.
+# Downstream: Native prebuild triggers via workflow_run after this workflow completes.
+#
+# Fork contributors: run npm run sync-lock locally and push — this workflow only runs on pushes to this repo.
 name: Sync package lockfile
 
 on:
@@ -11,6 +10,9 @@ on:
     paths:
       - package.json
   workflow_dispatch:
+
+env:
+  NODE_VERSION: '22'
 
 permissions:
   contents: write
@@ -28,23 +30,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - uses: actions/setup-node@v5
+      - uses: ./.github/actions/sync-package-lock
         with:
-          node-version: '22'
-          cache: npm
-
-      - name: Regenerate lockfile and push if changed
-        run: |
-          npm install --package-lock-only
-          git add package-lock.json
-          if git diff --staged --quiet; then
-            echo "package-lock.json already matches package.json"
-            exit 0
-          fi
-          git config user.name "DBs-Server-Service"
-          git config user.email "Devom.hb@gmail.com"
-          git commit -m "chore: sync package-lock.json"
-          git push
-
-      - name: Verify committed lockfile matches package.json
-        run: npm run verify-lock
+          node-version: ${{ env.NODE_VERSION }}
