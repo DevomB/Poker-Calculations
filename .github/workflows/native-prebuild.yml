@@ -4,7 +4,9 @@
 # "Sync package lockfile" finish if it runs, then run this workflow from the Actions tab.
 # This avoids burning semver numbers when the native matrix fails before publish.
 #
-# Secrets: NPM_TOKEN — npm automation/granular token with publish for this package.
+# Publishing auth: npm Trusted Publishing (OIDC). Configure on npmjs.com for this repo +
+# workflow filename native-prebuild.yml — no NPM_TOKEN for publish. Requires npm CLI ≥11.5.1
+# (see publish job).
 
 name: Native prebuilds & npm publish
 
@@ -198,7 +200,11 @@ jobs:
       - name: Assemble prebuilds/
         run: node scripts/assemble-prebuilds.js _native_bins
 
-      - name: Publish to npm
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Trusted publishing: OIDC via id-token (job permissions). npm CLI ≥11.5.1 required.
+      # Provenance is generated automatically for public repos — no --provenance flag needed.
+      # https://docs.npmjs.com/trusted-publishers
+      - name: Ensure npm CLI for OIDC (≥11.5.1)
+        run: npm install -g npm@^11.5.1
+
+      - name: Publish to npm (trusted publishing / OIDC)
+        run: npm publish --access public
