@@ -1,6 +1,6 @@
 {
   "name": "poker-calculations",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "NL Hold'em hand evaluation, Monte Carlo equity, and pot-odds helpers — prebuilt native addon, no compiler required.",
   "main": "index.js",
   "types": "index.d.ts",
