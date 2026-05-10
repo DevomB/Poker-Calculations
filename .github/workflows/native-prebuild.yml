@@ -110,19 +110,14 @@ jobs:
           name: native-${{ matrix.tuple }}
           path: ${{ matrix.tuple }}.napi.node
 
-  build-musl:
-    name: Build (Alpine / musl)
+  # GitHub: JS Actions inside Alpine containers only work on x64 Linux hosts — not on ubuntu-*-arm.
+  # linux-x64 musl: native Alpine job on ubuntu-latest.
+  # linux-arm64 musl: build on ubuntu-latest via Docker (--platform linux/arm64) + QEMU.
+  build-musl-x64:
+    name: Build (Alpine / musl, linux-x64)
     needs: release-gate
     if: needs.release-gate.outputs.publish == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runs-on: ubuntu-latest
-            tuple: linux-x64
-          - runs-on: ubuntu-24.04-arm
-            tuple: linux-arm64
-    runs-on: ${{ matrix.runs-on }}
+    runs-on: ubuntu-latest
     container:
       image: node:22-alpine
     steps:
@@ -146,19 +141,50 @@ jobs:
         run: node scripts/build-native.js compile
 
       - name: Stage prebuild (node.napi.musl.node)
-        run: node scripts/stage-prebuild.js ${{ matrix.tuple }} musl
+        run: node scripts/stage-prebuild.js linux-x64 musl
 
       - name: Flatten artifact name for merge job
-        run: cp "prebuilds/${{ matrix.tuple }}/node.napi.musl.node" "${{ matrix.tuple }}-musl.napi.node"
+        run: cp prebuilds/linux-x64/node.napi.musl.node linux-x64-musl.napi.node
 
       - uses: actions/upload-artifact@v7
         with:
-          name: native-${{ matrix.tuple }}-musl
-          path: ${{ matrix.tuple }}-musl.napi.node
+          name: native-linux-x64-musl
+          path: linux-x64-musl.napi.node
+
+  build-musl-arm64:
+    name: Build (Alpine / musl, linux-arm64)
+    needs: release-gate
+    if: needs.release-gate.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: docker/setup-qemu-action@v3
+
+      - name: Build in arm64 Alpine (Docker)
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v "$PWD:/ws" -w /ws \
+            node:22-alpine \
+            sh -exc '
+              apk add --no-cache python3 make g++ cmake git bash
+              npm ci
+              node scripts/build-native.js compile
+              node scripts/stage-prebuild.js linux-arm64 musl
+            '
+          cp prebuilds/linux-arm64/node.napi.musl.node linux-arm64-musl.napi.node
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native-linux-arm64-musl
+          path: linux-arm64-musl.napi.node
 
   publish:
     name: Publish to npm
-    needs: [release-gate, build, build-musl]
+    needs: [release-gate, build, build-musl-x64, build-musl-arm64]
     if: needs.release-gate.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
