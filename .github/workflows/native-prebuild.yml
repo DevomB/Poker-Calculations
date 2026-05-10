@@ -1,11 +1,12 @@
 # Build native addons per OS and publish to npm when package.json "version" is new on the registry.
 #
-# Trigger: after "Sync package lockfile" completes on main (so the lockfile commit exists before
-# npm ci), or workflow_dispatch. No git tags required — CI skips build/publish if that exact
-# version already exists on npm.
+# Trigger: after "Sync package lockfile" completes on main, or workflow_dispatch. No git tags
+# required — CI skips build/publish if that exact version already exists on npm.
 #
-# Lockfile: runs after sync-package-lock.yml so checkout includes an up-to-date package-lock.json.
-# Each job checks out branch main at latest (fetch-depth 0), not the triggering SHA.
+# Lockfile: job `ensure-lockfile` runs first in this workflow — regenerates package-lock.json from
+# package.json, commits/pushes if needed, then verify-lock — so the registry publish never runs
+# until the lockfile version matches package.json on main (same behavior as sync-package-lock.yml,
+# but ordered strictly before release-gate / build / npm publish).
 #
 # Secrets (repository → Settings → Secrets and variables → Actions):
 #   NPM_TOKEN — npm "Automation" or "Granular Access Token" with publish permission for this package.
@@ -25,7 +26,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ensure-lockfile:
+    name: Sync package-lock.json before release
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Regenerate lockfile and push if changed
+        run: |
+          npm install --package-lock-only
+          git add package-lock.json
+          if git diff --staged --quiet; then
+            echo "package-lock.json already matches package.json"
+            exit 0
+          fi
+          git config user.name "DBs-Server-Service"
+          git config user.email "Devom.hb@gmail.com"
+          git commit -m "chore: sync package-lock.json"
+          git push
+
+      - name: Verify committed lockfile matches package.json
+        run: npm run verify-lock
+        env:
+          CI: true
+
   release-gate:
+    needs: ensure-lockfile
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     outputs:
