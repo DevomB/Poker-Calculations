@@ -1,75 +1,26 @@
 # poker-calculations — NL Hold’em engine & odds helpers (C++ core, Node addon)
 
-A small **No-Limit Texas Hold’em** engine and decision helper in modern C++: deck and dealing, game state and betting streets, **7-card hand evaluation**, **Monte Carlo equity** (single- and multi-threaded), a **rule-based `decide_action`** layer (pot odds + simplified chip EV), optional **opponent frequency stats**, and a **`PokerBotInterface` hook** for simulators or other permitted integrations.
+**No-Limit Texas Hold’em** hand evaluation, **Monte Carlo equity** (single- and multi-threaded), pot-odds and chip-EV helpers, and a rule-based **`decideAction`** layer—implemented in **C++** and exposed to Node via **N-API**.
 
-The same C++ code is published as the **`poker-calculations` npm package**: the implementation stays in **C++**, but **published releases ship prebuilt native binaries** ([`node-gyp-build`](https://github.com/prebuild/node-gyp-build)) so **`npm install` does not require CMake, a compiler, or the Windows SDK** on the downloader’s machine.
+Published releases ship **prebuilt native binaries** ([`node-gyp-build`](https://github.com/prebuild/node-gyp-build)), so **`npm install` does not require CMake, a compiler, or the Windows SDK** on the installing machine.
 
-Use this for **your own simulator, research, or APIs you are allowed to automate**. It is not intended to help bypass third-party terms of service on real-money sites.
+Full TypeScript types: **[`index.d.ts`](index.d.ts)**.
 
-## Features
+## Install
 
-| Area | What’s included |
-|------|------------------|
-| **Cards / deck** | 52-card deck, shuffle with injected `std::mt19937`, deal, burn on board deals in `GameEngine` |
-| **State & rules** | `PokerGameState`, blinds, pot, per-street commits, phase machine (pre-flop → river → showdown), `GameEngine::apply_action` with `Decision` |
-| **Evaluation** | Best five of up to seven cards, full ranking + kickers, `evaluate_hand_strength` scalar |
-| **Strategy** | `decide_action(..., BotConfig, OpponentModel*)` using MC equity (or strength fallback when sim count is 0), pot odds, and call EV |
-| **Simulation** | `simulate_hand_outcome`, `parallel_hand_simulation` (chunked async workers, distinct seeds) |
-| **Config** | `BotConfig::load_from_config_file` / `save_to_config_file` (`key=value`, `#` comments) |
-| **Tests** | GoogleTest suite (deck, engine, evaluator, strategy, opponent model, MC, config) |
-
-## NPM package
-
-### Installing from the registry (typical consumer)
-
-**Requirements:** Node.js 18+ only. The tarball includes **prebuilt** `prebuilds/<platform>-<arch>/node.napi.node` files; [`node-gyp-build`](https://github.com/prebuild/node-gyp-build) picks the right one at load time.
+**Requirements:** Node.js 18+.
 
 ```bash
 npm install poker-calculations
 ```
 
-No CMake, compiler, or SDK install is required.
+The package tarball includes prebuilt `prebuilds/<platform>-<arch>/node.napi.node` binaries for supported platforms.
 
-### Cloning this repo or installing from Git (developers)
+## Quick start
 
-Native code is **not** compiled during `npm install` for published packages. If you clone the repository or install from a git URL before prebuilds have been generated locally, you need a normal **C++ toolchain** (CMake 3.16+, and MSVC with C++ workload on Windows, Xcode CLI tools on macOS, or GCC on Linux), then:
+This is a **Node.js library**—`require` or `import` it and call functions. There are **no HTTP endpoints** unless you wrap it yourself.
 
-```bash
-npm ci
-npm run build:native
-node scripts/stage-prebuild.js <platform-arch>
-```
-
-Use the same `<platform-arch>` tuple [`node-gyp-build` expects](https://github.com/prebuild/node-gyp-build) (for example `win32-x64`, `linux-x64`, `darwin-arm64`). On Windows, delete a stale `build` folder if configure fails; ensure the **Windows SDK** is installed if you see resource-compiler (`rc`) or manifest (`mt`) errors.
-
-### Automated npm releases (GitHub Actions)
-
-Publishing uses workflow [`.github/workflows/native-prebuild.yml`](.github/workflows/native-prebuild.yml):
-
-1. Add a repository secret **`NPM_TOKEN`** (npmjs.com → Access Tokens → classic **Automation** token, or a granular token with publish rights for `poker-calculations`).
-2. Bump **`package.json`** `version` (e.g. `1.0.1`) and push to **`main`**.
-
-The workflow runs when **`package.json` changes** on `main`. It asks the registry whether that **`name@version` already exists**; if not, it builds all four native targets, merges them into `prebuilds/*/node.napi.node`, runs **`npm publish --provenance`**, and uploads the tarball to the public npm registry. **No git tags** — the version field is the only release input.
-
-You can also run the workflow manually from the Actions tab (**workflow_dispatch**). If the current `package.json` version is already published, the workflow skips build and publish.
-
-If publish fails on **`--provenance`** (registry or npm version), edit the workflow step to plain **`npm publish --access public`** (same secret).
-
-**You do not need a self-hosted server** for this flow; GitHub-hosted runners are enough. A custom runner would only matter if you wanted builds somewhere without GitHub’s matrix (not required here).
-
-**Manual publish** (same checks): assemble binaries under `prebuilds/`, then `npm publish`. Without binaries, `prepack` fails unless `SKIP_PREBUILD_CHECK=1`.
-
-### Rebuild native addon (after changing C++)
-
-```bash
-npm run build:native
-```
-
-### How you call this code (programmatic API — not HTTP)
-
-This package is a **Node.js library**: you `require()` or `import` it and call functions. There are **no REST endpoints** unless you wrap it in your own server.
-
-**CommonJS**
+### CommonJS
 
 ```js
 const poker = require('poker-calculations');
@@ -79,7 +30,7 @@ const equity = poker.simulateHandOutcome(['Ah', 'Kh'], ['Qh', 'Jh', 'Th'], 2000,
 const math = poker.spr(90, 270); // pure JS
 ```
 
-**ESM**
+### ESM
 
 ```js
 import { createRequire } from 'module';
@@ -87,34 +38,80 @@ const require = createRequire(import.meta.url);
 const poker = require('poker-calculations');
 ```
 
-Reference: **[`index.d.ts`](index.d.ts)** (every export and type). Runnable sample: **[`examples/demo.mjs`](examples/demo.mjs)** (`node examples/demo.mjs` from repo root).
-
-| Layer | Role |
-|--------|------|
-| **Native (C++ via N-API)** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandCategory`, `simulateHandOutcome`, `parallelHandSimulation`, `decideAction`, `potOddsRatio`, `expectedValueCall` |
-| **Pure JS** (`poker-math.js`) | `spr`, `effectiveStack`, `breakevenCallEquity`, `minimumDefenseFrequency`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds`, `ruleOfFourEquity`, `ruleOfTwoEquity`, `impliedBreakevenFutureWin`, `bluffToValueRatio` |
+Runnable sample: **[`examples/demo.mjs`](examples/demo.mjs)** (from repo root: `node examples/demo.mjs`).
 
 Cards are strings like `"Ah"`, `"Td"` (ten may be `"10h"`).
 
+## API overview
+
+| Layer | Exports |
+| --- | --- |
+| **Native (C++ via N-API)** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandCategory`, `simulateHandOutcome`, `parallelHandSimulation`, `decideAction`, `potOddsRatio`, `expectedValueCall` |
+| **Pure JS** ([`poker-math.js`](poker-math.js)) | `spr`, `effectiveStack`, `breakevenCallEquity`, `minimumDefenseFrequency`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds`, `ruleOfFourEquity`, `ruleOfTwoEquity`, `impliedBreakevenFutureWin`, `bluffToValueRatio` |
+
+## Responsible use
+
+Use this for **your own simulator, research, or automation you are permitted to run**. It is not intended to help bypass third-party terms of service on real-money sites.
+
+## Features (engine)
+
+| Area | What’s included |
+| --- | --- |
+| **Cards / deck** | 52-card deck, shuffle with injected `std::mt19937`, deal, burn on board deals in `GameEngine` |
+| **State & rules** | `PokerGameState`, blinds, pot, per-street commits, phase machine (pre-flop → river → showdown), `GameEngine::apply_action` with `Decision` |
+| **Evaluation** | Best five of up to seven cards, full ranking + kickers, `evaluate_hand_strength` scalar |
+| **Strategy** | `decide_action(..., BotConfig, OpponentModel*)` using MC equity (or strength fallback when sim count is 0), pot odds, and call EV |
+| **Simulation** | `simulate_hand_outcome`, `parallel_hand_simulation` (chunked async workers, distinct seeds) |
+| **Config** | `BotConfig::load_from_config_file` / `save_to_config_file` (`key=value`, `#` comments) |
+| **Tests** | GoogleTest suite (deck, engine, evaluator, strategy, opponent model, MC, config) |
+
+## Developing from source
+
+If you **clone** the repo or install from a **git URL** without local prebuilds, you need a **C++ toolchain** (CMake 3.16+, and MSVC with C++ workload on Windows, Xcode CLI tools on macOS, or GCC on Linux). Published tarballs from npm do not compile native code during install.
+
 ```bash
-node examples/demo.mjs
+npm ci
+npm run build:native
+node scripts/stage-prebuild.js <platform-arch>
 ```
 
-### Native C++ tests (GoogleTest)
+Use the `<platform-arch>` tuple [`node-gyp-build` expects](https://github.com/prebuild/node-gyp-build) (for example `win32-x64`, `linux-x64`, `darwin-arm64`). On Windows, delete a stale `build` folder if configure fails; ensure the **Windows SDK** is installed if you see resource-compiler (`rc`) or manifest (`mt`) errors.
 
-Separate CMake build dir `build_native_tests` (no Node addon):
+Rebuild after changing C++:
+
+```bash
+npm run build:native
+```
+
+### Native tests
 
 ```bash
 npm test
 ```
 
-On Windows this expects the same MSVC-on-PATH setup as above.
+On Windows this expects MSVC on `PATH` like the build steps above.
 
-## Plain CMake (library only)
+## Maintainers: publishing
+
+Publishing uses [`.github/workflows/native-prebuild.yml`](.github/workflows/native-prebuild.yml).
+
+1. Add a repository secret **`NPM_TOKEN`** (npmjs.com → Access Tokens → classic **Automation** token, or a granular token with publish rights for `poker-calculations`).
+2. Bump **`package.json`** `version` and push to **`main`**.
+
+The workflow runs when **`package.json` changes** on `main`. It checks whether **`name@version` already exists** on the registry; if not, it builds native targets, merges them into `prebuilds/*/node.napi.node`, runs **`npm publish --provenance`**, and publishes. **No git tags** — the version field is the release input. **workflow_dispatch** is also available. If the version is already published, the workflow skips build and publish.
+
+If **`--provenance`** fails, adjust the workflow step to **`npm publish --access public`** (same secret).
+
+GitHub-hosted runners are sufficient; no self-hosted runner is required.
+
+**Manual publish:** assemble binaries under `prebuilds/`, then `npm publish`. Without binaries, `prepack` fails unless `SKIP_PREBUILD_CHECK=1`.
+
+<details>
+<summary>Plain CMake (library / C++ consumers)</summary>
 
 ### Repository layout
 
-```
+```text
 include/poker/     Public headers (Card, Deck, GameEngine, HandEvaluator, …)
 src/               Implementations
 native/            Node-API binding (built when CMAKE_JS_INC is set by cmake-js)
@@ -138,7 +135,7 @@ cd build
 ctest --output-on-failure
 ```
 
-### Windows: MSVC with NMake (typical when `cl` is not on PATH)
+### Windows: MSVC with NMake (when `cl` is not on PATH)
 
 Open **x64 Native Tools** or run `vcvars64.bat`, then:
 
@@ -152,8 +149,8 @@ ctest --output-on-failure
 ### CMake options
 
 | Option | Default | Meaning |
-|--------|---------|---------|
-| `POKER_BUILD_TESTS` | `ON` when not using cmake-js; **`OFF`** when `CMAKE_JS_INC` is set (npm install path) | Build `poker_tests` and fetch GoogleTest |
+| --- | --- | --- |
+| `POKER_BUILD_TESTS` | `ON` (non–cmake-js); `OFF` if `CMAKE_JS_INC` is set | Build `poker_tests` and GoogleTest. Off for fast npm addon builds. |
 
 When **cmake-js** configures the project, it defines `CMAKE_JS_INC` and only **`poker_calculations.node`** plus **`poker_lib`** are built—tests are skipped so the addon build stays fast and does not pull GoogleTest.
 
@@ -167,9 +164,9 @@ cmake -S . -B build -DPOKER_BUILD_TESTS=OFF
 
 Tests link `libstdc++fs` when using GNU C++ for `std::filesystem` in config tests.
 
-## Configuration file
+</details>
 
-`BotConfig` reads simple line-based files:
+## Configuration file (`BotConfig`)
 
 ```ini
 # bot.txt
@@ -194,10 +191,10 @@ Load with `BotConfig::load_from_config_file("bot.txt")`.
 
 Headers live under `include/poker/`. Link against **`poker_lib`**.
 
-## Contributing / tuning
+## Contributing
 
-Strategy thresholds and MC counts are intentionally centralized in **`BotConfig`**. Adjust and re-run **`npm test`** or **`ctest`** after changes; MC-heavy tests assume statistical bands (e.g. AA pre-flop equity vs one random hand).
+Strategy thresholds and MC counts are centralized in **`BotConfig`**. After changes, run **`npm test`** or **`ctest`**; MC-heavy tests use statistical bands (e.g. AA pre-flop equity vs one random hand).
 
 ## License
 
-Specify your license in this repository (none is set in this README by default).
+[ISC](LICENSE) — see [`LICENSE`](LICENSE) in this repository.

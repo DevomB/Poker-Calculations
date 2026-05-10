@@ -1,7 +1,7 @@
 {
   "name": "poker-calculations",
   "version": "1.0.10",
-  "description": "NL Hold'em hand evaluation, Monte Carlo equity, pot-odds / SPR / MDF helpers; C++ core shipped as prebuilt native addons (no compiler needed for npm install).",
+  "description": "NL Hold'em hand evaluation, Monte Carlo equity, and pot-odds helpers — prebuilt native addon, no compiler required.",
   "main": "index.js",
   "types": "index.d.ts",
   "directories": {
@@ -55,6 +55,7 @@
     "index.d.ts",
     "poker-math.js",
     "prebuilds",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ]
 }
