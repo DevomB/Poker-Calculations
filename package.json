@@ -43,6 +43,9 @@
     "url": "https://github.com/DevomB/Poker-Calculations/issues"
   },
   "homepage": "https://github.com/DevomB/Poker-Calculations#readme",
+  "binary": {
+    "napi_versions": [8]
+  },
   "dependencies": {
     "node-gyp-build": "^4.8.4"
   },
