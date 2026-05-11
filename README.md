@@ -36,7 +36,7 @@ const poker = require('poker-calculations');
 
 poker.evaluateBestHand(['Ah', 'Ac', 'Kd', 'Ks', 'Qh']); // native — best 5 of 7
 const equity = poker.simulateHandOutcome(['Ah', 'Kh'], ['Qh', 'Jh', 'Th'], 2000, 42, 1);
-const math = poker.spr(90, 270); // pure JS
+const spr = poker.spr(90, 270); // native (C++ chip math)
 ```
 
 ### ESM
@@ -53,10 +53,20 @@ Cards are strings like `"Ah"`, `"Td"` (ten may be `"10h"`).
 
 ## API overview
 
-| Layer | Exports |
+All symbols below are exported from the **native addon** (C++ via N-API). **`breakevenCallEquity(potBeforeCall, toCall)`** equals **`potOddsRatio(pot, toCall)`** when the same pot and call amounts are used.
+
+| Area | Exports |
 | --- | --- |
-| **Native (C++ via N-API)** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandCategory`, `simulateHandOutcome`, `parallelHandSimulation`, `decideAction`, `potOddsRatio`, `expectedValueCall` |
-| **Pure JS** ([`poker-math.js`](poker-math.js)) | `spr`, `effectiveStack`, `breakevenCallEquity`, `minimumDefenseFrequency`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds`, `ruleOfFourEquity`, `ruleOfTwoEquity`, `impliedBreakevenFutureWin`, `bluffToValueRatio` |
+| **Hands & equity** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandCategory`, `simulateHandOutcome`, `parallelHandSimulation` |
+| **Strategy** | `decideAction` |
+| **Pot / EV** | `potOddsRatio`, `expectedValueCall`, `breakevenCallEquity` |
+| **Stacks & display** | `spr`, `effectiveStack`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds` |
+| **Heuristics** | `ruleOfFourEquity`, `ruleOfTwoEquity`, `impliedBreakevenFutureWin` |
+| **GTO-style** | `minimumDefenseFrequency`, `alphaFrequency`, `bluffToValueRatio`, `valueToBluffRatio` |
+| **Sizing & commitment** | `betAsPotFraction`, `sprAfterCall`, `commitmentRatio` |
+| **Fold equity** | `breakevenFoldEquityPureBluff`, `breakevenFoldEquitySemiBluff` |
+
+**Breaking change (v1.2.0):** `poker-math.js` was removed; require `poker-calculations` (or the `.node` binding) for all math. Rebuild native artifacts after upgrading from a git clone.
 
 ## Responsible use
 
@@ -72,7 +82,7 @@ Use this for **your own simulator, research, or automation you are permitted to 
 | **Strategy** | `decide_action(..., BotConfig, OpponentModel*)` using MC equity (or strength fallback when sim count is 0), pot odds, and call EV |
 | **Simulation** | `simulate_hand_outcome`, `parallel_hand_simulation` (chunked async workers, distinct seeds) |
 | **Config** | `BotConfig::load_from_config_file` / `save_to_config_file` (`key=value`, `#` comments) |
-| **Tests** | GoogleTest suite (deck, engine, evaluator, strategy, opponent model, MC, config) |
+| **Tests** | GoogleTest suite (deck, engine, evaluator, poker math, strategy, opponent model, MC, config) |
 
 ## Developing from source
 
@@ -134,10 +144,9 @@ Use **GitHub-hosted** runners for this workflow: OIDC trusted publishing does no
 ### Repository layout
 
 ```text
-include/poker/     Public headers (Card, Deck, GameEngine, HandEvaluator, …)
-src/               Implementations
+include/poker/     Public headers (Card, Deck, GameEngine, HandEvaluator, poker_math, …)
+src/               Implementations (`poker_math.cpp` — SPR, MDF, fold equity, …)
 native/            Node-API binding (built when CMAKE_JS_INC is set by cmake-js)
-poker-math.js      Chip / odds formulas (SPR, MDF, rule of 2 & 4, …)
 tests/             Unit tests
 examples/          demo.mjs (Node)
 CMakeLists.txt     Static poker_lib; optional poker_tests; optional poker_calculations.node when built by cmake-js
@@ -209,6 +218,7 @@ Load with `BotConfig::load_from_config_file("bot.txt")`.
 - **Hands**: `poker::evaluate_best_hand`, `poker::evaluate_hand_strength`, `poker::evaluate_hand`
 - **Equity**: `poker::simulate_hand_outcome`, `poker::parallel_hand_simulation`
 - **Decision**: `poker::decide_action(state, hero_hole_cards, cfg, opponent_model, hero_seat)`
+- **Chip / GTO math**: `poker::spr`, `poker::minimum_defense_frequency`, `poker::breakeven_fold_equity_pure_bluff`, … (`poker_math.hpp`)
 - **Integration**: subclass `poker::PokerBotInterface` or use `poker::MockPokerBotInterface` for tests
 
 Headers live under `include/poker/`. Link against **`poker_lib`**.

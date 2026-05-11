@@ -58,5 +58,8 @@ console.log('Decision:', d);
 console.log('SPR pot 90 eff 270:', poker.spr(90, 270));
 console.log('Breakeven equity calling 50 into 100+50:', poker.breakevenCallEquity(100, 50));
 console.log('MDF facing bet 50 into pot 100:', poker.minimumDefenseFrequency(100, 50));
+console.log('Alpha (1 - MDF) same spot:', poker.alphaFrequency(100, 50));
 console.log('Rule of 4 (9 outs):', poker.ruleOfFourEquity(9));
 console.log('EV call 40% equity pot 100 call 50:', poker.expectedValueCall(0.4, 100, 50));
+console.log('SPR after call pot 100 call 50 eff stack 200:', poker.sprAfterCall(100, 50, 200));
+console.log('Breakeven FE pure bluff 100 pot jam 50:', poker.breakevenFoldEquityPureBluff(100, 50));

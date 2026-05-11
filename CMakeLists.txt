@@ -19,6 +19,7 @@ add_library(poker_lib STATIC
     src/deck.cpp
     src/game_engine.cpp
     src/hand_evaluator.cpp
+    src/poker_math.cpp
     src/strategy.cpp
     src/opponent_model.cpp
     src/monte_carlo.cpp
@@ -45,6 +46,7 @@ if(POKER_BUILD_TESTS)
         tests/test_deck.cpp
         tests/test_game_engine.cpp
         tests/test_hand_evaluator.cpp
+        tests/test_poker_math.cpp
         tests/test_strategy.cpp
         tests/test_opponent_model.cpp
         tests/test_monte_carlo.cpp

@@ -4,16 +4,6 @@
 
 #include <gtest/gtest.h>
 
-TEST(Strategy, PotOddsRatio) {
-    EXPECT_DOUBLE_EQ(poker::pot_odds_ratio(100, 50), 50.0 / 150.0);
-    EXPECT_DOUBLE_EQ(poker::pot_odds_ratio(100, 0), 0.0);
-}
-
-TEST(Strategy, ExpectedValueCall) {
-    const double ev = poker::expected_value_call(0.5, 100, 50);
-    EXPECT_GT(ev, 0.0);
-}
-
 TEST(Strategy, DecideFoldsWeakFacingBet) {
     poker::PokerGameState state;
     state.players.push_back({"H", {}, 100, 0, 0, false, 0});
