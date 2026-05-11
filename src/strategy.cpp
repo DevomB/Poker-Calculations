@@ -2,32 +2,13 @@
 
 #include "poker/hand_evaluator.hpp"
 #include "poker/monte_carlo.hpp"
+#include "poker/poker_math.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <random>
 
 namespace poker {
-
-double pot_odds_ratio(int pot, int to_call) {
-    if (to_call <= 0) {
-        return 0.0;
-    }
-    const double denom = static_cast<double>(pot + to_call);
-    if (denom <= 0.0) {
-        return 0.0;
-    }
-    return static_cast<double>(to_call) / denom;
-}
-
-double expected_value_call(double equity, int pot, int to_call) {
-    if (to_call <= 0) {
-        return equity * static_cast<double>(pot);
-    }
-    const double win = static_cast<double>(pot + to_call);
-    const double lose = static_cast<double>(to_call);
-    return equity * win - (1.0 - equity) * lose;
-}
 
 namespace {
 

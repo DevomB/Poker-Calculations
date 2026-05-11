@@ -48,8 +48,8 @@ export interface DecisionResult {
   raiseBy: number;
 }
 
-/** Methods implemented in the native C++ addon. */
-export interface PokerCalculationsNative {
+/** N-API addon: hand engine, Monte Carlo, strategy, and chip / GTO math (all implemented in C++). */
+export interface PokerCalculations {
   evaluateBestHand(cards: string[]): HandEvalResult;
   evaluateHandStrength(holeCards: string[], board: string[]): string;
   evaluateHandCategory(holeCards: string[], board: string[]): string;
@@ -77,13 +77,10 @@ export interface PokerCalculationsNative {
   potOddsRatio(pot: number, toCall: number): number;
   /** Chip EV of calling once vs folding (0); same semantics as C++ `expected_value_call`. */
   expectedValueCall(equity: number, pot: number, toCall: number): number;
-}
-
-/** Pure JS helpers from `poker-math.js`. */
-export interface PokerMathHelpers {
+  /** Same fraction as `potOddsRatio(potBeforeCall, toCall)` for chip calls. */
+  breakevenCallEquity(potBeforeCall: number, toCall: number): number;
   spr(potChips: number, effectiveStackChips: number): number;
   effectiveStack(...stacks: number[]): number;
-  breakevenCallEquity(potBeforeCall: number, toCall: number): number;
   minimumDefenseFrequency(potBeforeOpponentBet: number, opponentBetSize: number): number;
   stackInBigBlinds(stackChips: number, bigBlind: number): number;
   potOddsRatioDisplay(potBeforeCall: number, toCall: number): number;
@@ -92,7 +89,25 @@ export interface PokerMathHelpers {
   ruleOfTwoEquity(outs: number): number;
   impliedBreakevenFutureWin(potBeforeCall: number, toCall: number, equity: number): number;
   bluffToValueRatio(potBeforeBet: number, betSize: number): number;
+  /** `1 / bluffToValueRatio`; `Infinity` when `betSize` is 0. */
+  valueToBluffRatio(potBeforeBet: number, betSize: number): number;
+  betAsPotFraction(potBeforeBet: number, betSize: number): number;
+  /**
+   * SPR after a call: remaining stack divided by new pot.
+   * Assumes heads-up single call: new pot = `potBeforeCall + 2 * toCall`. Throws if `toCall` exceeds stack.
+   */
+  sprAfterCall(potBeforeCall: number, toCall: number, effectiveStackBeforeCall: number): number;
+  commitmentRatio(toCall: number, effectiveStackBeforeCall: number): number;
+  /** `1 - minimumDefenseFrequency` = `bet / (pot + bet)`. */
+  alphaFrequency(potBeforeBet: number, betSize: number): number;
+  breakevenFoldEquityPureBluff(potBeforeHeroBet: number, heroBetOrCallSize: number): number;
+  breakevenFoldEquitySemiBluff(
+    potBeforeHeroBet: number,
+    heroBetSize: number,
+    equityWhenCalled: number,
+    totalPotIfCalled: number
+  ): number;
 }
 
-declare const api: PokerCalculationsNative & PokerMathHelpers;
+declare const api: PokerCalculations;
 export = api;

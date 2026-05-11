@@ -4,6 +4,7 @@
 #include "poker/card.hpp"
 #include "poker/game_state.hpp"
 #include "poker/opponent_model.hpp"
+#include "poker/poker_math.hpp"
 #include "poker/types.hpp"
 
 namespace poker {
@@ -14,10 +15,5 @@ namespace poker {
                                      const BotConfig& cfg,
                                      const OpponentModel* opponent_model = nullptr,
                                      int hero_seat = -1);
-
-[[nodiscard]] double pot_odds_ratio(int pot, int to_call);
-
-/// Simplified chip EV for calling once (fold = 0), ignores future streets.
-[[nodiscard]] double expected_value_call(double equity, int pot, int to_call);
 
 }  // namespace poker

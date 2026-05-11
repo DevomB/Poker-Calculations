@@ -1,7 +1,6 @@
 'use strict';
 
 const path = require('path');
-const math = require('./poker-math');
 
 let native;
 try {
@@ -16,4 +15,4 @@ try {
   throw err;
 }
 
-module.exports = Object.assign({}, native, math);
+module.exports = native;
