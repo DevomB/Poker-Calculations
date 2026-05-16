@@ -5,8 +5,8 @@
 # This avoids burning semver numbers when the native matrix fails before publish.
 #
 # Publishing auth: npm Trusted Publishing (OIDC). Configure on npmjs.com for this repo +
-# workflow filename native-prebuild.yml — no NPM_TOKEN for publish. Requires npm CLI ≥11.5.1
-# (see publish job).
+# workflow filename native-prebuild.yml — no NPM_TOKEN for publish. Requires Node ≥22.14.0
+# and npm CLI ≥11.5.1 (see publish job).
 
 name: Native prebuilds & npm publish
 
@@ -14,7 +14,8 @@ on:
   workflow_dispatch:
 
 env:
-  NODE_VERSION: '22'
+  # npm trusted publishing: Node ≥22.14.0 (https://docs.npmjs.com/trusted-publishers)
+  NODE_VERSION: '22.14'
 
 concurrency:
   group: npm-publish-${{ github.workflow }}
@@ -109,7 +110,7 @@ jobs:
     if: needs.release-gate.outputs.publish == 'true'
     runs-on: ubuntu-latest
     container:
-      image: node:22-alpine
+      image: node:22.14-alpine
     steps:
       - uses: actions/checkout@v5
         with:
@@ -158,7 +159,7 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 \
             -v "$PWD:/ws" -w /ws \
-            node:22-alpine \
+            node:22.14-alpine \
             sh -exc '
               apk add --no-cache python3 make g++ cmake git bash
               npm ci
@@ -196,11 +197,12 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
       - name: Assemble prebuilds/
         run: node scripts/assemble-prebuilds.js _native_bins
 
-      # Trusted publishing: OIDC via id-token (job permissions). npm CLI ≥11.5.1 required.
+      # Trusted publishing: OIDC via id-token (job permissions). Node ≥22.14 + npm CLI ≥11.5.1.
       # Provenance is generated automatically for public repos — no --provenance flag needed.
       # https://docs.npmjs.com/trusted-publishers
       - name: Ensure npm CLI for OIDC (≥11.5.1)
