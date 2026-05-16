@@ -112,7 +112,7 @@ On Windows this expects MSVC on `PATH` like the build steps above.
 
 ## Maintainers: publishing
 
-Publishing uses [`.github/workflows/npm-publish.yml`](.github/workflows/npm-publish.yml) and runs **only when you start it** (Actions → **npm publish** → **Run workflow**). Pushes to `main` do **not** automatically publish, so a failed native matrix does not “consume” the next semver before npm sees it.
+Publishing uses [`.github/workflows/npm-publish.yml`](.github/workflows/npm-publish.yml). It **starts automatically** when **`package.json`** or **`package-lock.json`** changes on **`main`** (for example merging a version bump). The release gate still **skips** the native build and `npm publish` when that **`version` is already on npm**, so dependency-only lockfile edits do not republish. You can also **re-run** from Actions → **npm publish** → **Run workflow** (same branch as the failed run, usually `main`) without a new commit.
 
 ### npm Trusted Publishing (OIDC)
 
@@ -127,10 +127,10 @@ All dependencies used during CI are public; **`npm ci`** does not need a read to
 
 ### Release steps
 
-1. On **`main`**, bump **`package.json`** `version` and keep **`package-lock.json`** in sync (for example `npm install --package-lock-only` after dependency or version changes), then push.
-2. Open **Actions** → **npm publish** → **Run workflow** (branch **`main`**).
+1. On **`main`**, bump **`package.json`** `version` and keep **`package-lock.json`** in sync (for example `npm install --package-lock-only` after dependency or version changes), then push or merge to **`main`**.
+2. The **npm publish** workflow runs from that push. If it failed before npm accepted the package, fix and push (or use **Run workflow** on **`main`** to retry without changing files).
 
-The release gate runs **`npm ci`** on `main` (so a broken or stale lockfile fails fast), then checks whether **`name@version` already exists** on npm. If not, it builds native targets (including **musl** artifacts as `node.napi.musl.node`), merges them under `prebuilds/`, and runs **`npm publish`** via OIDC. **No git tags** — the version field is the release input. With trusted publishing on a **public** repo, npm records **provenance** automatically. If that version is already on npm, the workflow skips build and publish.
+The release gate runs **`npm ci`** (so a broken or stale lockfile fails fast), then checks whether **`name@version` already exists** on npm. If not, it builds native targets (including **musl** artifacts as `node.napi.musl.node`), merges them under `prebuilds/`, and runs **`npm publish`** via OIDC. **No git tags** — the version field is the release input. With trusted publishing on a **public** repo, npm records **provenance** automatically. If that version is already on npm, the workflow skips build and publish.
 
 **If publish fails:** fix the underlying issue, push commits **without** bumping `version` again, and **re-run the same workflow** until it succeeds — then increment only for the *next* release. That keeps npm version numbers from skipping.
 
