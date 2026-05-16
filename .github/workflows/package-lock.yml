@@ -1,5 +1,5 @@
-# Fail PRs when package.json / package-lock.json drift; contributors must run npm run sync-lock.
-# On push to main, "Sync package lockfile" uses the same action with regenerate-and-push enabled.
+# Fail PRs when package-lock.json does not match package.json (no auto-regeneration in CI).
+
 name: Package lockfile
 
 env:
@@ -17,7 +17,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: ./.github/actions/sync-package-lock
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-          regenerate-and-push: 'false'
+          cache: npm
+
+      - name: Install (strict lockfile)
+        run: npm ci
+
+      - name: Verify lockfile matches package.json
+        run: npm run verify-lock
+        env:
+          CI: true

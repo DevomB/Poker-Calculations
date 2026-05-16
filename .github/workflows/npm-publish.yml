@@ -1,20 +1,15 @@
-# npm publish when package.json version is not yet on the registry (native prebuilds matrix).
+# Deliberate release: workflow_dispatch only. Bump version + lockfile on main locally, push,
+# then run this workflow from the Actions tab.
 #
-# Trigger: workflow_dispatch only (deliberate release). Bump package.json on main, let
-# "Sync package lockfile" finish if it runs, then run this workflow from the Actions tab.
-# This avoids burning semver numbers when the native matrix fails before publish.
-#
-# Publishing auth: npm Trusted Publishing (OIDC). Configure on npmjs.com for this repo +
-# workflow filename native-prebuild.yml — no NPM_TOKEN for publish. Requires Node ≥22.14.0
-# and npm CLI ≥11.5.1 (see publish job).
+# Auth: npm Trusted Publishing (OIDC). Configure at npmjs.com for this repo + workflow file
+# npm-publish.yml — no NPM_TOKEN. Requires Node ≥22.14 and npm CLI ≥11.5.1 on the publish job.
 
-name: Native prebuilds & npm publish
+name: npm publish
 
 on:
   workflow_dispatch:
 
 env:
-  # npm trusted publishing: Node ≥22.14.0 (https://docs.npmjs.com/trusted-publishers)
   NODE_VERSION: '22.14'
 
 concurrency:
@@ -26,7 +21,7 @@ jobs:
     name: Release gate
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     outputs:
       publish: ${{ steps.gate.outputs.publish }}
     steps:
@@ -34,11 +29,14 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: ./.github/actions/sync-package-lock
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies (validate lockfile)
+        run: npm ci
 
       - id: gate
         run: node scripts/should-npm-publish.js
@@ -60,7 +58,6 @@ jobs:
             tuple: linux-arm64
           - os: macos-latest
             tuple: darwin-arm64
-          # Intel macOS: avoid macos-13 (deprecated); use dedicated Intel image.
           - os: macos-15-intel
             tuple: darwin-x64
 
@@ -101,9 +98,6 @@ jobs:
           name: native-${{ matrix.tuple }}
           path: ${{ matrix.tuple }}.napi.node
 
-  # GitHub: JS Actions inside Alpine containers only work on x64 Linux hosts — not on ubuntu-*-arm.
-  # linux-x64 musl: native Alpine job on ubuntu-latest.
-  # linux-arm64 musl: build on ubuntu-latest via Docker (--platform linux/arm64) + QEMU.
   build-musl-x64:
     name: Build (Alpine / musl, linux-x64)
     needs: release-gate
@@ -202,9 +196,6 @@ jobs:
       - name: Assemble prebuilds/
         run: node scripts/assemble-prebuilds.js _native_bins
 
-      # Trusted publishing: OIDC via id-token (job permissions). Node ≥22.14 + npm CLI ≥11.5.1.
-      # Provenance is generated automatically for public repos — no --provenance flag needed.
-      # https://docs.npmjs.com/trusted-publishers
       - name: Ensure npm CLI for OIDC (≥11.5.1)
         run: npm install -g npm@^11.5.1
 
