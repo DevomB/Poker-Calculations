@@ -119,7 +119,7 @@ Publishing uses [`.github/workflows/native-prebuild.yml`](.github/workflows/nati
 Publishing uses **[trusted publishing](https://docs.npmjs.com/trusted-publishers)** — GitHub Actions proves identity to npm with **OIDC**; you **do not** store an **`NPM_TOKEN`** secret for `npm publish`.
 
 1. On [npmjs.com](https://www.npmjs.com/) → package **`poker-calculations`** → **Settings** → **Trusted Publisher**, connect **GitHub Actions** using:
-   - Repository that matches **`repository.url`** in [`package.json`](package.json) exactly (npm validates this).
+   - Repository that matches **`repository.url`** in [`package.json`](package.json) **exactly** (npm validates at publish time; npm does not validate when you save). Current value: `git+https://github.com/DevomB/Poker-Calculations.git`
    - Workflow filename **`native-prebuild.yml`** (same casing and `.yml` extension).
 2. After proving publishes work, optionally tighten **Publishing access** (“Require 2FA and disallow tokens”) and revoke old automation tokens, per npm’s migration guidance.
 
@@ -134,7 +134,9 @@ The workflow refreshes the lockfile in the release gate, then checks whether **`
 
 **If publish fails:** fix the underlying issue, push commits **without** bumping `version` again, and **re-run the same workflow** until it succeeds — then increment only for the *next* release. That keeps npm version numbers from skipping.
 
-Use **GitHub-hosted** runners for this workflow: OIDC trusted publishing does not support **self-hosted** runners yet ([npm docs](https://docs.npmjs.com/trusted-publishers)).
+Use **GitHub-hosted** runners for this workflow: OIDC trusted publishing does not support **self-hosted** runners yet ([npm docs](https://docs.npmjs.com/trusted-publishers)). The workflow pins **Node ≥22.14** to satisfy npm’s trusted-publishing runtime requirement alongside **npm CLI ≥11.5.1** in the publish job.
+
+In the GitHub repo, under **Settings → Actions → General → Workflow permissions**, use the default that allows Actions to run; the **publish** job sets **`id-token: write`** so OIDC works for `npm publish`.
 
 **Manual publish:** assemble binaries under `prebuilds/`, then `npm publish`. Without binaries, `prepack` fails unless `SKIP_PREBUILD_CHECK=1`.
 
