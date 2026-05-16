@@ -1,5 +1,6 @@
-# Deliberate release: workflow_dispatch only. Bump version + lockfile on main locally, push,
-# then run this workflow from the Actions tab.
+# Runs when package.json / package-lock.json change on main (typical release merge), and on
+# workflow_dispatch to re-run after a failure without a new commit. The release gate skips the
+# native matrix + publish when that version is already on npm (scripts/should-npm-publish.js).
 #
 # Auth: npm Trusted Publishing (OIDC). Configure at npmjs.com for this repo + workflow file
 # npm-publish.yml — no NPM_TOKEN. Requires Node ≥22.14 and npm CLI ≥11.5.1 on the publish job.
@@ -7,6 +8,12 @@
 name: npm publish
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - package.json
+      - package-lock.json
   workflow_dispatch:
 
 env:
@@ -27,7 +34,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: main
           fetch-depth: 0
 
       - uses: actions/setup-node@v5
@@ -66,7 +72,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: main
           fetch-depth: 0
 
       - uses: actions/setup-node@v5
@@ -108,7 +113,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: main
           fetch-depth: 0
 
       - name: Install Alpine build dependencies
@@ -144,7 +148,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: main
           fetch-depth: 0
 
       - uses: docker/setup-qemu-action@v3
@@ -178,7 +181,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: main
           fetch-depth: 0
 
       - uses: actions/download-artifact@v8
