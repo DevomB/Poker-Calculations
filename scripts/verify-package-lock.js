@@ -31,7 +31,7 @@ const after = fs.readFileSync(lockPath, 'utf8');
 if (before !== after) {
   if (isCI) {
     console.error(
-      'package-lock.json is out of sync with package.json. Run: npm run sync-lock locally and commit package-lock.json.',
+      'package-lock.json is out of sync with package.json. Regenerate it (e.g. npm install --package-lock-only), commit package-lock.json, and push.',
     );
     process.exit(1);
   }

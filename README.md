@@ -112,7 +112,7 @@ On Windows this expects MSVC on `PATH` like the build steps above.
 
 ## Maintainers: publishing
 
-Publishing uses [`.github/workflows/native-prebuild.yml`](.github/workflows/native-prebuild.yml) and runs **only when you start it** (Actions → **Native prebuilds & npm publish** → **Run workflow**). Pushes to `main` do **not** automatically publish, so a failed native matrix does not “consume” the next semver before npm sees it.
+Publishing uses [`.github/workflows/npm-publish.yml`](.github/workflows/npm-publish.yml) and runs **only when you start it** (Actions → **npm publish** → **Run workflow**). Pushes to `main` do **not** automatically publish, so a failed native matrix does not “consume” the next semver before npm sees it.
 
 ### npm Trusted Publishing (OIDC)
 
@@ -120,17 +120,17 @@ Publishing uses **[trusted publishing](https://docs.npmjs.com/trusted-publishers
 
 1. On [npmjs.com](https://www.npmjs.com/) → package **`poker-calculations`** → **Settings** → **Trusted Publisher**, connect **GitHub Actions** using:
    - Repository that matches **`repository.url`** in [`package.json`](package.json) **exactly** (npm validates at publish time; npm does not validate when you save). Current value: `git+https://github.com/DevomB/Poker-Calculations.git`
-   - Workflow filename **`native-prebuild.yml`** (same casing and `.yml` extension).
+   - Workflow filename **`npm-publish.yml`** (same casing and `.yml` extension). If you previously used **`native-prebuild.yml`**, update the trusted publisher entry on npm to this filename (or add a second allowed workflow and remove the old one).
 2. After proving publishes work, optionally tighten **Publishing access** (“Require 2FA and disallow tokens”) and revoke old automation tokens, per npm’s migration guidance.
 
 All dependencies used during CI are public; **`npm ci`** does not need a read token. If you later add **private** npm dependencies, use a **read-only** granular token only on install steps, not for publish.
 
 ### Release steps
 
-1. Bump **`package.json`** `version` and merge to **`main`**. If that edit triggers **Sync package lockfile**, wait until it completes (or run **`npm run sync-lock`** locally and push).
-2. Open **Actions** → **Native prebuilds & npm publish** → **Run workflow** (branch **`main`**).
+1. On **`main`**, bump **`package.json`** `version` and keep **`package-lock.json`** in sync (for example `npm install --package-lock-only` after dependency or version changes), then push.
+2. Open **Actions** → **npm publish** → **Run workflow** (branch **`main`**).
 
-The workflow refreshes the lockfile in the release gate, then checks whether **`name@version` already exists** on npm. If not, it builds native targets (including **musl** artifacts as `node.napi.musl.node`), merges them under `prebuilds/`, and runs **`npm publish`** via OIDC. **No git tags** — the version field is the release input. With trusted publishing on a **public** repo, npm records **provenance** automatically. If that version is already on npm, the workflow skips build and publish.
+The release gate runs **`npm ci`** on `main` (so a broken or stale lockfile fails fast), then checks whether **`name@version` already exists** on npm. If not, it builds native targets (including **musl** artifacts as `node.napi.musl.node`), merges them under `prebuilds/`, and runs **`npm publish`** via OIDC. **No git tags** — the version field is the release input. With trusted publishing on a **public** repo, npm records **provenance** automatically. If that version is already on npm, the workflow skips build and publish.
 
 **If publish fails:** fix the underlying issue, push commits **without** bumping `version` again, and **re-run the same workflow** until it succeeds — then increment only for the *next* release. That keeps npm version numbers from skipping.
 

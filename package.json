@@ -1,6 +1,6 @@
 {
   "name": "poker-calculations",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "NL Hold'em hand evaluation, Monte Carlo equity, decideAction, and chip / GTO math — C++ core with prebuilt N-API addon.",
   "main": "index.js",
   "types": "index.d.ts",
@@ -9,7 +9,6 @@
     "test": "tests"
   },
   "scripts": {
-    "sync-lock": "npm install --package-lock-only",
     "verify-lock": "node scripts/verify-package-lock.js",
     "build:native": "node scripts/build-native.js compile",
     "rebuild:native": "node scripts/build-native.js rebuild",
