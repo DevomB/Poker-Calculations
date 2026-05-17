@@ -66,7 +66,13 @@ console.log('Breakeven FE pure bluff 100 pot jam 50:', poker.breakevenFoldEquity
 console.log('Hypergeometric one card 9/47:', poker.hypergeometricOneCardHitProbability(9, 47));
 console.log('Harrington M:', poker.harringtonM(1500, 50, 100, 0));
 console.log('ICM win probs [400,300,300]:', poker.icmWinProbabilitiesHarville([400, 300, 300]));
+console.log('ICM placement matrix row0:', poker.icmHarvillePlacementProbabilities([400, 300, 300])[0]);
 console.log(
   'Exact river AA vs random (sample board):',
   poker.exactHuEquityVsRandomHand(['As', 'Ah'], ['Kd', 'Qc', '7h', '5s', '3d'])
 );
+console.log(
+  'Chubukov max jam stack (AKs monotone flop sample):',
+  poker.chubukovMaxSymmetricJamStackBinarySearch(['As', 'Ks'], ['Qs', 'Js', '2c'], 150, 1_000_000_000)
+);
+console.log('Harrington effective M (2×25 ante):', poker.harringtonMEffective(1500, 50, 100, 25, 2));

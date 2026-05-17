@@ -57,22 +57,24 @@ All symbols below are exported from the **native addon** (C++ via N-API). **`bre
 
 | Area | Exports |
 | --- | --- |
-| **Hands & equity** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandCategory`, `simulateHandOutcome`, `parallelHandSimulation`, `exactHuEquityVsRandomHand` |
+| **Hands & equity** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandCategory`, `simulateHandOutcome`, `parallelHandSimulation`, `exactHuEquityVsRandomHand`, `straightMadeFlopToRiverExactProbability` |
 | **Strategy** | `decideAction` |
 | **Pot / EV** | `potOddsRatio`, `expectedValueCall`, `breakevenCallEquity`, `breakevenCallEquityWithRake`, `rakeFromPot` |
-| **Stacks & display** | `spr`, `effectiveStack`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds`, `harringtonM` |
-| **Heuristics & draws** | `ruleOfFourEquity`, `ruleOfTwoEquity`, `impliedBreakevenFutureWin`, `hypergeometricOneCardHitProbability`, `runnerRunnerBackdoorFlushTwoCardProbability`, `flopToRiverAtLeastOneHitProbability`, `flopToRiverAtLeastOneHitDisjointOutsSum`, `duplicationAdjustedOuts` |
+| **Stacks & display** | `spr`, `effectiveStack`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds`, `harringtonM`, `harringtonMEffective` |
+| **Heuristics & draws** | `ruleOfFourEquity`, `ruleOfTwoEquity`, `impliedBreakevenFutureWin`, `hypergeometricOneCardHitProbability`, `runnerRunnerBackdoorFlushTwoCardProbability`, `runnerRunnerStraightDrawHitProbability`, `flopToRiverAtLeastOneHitProbability`, `flopToRiverAtLeastOneHitUnionTwoCategories`, `flopToRiverAtLeastOneHitUnionThreeCategories`, `flopToRiverAtLeastOneHitDisjointOutsSum`, `duplicationAdjustedOuts` |
 | **Reverse implied / geometry** | `reverseImpliedOddsMaxFutureLoss`, `geometricPotAfterMatchedPotFractions` |
 | **Stats & risk** | `monteCarloStandardError`, `wilsonScoreInterval`, `riskOfRuinDiffusionApprox`, `bankrollForTargetRorDiffusion`, `betaBinomialFoldPosterior` |
-| **Kelly & jam toys** | `kellyCriterionBinary`, `chubukovSymmetricJamBreakevenStack` |
+| **Kelly & jam toys** | `kellyCriterionBinary`, `chubukovSymmetricJamBreakevenStack`, `chubukovSymmetricJamEv`, `chubukovMaxSymmetricJamStackChipsBinarySearch`, `chubukovMaxSymmetricJamStackBinarySearch` |
 | **GTO-style** | `minimumDefenseFrequency`, `alphaFrequency`, `bluffToValueRatio`, `valueToBluffRatio` |
 | **Sizing & commitment** | `betAsPotFraction`, `sprAfterCall`, `commitmentRatio` |
-| **Fold equity** | `breakevenFoldEquityPureBluff`, `breakevenFoldEquitySemiBluff`, `breakevenFoldEquitySemiBluffWithRake`, `twoStreetPureBluffSameFoldEquity` |
-| **Multiway** | `multiwaySymmetricBreakevenCallEquity` |
-| **ICM** | `icmWinProbabilitiesHarville`, `icmExpectedPayouts`, `icmPairwiseBubbleFactor` |
+| **Fold equity** | `breakevenFoldEquityPureBluff`, `breakevenFoldEquityPureBluffWithRake`, `breakevenFoldEquitySemiBluff`, `breakevenFoldEquitySemiBluffWithRake`, `twoStreetPureBluffSameFoldEquity`, `twoStreetPureBluffEv`, `breakevenFoldEquitySecondStreetPureBluff` |
+| **Multiway** | `multiwaySymmetricBreakevenCallEquity`, `multiwaySymmetricBreakevenCallEquityWithShare` |
+| **ICM** | `icmWinProbabilitiesHarville`, `icmHarvillePlacementProbabilities`, `icmExpectedPayouts`, `icmPairwiseBubbleFactor` |
 | **Side pots** | `sidePotLadderFromCommitments`, `layeredPotChipEvFromEquities` |
 
 **Breaking change (v1.2.0):** `poker-math.js` was removed; require `poker-calculations` (or the `.node` binding) for all math. Rebuild native artifacts after upgrading from a git clone.
+
+**API note:** `chubukovMaxSymmetricJamStackBinarySearch` takes four numeric arguments (no `iterations`); it returns the largest **integer** jam size in `[1, maxStackChips]` with nonnegative symmetric-jam EV using exact HU equity vs a random hand.
 
 ## Responsible use
 

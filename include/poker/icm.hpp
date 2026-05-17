@@ -5,7 +5,14 @@
 
 namespace poker {
 
-/// Harville / Malmuth–Harville placement probabilities: `placement[i]` = P(player i wins).
+/**
+ * P17: full Harville / Malmuth–Harville placement matrix.
+ * `out[i][r]` = P(player index `i` finishes in place `r+1`), where `r=0` is first place.
+ */
+[[nodiscard]] std::vector<std::vector<double>> icm_harville_placement_probabilities(
+    const std::vector<double>& stacks);
+
+/// Harville first-place probabilities (column `r=0` of `icm_harville_placement_probabilities`).
 [[nodiscard]] std::vector<double> icm_win_probabilities_harville(const std::vector<double>& stacks);
 
 /// Expected payout chips (or dollars) per seat for `payouts[0]` = first prize, etc.
