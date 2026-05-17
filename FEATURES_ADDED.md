@@ -8,7 +8,7 @@ Authoritative public API: [`index.d.ts`](index.d.ts) and the API tables in [`REA
 
 ## JavaScript / N-API exports (from `index.d.ts`)
 
-These are the symbols consumers `require('poker-calculations')` receive. All are implemented in C++ and bound in [`native/binding.cpp`](native/binding.cpp).
+These are the symbols consumers `require('poker-calculations')` receive. All are implemented in C++ and bound in [`native/binding.cpp`](native/binding.cpp). This table is the **entire** JavaScript API (see also `examples/native-binding-exports.mjs` for an auto-generated list at runtime). **C++-only** engine pieces (full `GameEngine`, deck lifecycle, `BotConfig` file I/O) are summarized under [Engine and integration](#engine-and-integration-from-readme-features-engine) below and live outside this export list.
 
 | Group | Export | Role |
 | --- | --- | --- |
@@ -31,6 +31,7 @@ These are the symbols consumers `require('poker-calculations')` receive. All are
 | | `formatPotOdds(potBeforeCall, toCall, decimals?)` | Human-readable `"x:1"` string. |
 | | `harringtonM(stackChips, smallBlind, bigBlind, totalAntes)` | **P11** Harrington **M** = stack / (sb + bb + antes). |
 | | `harringtonMEffective(stackChips, smallBlind, bigBlind, antePerActivePlayer, numActivePlayers)` | **P11** Effective M = stack / (sb + bb + antes from active players only). |
+| | `harringtonMEffectiveActiveAntes(stackChips, smallBlind, bigBlind, antesFromActiveSeats[])` | **P11** Same denominator with explicit per-seat antes for active players only. |
 | **Heuristics** | `ruleOfFourEquity(outs)` | Out-count × 4% cap heuristic (turn+river). |
 | | `ruleOfTwoEquity(outs)` | Out-count × 2% cap heuristic (one card). |
 | | `impliedBreakevenFutureWin(potBeforeCall, toCall, equity)` | Average extra future win needed for a neutral call; `+∞` if equity ≤ 0. |
@@ -39,6 +40,7 @@ These are the symbols consumers `require('poker-calculations')` receive. All are
 | | `flopToRiverAtLeastOneHitProbability(outs, unseenAfterFlop)` | **P2** Two streets, single effective out count, no hit on both misses. |
 | | `flopToRiverAtLeastOneHitUnionTwoCategories(unseenAfterFlop, outsA, outsB, sharedAb)` | **P2** Two categories with overlap; union cardinality in the two-draw formula. |
 | | `flopToRiverAtLeastOneHitUnionThreeCategories(...)` | **P2** Three categories; inclusion–exclusion on union size, then same two-street formula. |
+| | `flopToRiverAtLeastOneHitUnionFourCategories(...)` | **P2** Four categories; full inclusion–exclusion on card-count intersections, then same two-street formula. |
 | | `flopToRiverAtLeastOneHitDisjointOutsSum(unseenAfterFlop, outsPerCategory[])` | **P2b** Sum **disjoint** categories then same as P2 (categories must not share outs). |
 | | `runnerRunnerStraightDrawHitProbability(straightKind, deadAmongPatternOuts, unseenAfterFlop)` | **P4 (pattern)** Runner–runner straight draw: gutshot (4) / OESD or double-belly (8), minus dead among pattern outs. |
 | | `straightMadeFlopToRiverExactProbability(heroHoleCards[], flopThree[], knownDead[])` | **P4 (enumeration)** Exact P(straight or better in hero’s best 7) after uniform random unordered turn+river from remaining deck. |
@@ -54,7 +56,8 @@ These are the symbols consumers `require('poker-calculations')` receive. All are
 | | `chubukovSymmetricJamBreakevenStack(deadMoneyChips, equity)` | **P23** Toy symmetric jam: `S = equity·dead/(1−2·equity)` for `equity < 0.5`; `+∞` if `equity > 0.5`. |
 | | `chubukovSymmetricJamEv(jamStackChips, deadMoneyChips, equity)` | **P23** Symmetric jam toy EV in chips. |
 | | `chubukovMaxSymmetricJamStackChipsBinarySearch(equity, deadMoneyChips, maxStackChips)` | **P23** Largest integer jam stack in `[1, max]` with nonnegative EV for fixed equity. |
-| | `chubukovMaxSymmetricJamStackBinarySearch(heroHoleCards[], boardCards[], deadMoneyChips, maxStackChips)` | **P23** Same as chips search on equity from `exactHuEquityVsRandomHand` (board 3–5). |
+| | `chubukovMaxSymmetricJamStackBinarySearch(heroHoleCards[], boardCards[], deadMoneyChips, maxStackChips)` | **P23** Same as chips search on equity from `exactHuEquityVsRandomHand` (board 3–5); `maxStackChips` clamped like native `double` → int cap. |
+| | `chubukovMaxSymmetricJamStackFromHandBinarySearch(heroHoleCards[], boardCards[], deadMoneyChips, maxStackChips)` | **P23** Same integer search; `maxStackChips` read as **int32** in the binding (pair with the other export for large caps). |
 | **GTO-style (toy)** | `minimumDefenseFrequency(potBeforeOpponentBet, opponentBetSize)` | MDF from pot geometry. |
 | | `alphaFrequency(potBeforeBet, betSize)` | `1 - MDF` = exploit weight if hero never defends. |
 | | `bluffToValueRatio(potBeforeBet, betSize)` | Polarized river combo ratio `bet / (pot + 2×bet)`. |
@@ -69,6 +72,7 @@ These are the symbols consumers `require('poker-calculations')` receive. All are
 | | `twoStreetPureBluffSameFoldEquity(potBeforeStreet1, betStreet1, betStreet2)` | **P8** Same FE both streets, pure air; may return `NaN`. |
 | | `twoStreetPureBluffEv(..., foldEquityStreet1, foldEquityStreet2)` | **P8** Two-street pure-bluff chip EV with independent FE per street. |
 | | `breakevenFoldEquitySecondStreetPureBluff(..., foldEquityStreet1)` | **P8** Breakeven second-street FE given first-street FE. |
+| | `breakevenFoldEquityFirstStreetPureBluff(..., foldEquityStreet2)` | **P8** Breakeven first-street FE given second-street FE. |
 | **Multiway** | `multiwaySymmetricBreakevenCallEquity(potBefore, toCall, symmetricExtraCallers)` | **P5** `k` extra symmetric callers. |
 | | `multiwaySymmetricBreakevenCallEquityWithShare(..., shareModel, heroFractionWhenWin)` | **P5** Same geometry with winner-take-all vs fixed hero share when winning (chop proxy). |
 | **ICM** | `icmWinProbabilitiesHarville(stacks[])` | **P17** Harville first-place probabilities. |
