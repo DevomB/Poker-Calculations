@@ -129,14 +129,86 @@ export interface PokerCalculations {
   runnerRunnerBackdoorFlushTwoCardProbability(suitCardsRemaining: number, unseenCards: number): number;
   /** P2: flop→river at least one hit from disjoint out count. */
   flopToRiverAtLeastOneHitProbability(outs: number, unseenAfterFlop: number): number;
-  /** P4: sum disjoint out categories then same as P2 (categories must not overlap on cards). */
+  /**
+   * P2: two out categories with card-level overlap; `sharedAb` = intersection size.
+   * Uses union cardinality `outsA + outsB - sharedAb` in the two-draw formula.
+   */
+  flopToRiverAtLeastOneHitUnionTwoCategories(
+    unseenAfterFlop: number,
+    outsA: number,
+    outsB: number,
+    sharedAb: number
+  ): number;
+  /**
+   * P2: three categories; union = `oa+ob+oc - sab - sac - sbc + sabc`.
+   */
+  flopToRiverAtLeastOneHitUnionThreeCategories(
+    unseenAfterFlop: number,
+    outsA: number,
+    outsB: number,
+    outsC: number,
+    sharedAb: number,
+    sharedAc: number,
+    sharedBc: number,
+    sharedAbc: number
+  ): number;
+  /**
+   * P2: four out categories; inclusion–exclusion on **card counts** (pair/triple/four-way intersection sizes).
+   * Pair order (0,1)(0,2)(0,3)(1,2)(1,3)(2,3); triples (0,1,2)(0,1,3)(0,2,3)(1,2,3); last arg four-way.
+   */
+  flopToRiverAtLeastOneHitUnionFourCategories(
+    unseenAfterFlop: number,
+    outsA: number,
+    outsB: number,
+    outsC: number,
+    outsD: number,
+    s01: number,
+    s02: number,
+    s03: number,
+    s12: number,
+    s13: number,
+    s23: number,
+    s012: number,
+    s013: number,
+    s023: number,
+    s123: number,
+    fourWay: number
+  ): number;
+  /** P2b: disjoint categories only (must not share outs); sums then same as single-count P2. */
   flopToRiverAtLeastOneHitDisjointOutsSum(unseenAfterFlop: number, outsPerCategory: number[]): number;
+  /**
+   * P4 (pattern): structured straight-draw runner model (distinct straight-completing unseen cards).
+   * `straightKind`: 0 = gutshot (4 outs), 1 = open-ended (8), 2 = double-belly buster (8).
+   * For full-card flop→river P(straight or better) use `straightMadeFlopToRiverExactProbability`.
+   */
+  runnerRunnerStraightDrawHitProbability(
+    straightKind: 0 | 1 | 2,
+    deadAmongPatternOuts: number,
+    unseenAfterFlop: number
+  ): number;
   /** P6: toy reverse-implied ceiling (max future loss when losing). */
   reverseImpliedOddsMaxFutureLoss(potBeforeCall: number, toCall: number, equity: number): number;
   /** P7: pot after `nRounds` of matched pot-fraction betting heads-up. */
   geometricPotAfterMatchedPotFractions(pot0: number, fraction: number, nRounds: number): number;
   /** P11: Harrington M = stack / (sb + bb + antes). */
   harringtonM(stackChips: number, smallBlind: number, bigBlind: number, totalAntes: number): number;
+  /**
+   * P11: effective M = stack / (sb + bb + antePerActivePlayer * numActivePlayers).
+   */
+  harringtonMEffective(
+    stackChips: number,
+    smallBlind: number,
+    bigBlind: number,
+    antePerActivePlayer: number,
+    numActivePlayers: number
+  ): number;
+  /** P11: effective M with per-seat antes (active seats only); sum of array is total antes in denominator. */
+  harringtonMEffectiveActiveAntes(
+    stackChips: number,
+    smallBlind: number,
+    bigBlind: number,
+    antesFromActiveSeats: number[]
+  ): number;
   /** P12: full Kelly for binary outcome, `netOdds` = net profit per unit staked when you win. */
   kellyCriterionBinary(winProbability: number, netOdds: number): number;
   /** P15: SE of binomial MC estimate. */
@@ -178,11 +250,29 @@ export interface PokerCalculations {
     rakeFraction: number,
     rakeCap: number
   ): number;
+  /** P10 parallel: pure-bluff breakeven FE when fold wins `pot+bet` minus rake on shipped pot. */
+  breakevenFoldEquityPureBluffWithRake(
+    potBeforeHeroBet: number,
+    heroBetOrCallSize: number,
+    rakeFraction: number,
+    rakeCap: number
+  ): number;
   /** P5: symmetric extra callers each matching `toCall`. */
   multiwaySymmetricBreakevenCallEquity(
     potBefore: number,
     toCall: number,
     symmetricExtraCallers: number
+  ): number;
+  /**
+   * P5: same pot geometry with explicit pot-share when hero wins.
+   * `shareModel` 0 = winner-take-all; 1 = multiply final pot by `heroFractionWhenWin` (e.g. chop proxy).
+   */
+  multiwaySymmetricBreakevenCallEquityWithShare(
+    potBefore: number,
+    toCall: number,
+    symmetricExtraCallers: number,
+    shareModel: 0 | 1,
+    heroFractionWhenWin: number
   ): number;
   /** P8: same FE both streets, pure air; may return NaN if no root in [0,1]. */
   twoStreetPureBluffSameFoldEquity(
@@ -190,10 +280,45 @@ export interface PokerCalculations {
     betStreet1: number,
     betStreet2: number
   ): number;
+  /** P8: EV of two-street pure bluff with independent `fe1`, `fe2`. */
+  twoStreetPureBluffEv(
+    potBeforeStreet1: number,
+    betStreet1: number,
+    betStreet2: number,
+    foldEquityStreet1: number,
+    foldEquityStreet2: number
+  ): number;
+  /** P8: breakeven second-street FE given first-street FE (may lie outside [0,1]). */
+  breakevenFoldEquitySecondStreetPureBluff(
+    potBeforeStreet1: number,
+    betStreet1: number,
+    betStreet2: number,
+    foldEquityStreet1: number
+  ): number;
+  /** P8: breakeven first-street FE given second-street FE (may lie outside [0,1]). */
+  breakevenFoldEquityFirstStreetPureBluff(
+    potBeforeStreet1: number,
+    betStreet1: number,
+    betStreet2: number,
+    foldEquityStreet2: number
+  ): number;
   /** P23: symmetric jam breakeven stack from dead money and equity (toy HU). */
   chubukovSymmetricJamBreakevenStack(deadMoneyChips: number, equity: number): number;
+  /** P23: symmetric jam toy EV in chips: `equity * (2 * jamStack + dead) - jamStack`. */
+  chubukovSymmetricJamEv(jamStackChips: number, deadMoneyChips: number, equity: number): number;
+  /**
+   * P23: largest integer jam stack in `[1, maxStackChips]` with nonnegative symmetric-jam EV for the
+   * supplied equity (composition with `exactHuEquityVsRandomHand` is left to the caller).
+   */
+  chubukovMaxSymmetricJamStackChipsBinarySearch(
+    equity: number,
+    deadMoneyChips: number,
+    maxStackChips: number
+  ): number;
   /** P17: Harville first-place probabilities. */
   icmWinProbabilitiesHarville(stacks: number[]): number[];
+  /** P17: full Harville placement matrix `[player][finishRank]` (rank 0 = first). */
+  icmHarvillePlacementProbabilities(stacks: number[]): number[][];
   /** P18: ICM expected payouts (prize vector length = players). */
   icmExpectedPayouts(stacks: number[], payouts: number[]): number[];
   /** P19: pairwise bubble factor (finite differences on P18). */
@@ -213,6 +338,26 @@ export interface PokerCalculations {
   ): number[];
   /** P22: exact HU vs random villain hand; board must have 3–5 cards. */
   exactHuEquityVsRandomHand(heroHoleCards: string[], boardCards: string[]): number;
+  /**
+   * P4 (exact): P(best 7-card hand is straight or straight flush) after two uniformly random **distinct**
+   * cards from the remaining deck (unordered two-card subset; same distribution as turn+river multiset).
+   * `flopThree` length 3; `knownDead` may be empty.
+   */
+  straightMadeFlopToRiverExactProbability(
+    heroHoleCards: string[],
+    flopThree: string[],
+    knownDead: string[]
+  ): number;
+  /**
+   * P23: largest integer jam stack in `[1, maxStackChips]` with nonnegative symmetric-jam EV using
+   * exact HU equity vs a random hand (`exactHuEquityVsRandomHand`); board 3–5.
+   */
+  chubukovMaxSymmetricJamStackBinarySearch(
+    heroHoleCards: string[],
+    boardCards: string[],
+    deadMoneyChips: number,
+    maxStackChips: number
+  ): number;
 }
 
 declare const api: PokerCalculations;

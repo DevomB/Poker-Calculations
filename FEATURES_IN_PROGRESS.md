@@ -52,9 +52,9 @@ Follow the same pipeline the project already uses for chip / GTO math.
 | Topic | Note |
 | --- | --- |
 | **ICM (P17–P19)** | Harville / Malmuth–Harville weighting; document elimination-order assumptions; expose payout vector explicitly. |
-| **P22–P23** | Enumeration cost grows quickly; **no silent caching** inside the addon. `exactHuEquityVsRandomHand` requires board length ≥ 3. `chubukovSymmetricJamBreakevenStack` is a **closed-form toy** from equity (combine with P22 or external equity when you have it). |
+| **P22–P23** | Enumeration cost grows quickly; **no silent caching** inside the addon. `exactHuEquityVsRandomHand` requires board length **3–5**. `chubukovSymmetricJamBreakevenStack` is closed-form from equity; `chubukovSymmetricJamEv` / `chubukovMaxSymmetricJamStackChipsBinarySearch` are the affine toy in integer chips; `chubukovMaxSymmetricJamStackBinarySearch` composes P22 equity with that integer search. |
 | **P25** | Heuristic only — never present as exact multiway equity. |
-| **P2 / P4** | Easy to get wrong with overlapping outs; prefer tests with small toy decks **or** fully specified out sets from integration tests. |
+| **P2 / P4** | Overlapping out categories: use `flopToRiverAtLeastOneHitUnionTwoCategories` / `UnionThreeCategories` with explicit intersection sizes; do not sum disjoint helpers. Straight runner helper is **out-count semantics** (4 or 8 pattern outs minus dead), not full wrap geometry from the evaluator. |
 
 ---
 

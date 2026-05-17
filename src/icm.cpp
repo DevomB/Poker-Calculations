@@ -61,8 +61,9 @@ void harville_placement_recur(const std::vector<double>& stacks, std::uint32_t m
     }
 }
 
-[[nodiscard]] std::vector<std::vector<double>> harville_placement_matrix(
-    const std::vector<double>& stacks) {
+}  // namespace
+
+std::vector<std::vector<double>> icm_harville_placement_probabilities(const std::vector<double>& stacks) {
     const std::size_t n = stacks.size();
     if (n == 0 || n > 31) {
         throw std::invalid_argument("ICM: need 1..31 players");
@@ -79,16 +80,13 @@ void harville_placement_recur(const std::vector<double>& stacks, std::uint32_t m
         }
         mask |= (1U << static_cast<unsigned>(i));
     }
-    std::vector<std::vector<double>> placement(
-        n, std::vector<double>(n, 0.0));
+    std::vector<std::vector<double>> placement(n, std::vector<double>(n, 0.0));
     harville_placement_recur(stacks, mask, 1, 1.0, placement);
     return placement;
 }
 
-}  // namespace
-
 std::vector<double> icm_win_probabilities_harville(const std::vector<double>& stacks) {
-    const auto p = harville_placement_matrix(stacks);
+    const auto p = icm_harville_placement_probabilities(stacks);
     const std::size_t n = stacks.size();
     std::vector<double> win(n, 0.0);
     for (std::size_t i = 0; i < n; ++i) {
@@ -108,7 +106,7 @@ std::vector<double> icm_expected_payouts(const std::vector<double>& stacks,
             throw std::invalid_argument("ICM: payouts must be finite and non-negative");
         }
     }
-    const auto placement = harville_placement_matrix(stacks);
+    const auto placement = icm_harville_placement_probabilities(stacks);
     std::vector<double> ev(n, 0.0);
     for (std::size_t i = 0; i < n; ++i) {
         for (std::size_t r = 0; r < n; ++r) {

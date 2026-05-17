@@ -6,6 +6,20 @@
 
 namespace poker {
 
+/// P4: structured straight-draw runner patterns (distinct straight-completing unseen cards).
+enum class Runner_runner_straight_draw_kind {
+    GutshotFourOut = 0,
+    OpenEndedEightOut = 1,
+    DoubleBellyBusterEightOut = 2,
+};
+
+/// P5: how hero shares the pot when winning after calling (symmetric multiway toy).
+enum class Multiway_symmetric_pot_share_model {
+    WinnerTakesAll = 0,
+    /** Hero wins `hero_fraction_of_pot_when_win` of the **final** pot when holding the best hand. */
+    FixedHeroShareWhenWins = 1,
+};
+
 /// `to_call / (pot + to_call)` when `to_call > 0` and `pot + to_call > 0`; else `0`.
 [[nodiscard]] double pot_odds_ratio(int pot, int to_call);
 
@@ -98,8 +112,46 @@ namespace poker {
 [[nodiscard]] double runner_runner_flush_two_card_probability(double suit_cards_remaining,
                                                               double unseen_cards);
 
-/// Two streets, flop to river: P(at least one hit) with disjoint out count `outs`.
+/// Two streets, flop to river: P(at least one hit) with one clean out count `outs` (two draws).
 [[nodiscard]] double flop_to_river_at_least_one_hit_probability(double outs, double unseen_after_flop);
+
+/**
+ * P2: two overlapping out categories (card counts). Union = `outs_a + outs_b - overlap_ab`; then the
+ * standard two-draw “at least one” formula.
+ */
+[[nodiscard]] double flop_to_river_two_category_union_hit_probability(double unseen_after_flop,
+                                                                      double outs_a, double outs_b,
+                                                                      double overlap_ab);
+
+/** P2: same as `flop_to_river_two_category_union_hit_probability` (shared_ab = overlap_ab). */
+[[nodiscard]] double flop_to_river_at_least_one_hit_union_two_categories(double unseen_after_flop,
+                                                                         double outs_a, double outs_b,
+                                                                         double shared_ab);
+
+/**
+ * P2: three categories with pairwise and triple intersection sizes (card counts). Union size =
+ * `oa+ob+oc - sab - sac - sbc + sabc`.
+ */
+[[nodiscard]] double flop_to_river_at_least_one_hit_union_three_categories(
+    double unseen_after_flop, double outs_a, double outs_b, double outs_c, double shared_ab,
+    double shared_ac, double shared_bc, double shared_abc);
+
+/**
+ * P2: four categories; intersections are **card counts**. Pair order (0,1)(0,2)(0,3)(1,2)(1,3)(2,3);
+ * triple order (0,1,2)(0,1,3)(0,2,3)(1,2,3); `four_way` = |A∩B∩C∩D|.
+ */
+[[nodiscard]] double flop_to_river_at_least_one_hit_union_four_categories(
+    double unseen_after_flop, double oa, double ob, double oc, double od, double s01, double s02,
+    double s03, double s12, double s13, double s23, double s012, double s013, double s023, double s123,
+    double four_way);
+
+/**
+ * P4 (toy): canonical 4- or 8-out **straight-draw** runner model (subtract dead cards from pattern size).
+ * For **exact** straight-or-better rate from concrete flop cards, use
+ * `straight_made_flop_to_river_exact_probability` in `exact_equity.hpp`.
+ */
+[[nodiscard]] double runner_runner_straight_draw_hit_probability(
+    Runner_runner_straight_draw_kind kind, int dead_cards_among_pattern_outs, double unseen_after_flop);
 
 /// P6: max extra chips lost on future streets when losing, keeping current call EV >= 0 (toy model).
 [[nodiscard]] double reverse_implied_odds_max_future_loss(double pot_before_call, double to_call,
@@ -109,9 +161,24 @@ namespace poker {
 [[nodiscard]] double geometric_pot_after_matched_pot_fractions(double pot0, double fraction,
                                                                 int n_rounds);
 
-/// P11: Harrington M = stack / (sb + bb + antes).
+/// P11: Harrington M = stack / (sb + bb + total_antes) with caller-supplied total antes.
 [[nodiscard]] double harrington_m(double stack_chips, double small_blind, double big_blind,
                                   double total_antes);
+
+/**
+ * P11 effective M: `stack / (sb + bb + ante_per_active_player * num_active_players)` — antes only
+ * from `num_active_players` seats each paying `ante_per_active_player`.
+ */
+[[nodiscard]] double harrington_m_effective(double stack_chips, double small_blind, double big_blind,
+                                          double ante_per_active_player, int num_active_players);
+
+/**
+ * P11: effective M when antes differ by seat — pass one entry per **active** seat (zeros allowed);
+ * `total_antes` = sum of entries.
+ */
+[[nodiscard]] double harrington_m_effective_active_antes(double stack_chips, double small_blind,
+                                                        double big_blind,
+                                                        const std::vector<double>& antes_from_active_seats);
 
 /// P12: full Kelly fraction for binary bet: win net `net_odds` per unit staked, win prob `p`.
 [[nodiscard]] double kelly_criterion_binary(double win_probability, double net_odds);
@@ -167,11 +234,28 @@ struct Wilson_interval {
                                                                 double rake_fraction,
                                                                 double rake_cap);
 
+/**
+ * P10 parallel: pure-bluff breakeven FE when a fold wins `pot_before + hero_bet - rake` (rake on chips
+ * shipped after villain folds).
+ */
+[[nodiscard]] double breakeven_fold_equity_pure_bluff_with_rake(double pot_before_hero_bet,
+                                                                double hero_bet_or_call_size,
+                                                                double rake_fraction, double rake_cap);
+
 // --- P5 / P8 ---
 
 /// P5: symmetric callers: `k` opponents each match `to_call` after hero calls.
 [[nodiscard]] double multiway_symmetric_breakeven_call_equity(double pot_before, double to_call,
                                                               int symmetric_extra_callers);
+
+/**
+ * P5: same geometry as `multiway_symmetric_breakeven_call_equity`, but hero receives only
+ * `hero_fraction_of_pot_when_win` of the final pot when winning (e.g. 1/(1+t) for t-way chop proxy).
+ * `model` must be `FixedHeroShareWhenWins` with fraction in (0,1], or `WinnerTakesAll` (fraction ignored).
+ */
+[[nodiscard]] double multiway_symmetric_breakeven_call_equity_with_share(
+    double pot_before, double to_call, int symmetric_extra_callers,
+    Multiway_symmetric_pot_share_model model, double hero_fraction_of_pot_when_win);
 
 /**
  * P8: same fold equity `fe` on two streets; pure air; pot P0, bets B1 then B2 into P0+2*B1.
@@ -180,7 +264,28 @@ struct Wilson_interval {
 [[nodiscard]] double two_street_pure_bluff_same_fold_equity(double pot_before_street1,
                                                              double bet_street1, double bet_street2);
 
-// --- P4: disjoint out groups (union bound exact for two draws when groups disjoint on cards) ---
+/// P8: EV of two-street pure-bluff line given independent fold rates `fe1`, `fe2` (linear accounting).
+[[nodiscard]] double two_street_pure_bluff_ev(double pot_before_street1, double bet_street1,
+                                              double bet_street2, double fold_equity_street1,
+                                              double fold_equity_street2);
+
+/**
+ * P8: given `fold_equity_street1`, returns breakeven `fold_equity_street2` for pure air (may lie outside
+ * [0,1]). Throws if `fold_equity_street1` is 1 (degenerate).
+ */
+[[nodiscard]] double breakeven_fold_equity_second_street_pure_bluff(double pot_before_street1,
+                                                                      double bet_street1, double bet_street2,
+                                                                      double fold_equity_street1);
+
+/**
+ * P8: given `fold_equity_street2`, returns breakeven `fold_equity_street1` for pure air (may lie outside
+ * [0,1]). Throws if `fold_equity_street2` is 1 (degenerate).
+ */
+[[nodiscard]] double breakeven_fold_equity_first_street_pure_bluff(double pot_before_street1,
+                                                                   double bet_street1, double bet_street2,
+                                                                   double fold_equity_street2);
+
+// --- P2b: disjoint categories (caller must ensure categories do not share outs) ---
 
 [[nodiscard]] double flop_to_river_at_least_one_hit_disjoint_outs_sum(double unseen_after_flop,
                                                                       const std::vector<double>& outs_per_disjoint_category);
@@ -191,5 +296,17 @@ struct Wilson_interval {
  * Returns `+Infinity` when `equity > 0.5` (toy model: jam arbitrarily large is +EV).
  */
 [[nodiscard]] double chubukov_symmetric_jam_breakeven_stack(double dead_money_chips, double equity);
+
+/// EV of symmetric jam `S` chips each when called: `equity * (2S + dead) - S`.
+[[nodiscard]] double chubukov_symmetric_jam_ev(double jam_stack_chips, double dead_money_chips,
+                                               double equity);
+
+/**
+ * P23: largest integer jam stack in `[1, max_stack_chips]` with nonnegative symmetric-jam EV
+ * (binary search). When `equity > 0.5`, returns `max_stack_chips`.
+ */
+[[nodiscard]] int chubukov_max_symmetric_jam_stack_chips_binary_search(double equity,
+                                                                       double dead_money_chips,
+                                                                       int max_stack_chips);
 
 }  // namespace poker

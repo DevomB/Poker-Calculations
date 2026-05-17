@@ -10,13 +10,13 @@ All **P1–P25** roadmap items from the former [`FEATURES_IN_PROGRESS.md`](FEATU
 
 | Phase | IDs | Topic |
 | --- | --- | --- |
-| A | P1, P3, P6, P7, P11, P12, P15, P24, P25 | Hypergeometric one-card, RR flush, reverse implied ceiling, geometric pot, Harrington M, Kelly, MC SE, Beta–Binomial, duplication heuristic |
+| A | P1, P3, P6, P7, P11, P12, P15, P24, P25 | Hypergeometric one-card, RR flush, reverse implied ceiling, geometric pot, Harrington M / effective M, Kelly, MC SE, Beta–Binomial, duplication heuristic |
 | B | P13, P14, P16 | Diffusion ROR, bankroll for target ROR, Wilson interval |
-| C | P9, P10 | Rake on final pot; call and semi-bluff breakevens with rake |
-| D | P2, P4, P5, P8 | Flop–river hit, disjoint outs sum, multiway symmetric breakeven, two-street same-FE pure bluff |
+| C | P9, P10 | Rake on final pot; call, semi-bluff, and pure-bluff breakevens with rake |
+| D | P2, P4, P5, P8 | Flop–river hit (single, disjoint sum, two- and three-category unions), RR straight draw outs, multiway symmetric breakeven + share model, two-street pure bluff (same FE, general FE, second-street breakeven) |
 | E | P20, P21 | Side-pot ladder, layered pot chip EV from per-layer equities |
-| F | P22, P23 | Exact HU vs random (board 3–5); Chubukov-style symmetric jam breakeven stack (toy) |
-| G | P17, P18, P19 | Harville ICM win probs, expected payouts, pairwise bubble factor |
+| F | P22, P23 | Exact HU vs random (board 3–5); Chubukov closed-form stack + max-stack binary search from enumerated equity |
+| G | P17, P18, P19 | Harville ICM (full placement matrix, win probs), expected payouts, pairwise bubble factor |
 
 ---
 
@@ -53,4 +53,4 @@ Rebranded pot-odds-only helpers, opaque “hand power” indices, PLO/short-deck
 
 ---
 
-*Last expanded when P1–P25 shipped to the native API; verify `index.d.ts` before relying on names.*
+*Last expanded when P1–P25 extensions (P2 union, P4 straight RR, P5 share, P8 general FE, P11 effective M, P10 pure rake, P17 placement matrix, P23 binary search) shipped; verify `index.d.ts` before relying on names.*

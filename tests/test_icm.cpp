@@ -31,3 +31,24 @@ TEST(Icm, BubbleFactorPositive) {
     EXPECT_TRUE(std::isfinite(bf));
     EXPECT_GT(bf, 0.0);
 }
+
+TEST(Icm, HarvillePlacementMatrixRowsAndColumns) {
+    const std::vector<double> stacks = {300.0, 200.0, 500.0};
+    const auto m = poker::icm_harville_placement_probabilities(stacks);
+    ASSERT_EQ(m.size(), 3U);
+    for (const auto& row : m) {
+        ASSERT_EQ(row.size(), 3U);
+        double rs = 0.0;
+        for (double x : row) {
+            rs += x;
+        }
+        EXPECT_NEAR(rs, 1.0, 1e-6);
+    }
+    for (std::size_t c = 0; c < 3; ++c) {
+        double cs = 0.0;
+        for (std::size_t r = 0; r < 3; ++r) {
+            cs += m[r][c];
+        }
+        EXPECT_NEAR(cs, 1.0, 1e-6);
+    }
+}

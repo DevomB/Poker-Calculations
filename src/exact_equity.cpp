@@ -1,6 +1,8 @@
 #include "poker/exact_equity.hpp"
 
 #include "poker/hand_evaluator.hpp"
+#include "poker/poker_math.hpp"
+#include "poker/types.hpp"
 
 #include <array>
 #include <cstddef>
@@ -48,6 +50,12 @@ void mark_used(const std::vector<Card>& cards, std::array<bool, 52>& used) {
         }
     }
     return d;
+}
+
+[[nodiscard]] Card card_from_index(int idx) {
+    const int rank = idx / 4;
+    const int suit = idx % 4;
+    return Card(static_cast<std::uint8_t>(rank), static_cast<std::uint8_t>(suit));
 }
 
 void enumerate_combos(const std::vector<int>& pool, int k, int start, std::vector<int>& cur,
@@ -128,6 +136,106 @@ double exact_hu_equity_vs_random_hand(const std::vector<Card>& hero_hole_cards,
         throw std::invalid_argument("exactHuEquityVsRandomHand: empty enumeration");
     }
     return win_weight / total;
+}
+
+double straight_made_flop_to_river_exact_probability(const std::vector<Card>& hero_hole_cards,
+                                                     const std::vector<Card>& flop_three_cards,
+                                                     const std::vector<Card>& known_dead_cards) {
+    if (hero_hole_cards.size() != 2) {
+        throw std::invalid_argument("straightMadeFlopToRiverExactProbability: hero must have exactly two cards");
+    }
+    if (flop_three_cards.size() != 3) {
+        throw std::invalid_argument("straightMadeFlopToRiverExactProbability: flop must have exactly three cards");
+    }
+    std::array<bool, 52> used{};
+    used.fill(false);
+    mark_used(hero_hole_cards, used);
+    mark_used(flop_three_cards, used);
+    mark_used(known_dead_cards, used);
+    const std::vector<int> deck = unused_indices(used);
+    if (static_cast<int>(deck.size()) < 2) {
+        throw std::invalid_argument("straightMadeFlopToRiverExactProbability: need at least two unseen cards");
+    }
+    std::vector<std::vector<int>> pairs;
+    std::vector<int> cur;
+    enumerate_combos(deck, 2, 0, cur, pairs);
+    std::size_t hits = 0;
+    for (const std::vector<int>& pr : pairs) {
+        std::vector<Card> seven;
+        seven.reserve(7);
+        seven.insert(seven.end(), hero_hole_cards.begin(), hero_hole_cards.end());
+        seven.insert(seven.end(), flop_three_cards.begin(), flop_three_cards.end());
+        seven.push_back(card_from_index(pr[0]));
+        seven.push_back(card_from_index(pr[1]));
+        const HandEvaluation he = evaluate_best_hand(seven);
+        const HandRank cat = hand_category(he);
+        if (cat == HandRank::Straight || cat == HandRank::StraightFlush || cat == HandRank::RoyalFlush) {
+            ++hits;
+        }
+    }
+    if (pairs.empty()) {
+        throw std::invalid_argument("straightMadeFlopToRiverExactProbability: empty enumeration");
+    }
+    return static_cast<double>(hits) / static_cast<double>(pairs.size());
+}
+
+int chubukov_max_symmetric_jam_stack_from_hand_binary_search(const std::vector<Card>& hero_hole_cards,
+                                                             const std::vector<Card>& board_cards,
+                                                             double dead_money_chips, int max_stack_chips) {
+    if (!std::isfinite(dead_money_chips) || dead_money_chips < 0.0) {
+        throw std::invalid_argument("deadMoneyChips must be finite and non-negative");
+    }
+    if (max_stack_chips < 0) {
+        throw std::invalid_argument("maxStackChips must be non-negative");
+    }
+    if (max_stack_chips == 0) {
+        return 0;
+    }
+    const double eq = exact_hu_equity_vs_random_hand(hero_hole_cards, board_cards);
+    return chubukov_max_symmetric_jam_stack_chips_binary_search(eq, dead_money_chips, max_stack_chips);
+}
+
+double chubukov_max_symmetric_jam_stack_binary_search(const std::vector<Card>& hero_hole_cards,
+                                                     const std::vector<Card>& board_cards,
+                                                     double dead_money_chips, double max_stack_chips,
+                                                     int iterations) {
+    if (!std::isfinite(dead_money_chips) || dead_money_chips < 0.0) {
+        throw std::invalid_argument("deadMoneyChips must be finite and non-negative");
+    }
+    if (!std::isfinite(max_stack_chips) || max_stack_chips < 0.0) {
+        throw std::invalid_argument("maxStackChips must be finite and non-negative");
+    }
+    int it = iterations;
+    if (it < 1) {
+        it = 1;
+    }
+    if (it > 200) {
+        it = 200;
+    }
+    const double eq = exact_hu_equity_vs_random_hand(hero_hole_cards, board_cards);
+    if (eq <= 0.0) {
+        return 0.0;
+    }
+    if (eq >= 0.5) {
+        return max_stack_chips;
+    }
+    const auto ev = [eq, dead_money_chips](double S) {
+        return chubukov_symmetric_jam_ev(S, dead_money_chips, eq);
+    };
+    if (ev(max_stack_chips) >= 0.0) {
+        return max_stack_chips;
+    }
+    double lo = 0.0;
+    double hi = max_stack_chips;
+    for (int i = 0; i < it; ++i) {
+        const double mid = (lo + hi) * 0.5;
+        if (ev(mid) >= 0.0) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    return lo;
 }
 
 }  // namespace poker
