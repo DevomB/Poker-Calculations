@@ -1,5 +1,4 @@
 # Prebuilt native addons
-
 End users load binaries from here via [`node-gyp-build`](https://github.com/prebuild/node-gyp-build).
 
 ## Layout

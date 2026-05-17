@@ -6,3 +6,5 @@
 /build_native_tests
 /build_test_addon
 node_modules/
+
+prompt.txt

@@ -63,3 +63,10 @@ console.log('Rule of 4 (9 outs):', poker.ruleOfFourEquity(9));
 console.log('EV call 40% equity pot 100 call 50:', poker.expectedValueCall(0.4, 100, 50));
 console.log('SPR after call pot 100 call 50 eff stack 200:', poker.sprAfterCall(100, 50, 200));
 console.log('Breakeven FE pure bluff 100 pot jam 50:', poker.breakevenFoldEquityPureBluff(100, 50));
+console.log('Hypergeometric one card 9/47:', poker.hypergeometricOneCardHitProbability(9, 47));
+console.log('Harrington M:', poker.harringtonM(1500, 50, 100, 0));
+console.log('ICM win probs [400,300,300]:', poker.icmWinProbabilitiesHarville([400, 300, 300]));
+console.log(
+  'Exact river AA vs random (sample board):',
+  poker.exactHuEquityVsRandomHand(['As', 'Ah'], ['Kd', 'Qc', '7h', '5s', '3d'])
+);

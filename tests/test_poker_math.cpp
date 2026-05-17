@@ -81,3 +81,29 @@ TEST(PokerMath, FormatPotOdds) {
 TEST(PokerMath, ImpliedBreakevenInfinityAtZeroEquity) {
     EXPECT_TRUE(std::isinf(poker::implied_breakeven_future_win(100, 50, 0.0)));
 }
+
+TEST(PokerMath, HypergeometricOneCard) {
+    EXPECT_DOUBLE_EQ(poker::hypergeometric_one_card_hit_probability(9, 47), 9.0 / 47.0);
+}
+
+TEST(PokerMath, KellyBinary) {
+    const double f = poker::kelly_criterion_binary(0.6, 1.0);
+    EXPECT_NEAR(f, 0.2, 1e-12);
+}
+
+TEST(PokerMath, ChubukovBreakevenStack) {
+    const double s = poker::chubukov_symmetric_jam_breakeven_stack(150.0, 0.4);
+    EXPECT_NEAR(s, 150.0 * 0.4 / (1.0 - 0.8), 1e-9);
+}
+
+TEST(PokerMath, MultiwaySymmetricBreakeven) {
+    const double e = poker::multiway_symmetric_breakeven_call_equity(100, 50, 2);
+    EXPECT_DOUBLE_EQ(e, 50.0 / (100 + 50 * 3));
+}
+
+TEST(PokerMath, RakeBreakevenCall) {
+    const double e = poker::breakeven_call_equity_with_rake(100, 50, 0.05, 1e9);
+    const double final_pot = 200.0;
+    const double rake = 0.05 * final_pot;
+    EXPECT_DOUBLE_EQ(e, 50.0 / (200.0 - rake));
+}
