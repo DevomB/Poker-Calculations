@@ -20,6 +20,9 @@ add_library(poker_lib STATIC
     src/game_engine.cpp
     src/hand_evaluator.cpp
     src/poker_math.cpp
+    src/icm.cpp
+    src/side_pot.cpp
+    src/exact_equity.cpp
     src/strategy.cpp
     src/opponent_model.cpp
     src/monte_carlo.cpp
@@ -47,6 +50,9 @@ if(POKER_BUILD_TESTS)
         tests/test_game_engine.cpp
         tests/test_hand_evaluator.cpp
         tests/test_poker_math.cpp
+        tests/test_icm.cpp
+        tests/test_side_pot.cpp
+        tests/test_exact_equity.cpp
         tests/test_strategy.cpp
         tests/test_opponent_model.cpp
         tests/test_monte_carlo.cpp

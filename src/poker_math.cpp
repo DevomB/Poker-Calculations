@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -236,6 +237,345 @@ double breakeven_fold_equity_semi_bluff(double pot_before_hero_bet, double hero_
         throw std::invalid_argument("breakevenFoldEquitySemiBluff: degenerate (net equals pot)");
     }
     return net_when_called / den;
+}
+
+double hypergeometric_one_card_hit_probability(double outs, double unseen_cards) {
+    assert_non_neg_finite("outs", outs);
+    assert_positive_finite("unseenCards", unseen_cards);
+    if (outs > unseen_cards) {
+        throw std::invalid_argument("outs cannot exceed unseenCards for one-card draw");
+    }
+    return outs / unseen_cards;
+}
+
+double runner_runner_flush_two_card_probability(double suit_cards_remaining, double unseen_cards) {
+    assert_non_neg_finite("suitCardsRemaining", suit_cards_remaining);
+    assert_positive_finite("unseenCards", unseen_cards);
+    if (suit_cards_remaining > unseen_cards) {
+        throw std::invalid_argument("suitCardsRemaining cannot exceed unseenCards");
+    }
+    if (suit_cards_remaining < 2.0) {
+        return 0.0;
+    }
+    if (unseen_cards < 2.0) {
+        return 0.0;
+    }
+    const double num = suit_cards_remaining * (suit_cards_remaining - 1.0);
+    const double den = unseen_cards * (unseen_cards - 1.0);
+    return den <= 0.0 ? 0.0 : num / den;
+}
+
+double flop_to_river_at_least_one_hit_probability(double outs, double unseen_after_flop) {
+    assert_non_neg_finite("outs", outs);
+    assert_positive_finite("unseenAfterFlop", unseen_after_flop);
+    if (outs > unseen_after_flop) {
+        throw std::invalid_argument("outs cannot exceed unseenAfterFlop");
+    }
+    if (unseen_after_flop < 2.0) {
+        throw std::invalid_argument("need at least two unseen cards for flop-to-river");
+    }
+    if (outs <= 0.0) {
+        return 0.0;
+    }
+    const double u = unseen_after_flop;
+    const double o = outs;
+    const double miss_both = ((u - o) / u) * ((u - o - 1.0) / (u - 1.0));
+    return 1.0 - miss_both;
+}
+
+double reverse_implied_odds_max_future_loss(double pot_before_call, double to_call, double equity) {
+    assert_non_neg_finite("potBeforeCall", pot_before_call);
+    assert_non_neg_finite("toCall", to_call);
+    if (!std::isfinite(equity)) {
+        throw std::invalid_argument("equity must be a finite number");
+    }
+    const double e = clamp01(equity);
+    if (e <= 0.0) {
+        return 0.0;
+    }
+    if (e >= 1.0) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const double immediate_win = pot_before_call + to_call;
+    const double ev_at_zero_loss = e * immediate_win - (1.0 - e) * to_call;
+    if (ev_at_zero_loss < 0.0) {
+        return 0.0;
+    }
+    const double max_loss = (e * immediate_win) / (1.0 - e) - to_call;
+    return std::max(0.0, max_loss);
+}
+
+double geometric_pot_after_matched_pot_fractions(double pot0, double fraction, int n_rounds) {
+    assert_non_neg_finite("pot0", pot0);
+    if (!std::isfinite(fraction) || fraction < 0.0) {
+        throw std::invalid_argument("fraction must be a finite non-negative number");
+    }
+    if (n_rounds < 0) {
+        throw std::invalid_argument("nRounds must be non-negative");
+    }
+    if (pot0 == 0.0) {
+        return 0.0;
+    }
+    const double factor = 1.0 + 2.0 * fraction;
+    return pot0 * std::pow(factor, static_cast<double>(n_rounds));
+}
+
+double harrington_m(double stack_chips, double small_blind, double big_blind, double total_antes) {
+    assert_non_neg_finite("stackChips", stack_chips);
+    assert_non_neg_finite("smallBlind", small_blind);
+    assert_non_neg_finite("bigBlind", big_blind);
+    assert_non_neg_finite("totalAntes", total_antes);
+    const double denom = small_blind + big_blind + total_antes;
+    if (denom <= 0.0) {
+        throw std::invalid_argument("Harrington M denominator (sb+bb+antes) must be positive");
+    }
+    return stack_chips / denom;
+}
+
+double kelly_criterion_binary(double win_probability, double net_odds) {
+    if (!std::isfinite(win_probability)) {
+        throw std::invalid_argument("winProbability must be finite");
+    }
+    assert_positive_finite("netOdds", net_odds);
+    const double p = clamp01(win_probability);
+    const double q = 1.0 - p;
+    return (p * net_odds - q) / net_odds;
+}
+
+double monte_carlo_standard_error(double p_hat, int n_trials) {
+    if (!std::isfinite(p_hat)) {
+        throw std::invalid_argument("pHat must be finite");
+    }
+    if (n_trials <= 0) {
+        throw std::invalid_argument("nTrials must be positive");
+    }
+    const double p = clamp01(p_hat);
+    return std::sqrt(p * (1.0 - p) / static_cast<double>(n_trials));
+}
+
+Beta_binomial_fold_posterior beta_binomial_fold_update(double prior_alpha, double prior_beta,
+                                                       int folds, int calls) {
+    if (!std::isfinite(prior_alpha) || prior_alpha <= 0.0) {
+        throw std::invalid_argument("priorAlpha must be finite and positive");
+    }
+    if (!std::isfinite(prior_beta) || prior_beta <= 0.0) {
+        throw std::invalid_argument("priorBeta must be finite and positive");
+    }
+    if (folds < 0 || calls < 0) {
+        throw std::invalid_argument("folds and calls must be non-negative");
+    }
+    const double a = prior_alpha + static_cast<double>(folds);
+    const double b = prior_beta + static_cast<double>(calls);
+    Beta_binomial_fold_posterior out{};
+    out.alpha = a;
+    out.beta = b;
+    out.posterior_mean = a / (a + b);
+    return out;
+}
+
+double duplication_adjusted_outs(double outs, int num_villains, double duplication_weight) {
+    assert_non_neg_finite("outs", outs);
+    if (num_villains < 0) {
+        throw std::invalid_argument("numVillains must be non-negative");
+    }
+    assert_non_neg_finite("duplicationWeight", duplication_weight);
+    const double denom = 1.0 + duplication_weight * static_cast<double>(num_villains);
+    return denom <= 0.0 ? outs : outs / denom;
+}
+
+double risk_of_ruin_diffusion_approx(double drift_per_hand, double variance_per_hand,
+                                     double bankroll) {
+    if (!std::isfinite(drift_per_hand) || !std::isfinite(variance_per_hand) ||
+        !std::isfinite(bankroll)) {
+        throw std::invalid_argument("drift, variance, and bankroll must be finite");
+    }
+    assert_positive_finite("bankroll", bankroll);
+    assert_positive_finite("variancePerHand", variance_per_hand);
+    if (drift_per_hand <= 0.0) {
+        return 1.0;
+    }
+    const double exponent = -2.0 * drift_per_hand * bankroll / variance_per_hand;
+    return clamp01(std::exp(exponent));
+}
+
+double bankroll_for_target_ror_diffusion(double drift_per_hand, double variance_per_hand,
+                                         double target_ror) {
+    if (!std::isfinite(drift_per_hand) || !std::isfinite(variance_per_hand) ||
+        !std::isfinite(target_ror)) {
+        throw std::invalid_argument("arguments must be finite");
+    }
+    assert_positive_finite("variancePerHand", variance_per_hand);
+    assert_positive_finite("driftPerHand", drift_per_hand);
+    if (target_ror <= 0.0 || target_ror > 1.0) {
+        throw std::invalid_argument("targetRor must be in (0, 1]");
+    }
+    if (target_ror >= 1.0) {
+        return 0.0;
+    }
+    const double b =
+        -std::log(target_ror) * variance_per_hand / (2.0 * drift_per_hand);
+    return std::max(0.0, b);
+}
+
+Wilson_interval wilson_score_interval(int successes, int n_trials, double z) {
+    if (successes < 0 || n_trials < 0) {
+        throw std::invalid_argument("successes and nTrials must be non-negative");
+    }
+    if (successes > n_trials) {
+        throw std::invalid_argument("successes cannot exceed nTrials");
+    }
+    if (!std::isfinite(z) || z <= 0.0) {
+        throw std::invalid_argument("z must be finite and positive");
+    }
+    Wilson_interval w{};
+    if (n_trials == 0) {
+        w.lower = 0.0;
+        w.upper = 1.0;
+        return w;
+    }
+    const double n = static_cast<double>(n_trials);
+    const double p = static_cast<double>(successes) / n;
+    const double z2 = z * z;
+    const double denom = 1.0 + z2 / n;
+    const double center = (p + z2 / (2.0 * n)) / denom;
+    const double half = z * std::sqrt((p * (1.0 - p) + z2 / (4.0 * n * n)) / n) / denom;
+    w.lower = clamp01(center - half);
+    w.upper = clamp01(center + half);
+    return w;
+}
+
+double rake_from_pot(double pot_chips, double rake_fraction, double rake_cap) {
+    assert_non_neg_finite("potChips", pot_chips);
+    assert_non_neg_finite("rakeFraction", rake_fraction);
+    assert_non_neg_finite("rakeCap", rake_cap);
+    if (rake_fraction > 1.0) {
+        throw std::invalid_argument("rakeFraction should not exceed 1 for this model");
+    }
+    const double raw = rake_fraction * pot_chips;
+    return std::min(raw, rake_cap);
+}
+
+double breakeven_call_equity_with_rake(double pot_before_call, double to_call, double rake_fraction,
+                                       double rake_cap) {
+    assert_non_neg_finite("potBeforeCall", pot_before_call);
+    assert_non_neg_finite("toCall", to_call);
+    const double final_pot = pot_before_call + 2.0 * to_call;
+    const double rake = rake_from_pot(final_pot, rake_fraction, rake_cap);
+    const double denom = pot_before_call + 2.0 * to_call - rake;
+    if (denom <= 0.0) {
+        throw std::invalid_argument("rake model leaves no positive pot for breakeven equity");
+    }
+    return to_call / denom;
+}
+
+double breakeven_fold_equity_semi_bluff_with_rake(double pot_before_hero_bet, double hero_bet_size,
+                                                 double equity_when_called, double total_pot_if_called,
+                                                 double rake_fraction, double rake_cap) {
+    assert_non_neg_finite("potBeforeHeroBet", pot_before_hero_bet);
+    assert_non_neg_finite("heroBetSize", hero_bet_size);
+    if (!std::isfinite(equity_when_called)) {
+        throw std::invalid_argument("equityWhenCalled must be finite");
+    }
+    assert_positive_finite("totalPotIfCalled", total_pot_if_called);
+    const double e = clamp01(equity_when_called);
+    const double rake = rake_from_pot(total_pot_if_called, rake_fraction, rake_cap);
+    const double net_when_called =
+        e * (total_pot_if_called - rake) - hero_bet_size;
+    if (net_when_called >= 0.0) {
+        return 0.0;
+    }
+    const double den = net_when_called - pot_before_hero_bet;
+    if (std::abs(den) < 1e-15) {
+        throw std::invalid_argument("breakevenFoldEquitySemiBluffWithRake: degenerate (net equals pot)");
+    }
+    return net_when_called / den;
+}
+
+double multiway_symmetric_breakeven_call_equity(double pot_before, double to_call,
+                                              int symmetric_extra_callers) {
+    assert_non_neg_finite("potBefore", pot_before);
+    assert_non_neg_finite("toCall", to_call);
+    if (symmetric_extra_callers < 0) {
+        throw std::invalid_argument("symmetricExtraCallers must be non-negative");
+    }
+    const double k = static_cast<double>(symmetric_extra_callers);
+    const double denom = pot_before + to_call * (1.0 + k);
+    if (denom <= 0.0 || to_call == 0.0) {
+        return 0.0;
+    }
+    return to_call / denom;
+}
+
+double two_street_pure_bluff_same_fold_equity(double pot_before_street1, double bet_street1,
+                                             double bet_street2) {
+    assert_non_neg_finite("potBeforeStreet1", pot_before_street1);
+    assert_non_neg_finite("betStreet1", bet_street1);
+    assert_non_neg_finite("betStreet2", bet_street2);
+    const double P0 = pot_before_street1;
+    const double B1 = bet_street1;
+    const double B2 = bet_street2;
+    const double Bsum = B1 + B2;
+    const double A = P0 + 2.0 * B1;
+    const double a = -A;
+    const double b = 2.0 * P0 + 3.0 * B1 + B2;
+    const double c = -Bsum;
+    if (std::abs(a) < 1e-18) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double disc = b * b - 4.0 * a * c;
+    if (disc < 0.0) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double s = std::sqrt(disc);
+    const double x1 = (-b + s) / (2.0 * a);
+    const double x2 = (-b - s) / (2.0 * a);
+    auto pick = [](double x1, double x2) -> double {
+        const bool g1 = x1 >= 0.0 && x1 <= 1.0;
+        const bool g2 = x2 >= 0.0 && x2 <= 1.0;
+        if (g1 && g2) {
+            return std::min(x1, x2);
+        }
+        if (g1) {
+            return x1;
+        }
+        if (g2) {
+            return x2;
+        }
+        return std::numeric_limits<double>::quiet_NaN();
+    };
+    return pick(x1, x2);
+}
+
+double flop_to_river_at_least_one_hit_disjoint_outs_sum(
+    double unseen_after_flop, const std::vector<double>& outs_per_disjoint_category) {
+    assert_positive_finite("unseenAfterFlop", unseen_after_flop);
+    double sum = 0.0;
+    for (double o : outs_per_disjoint_category) {
+        assert_non_neg_finite("outsCategory", o);
+        sum += o;
+    }
+    if (sum > unseen_after_flop) {
+        throw std::invalid_argument("sum of disjoint outs cannot exceed unseenAfterFlop");
+    }
+    return flop_to_river_at_least_one_hit_probability(sum, unseen_after_flop);
+}
+
+double chubukov_symmetric_jam_breakeven_stack(double dead_money_chips, double equity) {
+    assert_non_neg_finite("deadMoneyChips", dead_money_chips);
+    if (!std::isfinite(equity)) {
+        throw std::invalid_argument("equity must be finite");
+    }
+    const double e = clamp01(equity);
+    if (e <= 0.0) {
+        return 0.0;
+    }
+    if (e > 0.5) {
+        return std::numeric_limits<double>::infinity();
+    }
+    if (std::abs(e - 0.5) < 1e-15) {
+        return dead_money_chips > 0.0 ? std::numeric_limits<double>::infinity() : 0.0;
+    }
+    return e * dead_money_chips / (1.0 - 2.0 * e);
 }
 
 }  // namespace poker
