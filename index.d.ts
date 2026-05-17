@@ -351,8 +351,19 @@ export interface PokerCalculations {
   /**
    * P23: largest integer jam stack in `[1, maxStackChips]` with nonnegative symmetric-jam EV using
    * exact HU equity vs a random hand (`exactHuEquityVsRandomHand`); board 3–5.
+   * `maxStackChips` is a double (clamped to int range in native code).
    */
   chubukovMaxSymmetricJamStackBinarySearch(
+    heroHoleCards: string[],
+    boardCards: string[],
+    deadMoneyChips: number,
+    maxStackChips: number
+  ): number;
+  /**
+   * P23: same integer search as `chubukovMaxSymmetricJamStackBinarySearch` (equity from the hand, then
+   * `chubukovMaxSymmetricJamStackChipsBinarySearch`). `maxStackChips` is coerced with **int32** semantics in native code.
+   */
+  chubukovMaxSymmetricJamStackFromHandBinarySearch(
     heroHoleCards: string[],
     boardCards: string[],
     deadMoneyChips: number,
