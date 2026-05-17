@@ -47,7 +47,7 @@ const require = createRequire(import.meta.url);
 const poker = require('poker-calculations');
 ```
 
-Runnable sample: **[`examples/demo.mjs`](examples/demo.mjs)** (from repo root: `node examples/demo.mjs`).
+Runnable samples: **[`examples/demo.mjs`](examples/demo.mjs)** runs every per-feature script under **`examples/`** plus **[`examples/native-binding-exports.mjs`](examples/native-binding-exports.mjs)** (prints the full N-API function list). Each other file matches a group in [`FEATURES_ADDED.md`](FEATURES_ADDED.md). From repo root: `node examples/demo.mjs` or `node examples/<name>.mjs`.
 
 Cards are strings like `"Ah"`, `"Td"` (ten may be `"10h"`).
 
@@ -60,21 +60,21 @@ All symbols below are exported from the **native addon** (C++ via N-API). **`bre
 | **Hands & equity** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandCategory`, `simulateHandOutcome`, `parallelHandSimulation`, `exactHuEquityVsRandomHand`, `straightMadeFlopToRiverExactProbability` |
 | **Strategy** | `decideAction` |
 | **Pot / EV** | `potOddsRatio`, `expectedValueCall`, `breakevenCallEquity`, `breakevenCallEquityWithRake`, `rakeFromPot` |
-| **Stacks & display** | `spr`, `effectiveStack`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds`, `harringtonM`, `harringtonMEffective` |
-| **Heuristics & draws** | `ruleOfFourEquity`, `ruleOfTwoEquity`, `impliedBreakevenFutureWin`, `hypergeometricOneCardHitProbability`, `runnerRunnerBackdoorFlushTwoCardProbability`, `runnerRunnerStraightDrawHitProbability`, `flopToRiverAtLeastOneHitProbability`, `flopToRiverAtLeastOneHitUnionTwoCategories`, `flopToRiverAtLeastOneHitUnionThreeCategories`, `flopToRiverAtLeastOneHitDisjointOutsSum`, `duplicationAdjustedOuts` |
+| **Stacks & display** | `spr`, `effectiveStack`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds`, `harringtonM`, `harringtonMEffective`, `harringtonMEffectiveActiveAntes` |
+| **Heuristics & draws** | `ruleOfFourEquity`, `ruleOfTwoEquity`, `impliedBreakevenFutureWin`, `hypergeometricOneCardHitProbability`, `runnerRunnerBackdoorFlushTwoCardProbability`, `runnerRunnerStraightDrawHitProbability`, `flopToRiverAtLeastOneHitProbability`, `flopToRiverAtLeastOneHitUnionTwoCategories`, `flopToRiverAtLeastOneHitUnionThreeCategories`, `flopToRiverAtLeastOneHitUnionFourCategories`, `flopToRiverAtLeastOneHitDisjointOutsSum`, `straightMadeFlopToRiverExactProbability`, `duplicationAdjustedOuts` |
 | **Reverse implied / geometry** | `reverseImpliedOddsMaxFutureLoss`, `geometricPotAfterMatchedPotFractions` |
 | **Stats & risk** | `monteCarloStandardError`, `wilsonScoreInterval`, `riskOfRuinDiffusionApprox`, `bankrollForTargetRorDiffusion`, `betaBinomialFoldPosterior` |
-| **Kelly & jam toys** | `kellyCriterionBinary`, `chubukovSymmetricJamBreakevenStack`, `chubukovSymmetricJamEv`, `chubukovMaxSymmetricJamStackChipsBinarySearch`, `chubukovMaxSymmetricJamStackBinarySearch` |
+| **Kelly & jam toys** | `kellyCriterionBinary`, `chubukovSymmetricJamBreakevenStack`, `chubukovSymmetricJamEv`, `chubukovMaxSymmetricJamStackChipsBinarySearch`, `chubukovMaxSymmetricJamStackBinarySearch`, `chubukovMaxSymmetricJamStackFromHandBinarySearch` |
 | **GTO-style** | `minimumDefenseFrequency`, `alphaFrequency`, `bluffToValueRatio`, `valueToBluffRatio` |
 | **Sizing & commitment** | `betAsPotFraction`, `sprAfterCall`, `commitmentRatio` |
-| **Fold equity** | `breakevenFoldEquityPureBluff`, `breakevenFoldEquityPureBluffWithRake`, `breakevenFoldEquitySemiBluff`, `breakevenFoldEquitySemiBluffWithRake`, `twoStreetPureBluffSameFoldEquity`, `twoStreetPureBluffEv`, `breakevenFoldEquitySecondStreetPureBluff` |
+| **Fold equity** | `breakevenFoldEquityPureBluff`, `breakevenFoldEquityPureBluffWithRake`, `breakevenFoldEquitySemiBluff`, `breakevenFoldEquitySemiBluffWithRake`, `twoStreetPureBluffSameFoldEquity`, `twoStreetPureBluffEv`, `breakevenFoldEquitySecondStreetPureBluff`, `breakevenFoldEquityFirstStreetPureBluff` |
 | **Multiway** | `multiwaySymmetricBreakevenCallEquity`, `multiwaySymmetricBreakevenCallEquityWithShare` |
 | **ICM** | `icmWinProbabilitiesHarville`, `icmHarvillePlacementProbabilities`, `icmExpectedPayouts`, `icmPairwiseBubbleFactor` |
 | **Side pots** | `sidePotLadderFromCommitments`, `layeredPotChipEvFromEquities` |
 
 **Breaking change (v1.2.0):** `poker-math.js` was removed; require `poker-calculations` (or the `.node` binding) for all math. Rebuild native artifacts after upgrading from a git clone.
 
-**API note:** `chubukovMaxSymmetricJamStackBinarySearch` takes four numeric arguments (no `iterations`); it returns the largest **integer** jam size in `[1, maxStackChips]` with nonnegative symmetric-jam EV using exact HU equity vs a random hand.
+**API note:** `chubukovMaxSymmetricJamStackBinarySearch` / `chubukovMaxSymmetricJamStackFromHandBinarySearch` take hole cards, board (3–5 cards), dead money, and max stack; they return the largest **integer** jam size with nonnegative symmetric-jam EV using exact HU equity vs a random hand. The `FromHand` variant uses **int32** coercion for `maxStackChips` in native code.
 
 ## Responsible use
 
@@ -158,7 +158,7 @@ include/poker/     Public headers (Card, Deck, GameEngine, HandEvaluator, poker_
 src/               Implementations (`poker_math.cpp` — SPR, MDF, fold equity, …)
 native/            Node-API binding (built when CMAKE_JS_INC is set by cmake-js)
 tests/             Unit tests
-examples/          demo.mjs (Node)
+examples/          Node ESM demos (`demo.mjs` runs all groups + `native-binding-exports.mjs`)
 CMakeLists.txt     Static poker_lib; optional poker_tests; optional poker_calculations.node when built by cmake-js
 ```
 
