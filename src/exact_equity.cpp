@@ -5,6 +5,7 @@
 #include "poker/types.hpp"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <stdexcept>
 #include <vector>
