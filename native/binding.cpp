@@ -1,5 +1,6 @@
 #include <napi.h>
 
+#include "poker/card_string.hpp"
 #include "poker/game_state.hpp"
 #include "poker/hand_evaluator.hpp"
 #include "poker/monte_carlo.hpp"
@@ -14,6 +15,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <optional>
 #include <random>
 #include <stdexcept>
@@ -54,57 +56,6 @@ constexpr const char* kHandRankNames[] = {"highCard",      "onePair",       "two
     return m;
 }
 
-[[nodiscard]] std::string trim_copy(std::string s) {
-    auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
-    s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
-    return s;
-}
-
-[[nodiscard]] bool parse_card_string(const std::string& raw, poker::Card& out) {
-    const std::string s = trim_copy(raw);
-    if (s.empty()) {
-        return false;
-    }
-    int rank = -1;
-    std::size_t i = 0;
-    if (s.size() >= 3 && s[0] == '1' && s[1] == '0') {
-        rank = 8;  // Ten
-        i = 2;
-    } else if (s.size() >= 2) {
-        const char r = static_cast<char>(std::toupper(static_cast<unsigned char>(s[0])));
-        static constexpr const char* kRanks = "23456789TJQKA";
-        for (int k = 0; k < 13; ++k) {
-            if (kRanks[k] == r) {
-                rank = k;
-                break;
-            }
-        }
-        i = 1;
-    }
-    if (rank < 0 || i >= s.size()) {
-        return false;
-    }
-    const char su = static_cast<char>(std::tolower(static_cast<unsigned char>(s[i])));
-    static constexpr const char* kSuits = "cdhs";
-    int suit = -1;
-    for (int k = 0; k < 4; ++k) {
-        if (kSuits[k] == su) {
-            suit = k;
-            break;
-        }
-    }
-    if (suit < 0) {
-        return false;
-    }
-    try {
-        out = poker::Card(static_cast<std::uint8_t>(rank), static_cast<std::uint8_t>(suit));
-    } catch (...) {
-        return false;
-    }
-    return true;
-}
-
 [[nodiscard]] std::vector<poker::Card> parse_card_strings(const Napi::Env& env, const Napi::Array& arr, std::string* err) {
     std::vector<poker::Card> out;
     const uint32_t n = arr.Length();
@@ -118,7 +69,7 @@ constexpr const char* kHandRankNames[] = {"highCard",      "onePair",       "two
             return {};
         }
         poker::Card c;
-        if (!parse_card_string(v.As<Napi::String>().Utf8Value(), c)) {
+        if (!poker::parse_card_string(v.As<Napi::String>().Utf8Value(), c)) {
             if (err) {
                 *err = "invalid card at index " + std::to_string(i);
             }
@@ -1733,12 +1684,231 @@ Napi::Value BreakevenFoldEquityPureBluffWithRake(const Napi::CallbackInfo& info)
     }
 }
 
+[[nodiscard]] std::vector<std::string> strings_from_js_array(const Napi::Array& a, const char* ctx) {
+    std::vector<std::string> v;
+    const uint32_t n = a.Length();
+    v.reserve(n);
+    for (uint32_t i = 0; i < n; ++i) {
+        const Napi::Value x = a[i];
+        if (!x.IsString()) {
+            throw std::invalid_argument(std::string(ctx) + ": array must contain only strings");
+        }
+        v.push_back(x.As<Napi::String>().Utf8Value());
+    }
+    return v;
+}
+
+Napi::Value ValidateCardString(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsString()) {
+            throw std::invalid_argument("validateCardString(card: string)");
+        }
+        poker::Card c{};
+        const bool ok = poker::parse_card_string(info[0].As<Napi::String>().Utf8Value(), c);
+        return Napi::Boolean::New(env, ok);
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value CardStringsHaveDuplicate(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsArray()) {
+            throw std::invalid_argument("cardStringsHaveDuplicate(cards: string[])");
+        }
+        const auto strs = strings_from_js_array(info[0].As<Napi::Array>(), "cardStringsHaveDuplicate");
+        return Napi::Boolean::New(env, poker::card_strings_have_duplicate(strs));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value EstimatedOutsFromRuleOfTwo(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsNumber()) {
+            throw std::invalid_argument("estimatedOutsFromRuleOfTwo(equity, unseenCards)");
+        }
+        const double eq = info[0].As<Napi::Number>().DoubleValue();
+        const double u = info[1].As<Napi::Number>().DoubleValue();
+        return Napi::Number::New(env, poker::estimated_outs_from_rule_of_two(eq, u));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value EstimatedOutsFromRuleOfFour(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsNumber()) {
+            throw std::invalid_argument("estimatedOutsFromRuleOfFour(equity, unseenCards)");
+        }
+        const double eq = info[0].As<Napi::Number>().DoubleValue();
+        const double u = info[1].As<Napi::Number>().DoubleValue();
+        return Napi::Number::New(env, poker::estimated_outs_from_rule_of_four(eq, u));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value MonteCarloTrialsForStandardErrorBound(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsNumber()) {
+            throw std::invalid_argument("monteCarloTrialsForStandardErrorBound(pHat, targetSe)");
+        }
+        const double ph = info[0].As<Napi::Number>().DoubleValue();
+        const double se = info[1].As<Napi::Number>().DoubleValue();
+        const std::int64_t n = poker::monte_carlo_trials_for_standard_error_bound(ph, se);
+        return Napi::Number::New(env, static_cast<double>(n));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value ExpectedValueCallWithRake(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 5 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() ||
+            !info[3].IsNumber() || !info[4].IsNumber()) {
+            throw std::invalid_argument(
+                "expectedValueCallWithRake(equity, potBeforeCall, toCall, rakeFraction, rakeCap)");
+        }
+        const double eq = info[0].As<Napi::Number>().DoubleValue();
+        const double pot = info[1].As<Napi::Number>().DoubleValue();
+        const double tc = info[2].As<Napi::Number>().DoubleValue();
+        const double rf = info[3].As<Napi::Number>().DoubleValue();
+        const double cap = info[4].As<Napi::Number>().DoubleValue();
+        return Napi::Number::New(env, poker::expected_value_call_with_rake(eq, pot, tc, rf, cap));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value PreflopCombosFromNotation(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsString()) {
+            throw std::invalid_argument("preflopCombosFromNotation(notation: string)");
+        }
+        const int n = poker::preflop_combos_from_notation(info[0].As<Napi::String>().Utf8Value());
+        return Napi::Number::New(env, n);
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value NlMinimumRaiseToTotal(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
+            throw std::invalid_argument(
+                "nlMinimumRaiseToTotal(currentMaxWager, lastRaiseIncrement, bigBlind)");
+        }
+        const double cur = info[0].As<Napi::Number>().DoubleValue();
+        const double inc = info[1].As<Napi::Number>().DoubleValue();
+        const double bb = info[2].As<Napi::Number>().DoubleValue();
+        return Napi::Number::New(env, poker::nl_minimum_raise_to_total(cur, inc, bb));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value OrbitCostChips(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsArray()) {
+            throw std::invalid_argument("orbitCostChips(smallBlind, bigBlind, antesFromSeats[])");
+        }
+        const double sb = info[0].As<Napi::Number>().DoubleValue();
+        const double bb = info[1].As<Napi::Number>().DoubleValue();
+        const std::vector<double> antes = doubles_from_js_array(info[2].As<Napi::Array>(), "antesFromSeats");
+        return Napi::Number::New(env, poker::orbit_cost_chips(sb, bb, antes));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value HarringtonQ(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsArray()) {
+            throw std::invalid_argument("harringtonQ(heroStack, stacks[])");
+        }
+        const double hero = info[0].As<Napi::Number>().DoubleValue();
+        const std::vector<double> stacks = doubles_from_js_array(info[1].As<Napi::Array>(), "stacks");
+        return Napi::Number::New(env, poker::harrington_q(hero, stacks));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value CompareBestHands(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
+            throw std::invalid_argument("compareBestHands(cardsA: string[], cardsB: string[])");
+        }
+        std::string err;
+        auto a = parse_card_strings(env, info[0].As<Napi::Array>(), &err);
+        if (!err.empty()) {
+            throw std::invalid_argument(err);
+        }
+        err.clear();
+        auto b = parse_card_strings(env, info[1].As<Napi::Array>(), &err);
+        if (!err.empty()) {
+            throw std::invalid_argument(err);
+        }
+        const int cmp = poker::compare_best_hands(a, b);
+        return Napi::Number::New(env, cmp);
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value IcmTopKFinishProbabilities(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsNumber()) {
+            throw std::invalid_argument("icmTopKFinishProbabilities(stacks[], k)");
+        }
+        const std::vector<double> stacks = doubles_from_js_array(info[0].As<Napi::Array>(), "stacks");
+        const int k = info[1].As<Napi::Number>().Int32Value();
+        const auto probs = poker::icm_top_k_finish_probabilities(stacks, k);
+        Napi::Array out = Napi::Array::New(env, probs.size());
+        for (std::size_t i = 0; i < probs.size(); ++i) {
+            out[static_cast<uint32_t>(i)] = Napi::Number::New(env, probs[i]);
+        }
+        return out;
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
 Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "evaluateBestHand"), Napi::Function::New(env, EvaluateBestHand));
     exports.Set(Napi::String::New(env, "evaluateHandStrength"),
                 Napi::Function::New(env, EvaluateHandStrength));
     exports.Set(Napi::String::New(env, "evaluateHandCategory"),
                 Napi::Function::New(env, EvaluateHandCategory));
+    exports.Set(Napi::String::New(env, "validateCardString"), Napi::Function::New(env, ValidateCardString));
+    exports.Set(Napi::String::New(env, "cardStringsHaveDuplicate"),
+                Napi::Function::New(env, CardStringsHaveDuplicate));
+    exports.Set(Napi::String::New(env, "compareBestHands"), Napi::Function::New(env, CompareBestHands));
     exports.Set(Napi::String::New(env, "simulateHandOutcome"),
                 Napi::Function::New(env, SimulateHandOutcome));
     exports.Set(Napi::String::New(env, "parallelHandSimulation"),
@@ -1746,6 +1916,8 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "decideAction"), Napi::Function::New(env, DecideAction));
     exports.Set(Napi::String::New(env, "potOddsRatio"), Napi::Function::New(env, PotOddsRatio));
     exports.Set(Napi::String::New(env, "expectedValueCall"), Napi::Function::New(env, ExpectedValueCall));
+    exports.Set(Napi::String::New(env, "expectedValueCallWithRake"),
+                Napi::Function::New(env, ExpectedValueCallWithRake));
     exports.Set(Napi::String::New(env, "spr"), Napi::Function::New(env, Spr));
     exports.Set(Napi::String::New(env, "effectiveStack"), Napi::Function::New(env, EffectiveStack));
     exports.Set(Napi::String::New(env, "breakevenCallEquity"),
@@ -1758,6 +1930,10 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "formatPotOdds"), Napi::Function::New(env, FormatPotOdds));
     exports.Set(Napi::String::New(env, "ruleOfFourEquity"), Napi::Function::New(env, RuleOfFourEquity));
     exports.Set(Napi::String::New(env, "ruleOfTwoEquity"), Napi::Function::New(env, RuleOfTwoEquity));
+    exports.Set(Napi::String::New(env, "estimatedOutsFromRuleOfTwo"),
+                Napi::Function::New(env, EstimatedOutsFromRuleOfTwo));
+    exports.Set(Napi::String::New(env, "estimatedOutsFromRuleOfFour"),
+                Napi::Function::New(env, EstimatedOutsFromRuleOfFour));
     exports.Set(Napi::String::New(env, "impliedBreakevenFutureWin"),
                 Napi::Function::New(env, ImpliedBreakevenFutureWin));
     exports.Set(Napi::String::New(env, "bluffToValueRatio"), Napi::Function::New(env, BluffToValueRatio));
@@ -1794,9 +1970,17 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "harringtonMEffective"), Napi::Function::New(env, HarringtonMEffective));
     exports.Set(Napi::String::New(env, "harringtonMEffectiveActiveAntes"),
                 Napi::Function::New(env, HarringtonMEffectiveActiveAntes));
+    exports.Set(Napi::String::New(env, "harringtonQ"), Napi::Function::New(env, HarringtonQ));
+    exports.Set(Napi::String::New(env, "orbitCostChips"), Napi::Function::New(env, OrbitCostChips));
+    exports.Set(Napi::String::New(env, "nlMinimumRaiseToTotal"),
+                Napi::Function::New(env, NlMinimumRaiseToTotal));
+    exports.Set(Napi::String::New(env, "preflopCombosFromNotation"),
+                Napi::Function::New(env, PreflopCombosFromNotation));
     exports.Set(Napi::String::New(env, "kellyCriterionBinary"), Napi::Function::New(env, KellyCriterionBinary));
     exports.Set(Napi::String::New(env, "monteCarloStandardError"),
                 Napi::Function::New(env, MonteCarloStandardError));
+    exports.Set(Napi::String::New(env, "monteCarloTrialsForStandardErrorBound"),
+                Napi::Function::New(env, MonteCarloTrialsForStandardErrorBound));
     exports.Set(Napi::String::New(env, "betaBinomialFoldPosterior"),
                 Napi::Function::New(env, BetaBinomialFoldPosterior));
     exports.Set(Napi::String::New(env, "duplicationAdjustedOuts"),
@@ -1834,6 +2018,8 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
                 Napi::Function::New(env, IcmWinProbabilitiesHarville));
     exports.Set(Napi::String::New(env, "icmHarvillePlacementProbabilities"),
                 Napi::Function::New(env, IcmHarvillePlacementProbabilities));
+    exports.Set(Napi::String::New(env, "icmTopKFinishProbabilities"),
+                Napi::Function::New(env, IcmTopKFinishProbabilities));
     exports.Set(Napi::String::New(env, "icmExpectedPayouts"), Napi::Function::New(env, IcmExpectedPayouts));
     exports.Set(Napi::String::New(env, "icmPairwiseBubbleFactor"),
                 Napi::Function::New(env, IcmPairwiseBubbleFactor));

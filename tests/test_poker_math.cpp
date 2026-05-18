@@ -1,6 +1,7 @@
 #include "poker/poker_math.hpp"
 
 #include <cmath>
+#include <cstdint>
 #include <gtest/gtest.h>
 #include <limits>
 
@@ -186,4 +187,44 @@ TEST(PokerMath, ChubukovJamEvAndIntMaxStack) {
     EXPECT_EQ(poker::chubukov_max_symmetric_jam_stack_chips_binary_search(0.4, 100.0, 500), 200);
     EXPECT_EQ(poker::chubukov_max_symmetric_jam_stack_chips_binary_search(0.4, 100.0, 150), 150);
     EXPECT_EQ(poker::chubukov_max_symmetric_jam_stack_chips_binary_search(0.4, 100.0, 0), 0);
+}
+
+TEST(PokerMath, MonteCarloTrialsForSeRoundTrip) {
+    const double ph = 0.25;
+    const std::int64_t n = poker::monte_carlo_trials_for_standard_error_bound(ph, 0.01);
+    const double se = poker::monte_carlo_standard_error(ph, static_cast<int>(n));
+    EXPECT_LE(se, 0.01 + 1e-12);
+}
+
+TEST(PokerMath, ExpectedValueCallWithRakeMatchesHand) {
+    const double final_pot = 200.0;
+    const double rake = 0.05 * final_pot;
+    const double win_net = 100.0 + 50.0 - rake;
+    const double expect = 0.5 * win_net - 0.5 * 50.0;
+    EXPECT_NEAR(poker::expected_value_call_with_rake(0.5, 100.0, 50.0, 0.05, 1e9), expect, 1e-9);
+}
+
+TEST(PokerMath, PreflopCombosNotation) {
+    EXPECT_EQ(poker::preflop_combos_from_notation("AA"), 6);
+    EXPECT_EQ(poker::preflop_combos_from_notation("AKs"), 4);
+    EXPECT_EQ(poker::preflop_combos_from_notation("AKo"), 12);
+}
+
+TEST(PokerMath, NlMinimumRaiseToTotalToy) {
+    EXPECT_DOUBLE_EQ(poker::nl_minimum_raise_to_total(2.0, 2.0, 2.0), 4.0);
+    EXPECT_DOUBLE_EQ(poker::nl_minimum_raise_to_total(10.0, 8.0, 2.0), 18.0);
+}
+
+TEST(PokerMath, OrbitCostChips) {
+    EXPECT_DOUBLE_EQ(poker::orbit_cost_chips(1.0, 2.0, {}), 3.0);
+    EXPECT_DOUBLE_EQ(poker::orbit_cost_chips(1.0, 2.0, {0.5, 0.5}), 4.0);
+}
+
+TEST(PokerMath, HarringtonQVsAverage) {
+    EXPECT_DOUBLE_EQ(poker::harrington_q(400.0, {300.0, 500.0}), 1.0);
+}
+
+TEST(PokerMath, EstimatedOutsFromRuleClamped) {
+    EXPECT_DOUBLE_EQ(poker::estimated_outs_from_rule_of_two(1.0, 40.0), 40.0);
+    EXPECT_DOUBLE_EQ(poker::estimated_outs_from_rule_of_four(1.0, 40.0), 40.0);
 }

@@ -1,6 +1,7 @@
 #include "poker/hand_evaluator.hpp"
 
 #include <gtest/gtest.h>
+#include <stdexcept>
 
 static poker::Card C(std::uint8_t r, std::uint8_t s) { return poker::Card{r, s}; }
 
@@ -33,4 +34,19 @@ TEST(HandEvaluator, PairBeatsHighCard) {
     std::vector<poker::Card> pair = {C(12, 0), C(12, 1), C(5, 2), C(3, 3), C(9, 0)};
     std::vector<poker::Card> high = {C(11, 0), C(9, 1), C(7, 2), C(5, 3), C(3, 0)};
     EXPECT_LT(poker::evaluate_five_cards(high), poker::evaluate_five_cards(pair));
+}
+
+TEST(HandEvaluator, CompareBestHandsOrder) {
+    std::vector<poker::Card> aa = {C(12, 0), C(12, 1)};
+    std::vector<poker::Card> kk = {C(11, 0), C(11, 1)};
+    EXPECT_EQ(poker::compare_best_hands(aa, kk), 1);
+    EXPECT_EQ(poker::compare_best_hands(kk, aa), -1);
+    std::vector<poker::Card> aa2 = {C(12, 2), C(12, 3)};
+    EXPECT_EQ(poker::compare_best_hands(aa, aa2), 0);
+}
+
+TEST(HandEvaluator, CompareBestHandsOverlapThrows) {
+    std::vector<poker::Card> a = {C(12, 0), C(12, 1)};
+    std::vector<poker::Card> b = {C(11, 0), C(12, 0)};
+    EXPECT_THROW(poker::compare_best_hands(a, b), std::invalid_argument);
 }

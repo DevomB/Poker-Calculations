@@ -57,19 +57,19 @@ All symbols below are exported from the **native addon** (C++ via N-API). **`bre
 
 | Area | Exports |
 | --- | --- |
-| **Hands & equity** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandCategory`, `simulateHandOutcome`, `parallelHandSimulation`, `exactHuEquityVsRandomHand`, `straightMadeFlopToRiverExactProbability` |
+| **Hands & equity** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandCategory`, `validateCardString`, `cardStringsHaveDuplicate`, `compareBestHands`, `simulateHandOutcome`, `parallelHandSimulation`, `exactHuEquityVsRandomHand`, `straightMadeFlopToRiverExactProbability` |
 | **Strategy** | `decideAction` |
-| **Pot / EV** | `potOddsRatio`, `expectedValueCall`, `breakevenCallEquity`, `breakevenCallEquityWithRake`, `rakeFromPot` |
-| **Stacks & display** | `spr`, `effectiveStack`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds`, `harringtonM`, `harringtonMEffective`, `harringtonMEffectiveActiveAntes` |
-| **Heuristics & draws** | `ruleOfFourEquity`, `ruleOfTwoEquity`, `impliedBreakevenFutureWin`, `hypergeometricOneCardHitProbability`, `runnerRunnerBackdoorFlushTwoCardProbability`, `runnerRunnerStraightDrawHitProbability`, `flopToRiverAtLeastOneHitProbability`, `flopToRiverAtLeastOneHitUnionTwoCategories`, `flopToRiverAtLeastOneHitUnionThreeCategories`, `flopToRiverAtLeastOneHitUnionFourCategories`, `flopToRiverAtLeastOneHitDisjointOutsSum`, `straightMadeFlopToRiverExactProbability`, `duplicationAdjustedOuts` |
+| **Pot / EV** | `potOddsRatio`, `expectedValueCall`, `expectedValueCallWithRake`, `breakevenCallEquity`, `breakevenCallEquityWithRake`, `rakeFromPot` |
+| **Stacks & display** | `spr`, `effectiveStack`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds`, `harringtonM`, `harringtonMEffective`, `harringtonMEffectiveActiveAntes`, `harringtonQ`, `orbitCostChips`, `nlMinimumRaiseToTotal`, `preflopCombosFromNotation` |
+| **Heuristics & draws** | `ruleOfFourEquity`, `ruleOfTwoEquity`, `estimatedOutsFromRuleOfTwo`, `estimatedOutsFromRuleOfFour`, `impliedBreakevenFutureWin`, `hypergeometricOneCardHitProbability`, `runnerRunnerBackdoorFlushTwoCardProbability`, `runnerRunnerStraightDrawHitProbability`, `flopToRiverAtLeastOneHitProbability`, `flopToRiverAtLeastOneHitUnionTwoCategories`, `flopToRiverAtLeastOneHitUnionThreeCategories`, `flopToRiverAtLeastOneHitUnionFourCategories`, `flopToRiverAtLeastOneHitDisjointOutsSum`, `duplicationAdjustedOuts` |
 | **Reverse implied / geometry** | `reverseImpliedOddsMaxFutureLoss`, `geometricPotAfterMatchedPotFractions` |
-| **Stats & risk** | `monteCarloStandardError`, `wilsonScoreInterval`, `riskOfRuinDiffusionApprox`, `bankrollForTargetRorDiffusion`, `betaBinomialFoldPosterior` |
+| **Stats & risk** | `monteCarloStandardError`, `monteCarloTrialsForStandardErrorBound`, `wilsonScoreInterval`, `riskOfRuinDiffusionApprox`, `bankrollForTargetRorDiffusion`, `betaBinomialFoldPosterior` |
 | **Kelly & jam toys** | `kellyCriterionBinary`, `chubukovSymmetricJamBreakevenStack`, `chubukovSymmetricJamEv`, `chubukovMaxSymmetricJamStackChipsBinarySearch`, `chubukovMaxSymmetricJamStackBinarySearch`, `chubukovMaxSymmetricJamStackFromHandBinarySearch` |
 | **GTO-style** | `minimumDefenseFrequency`, `alphaFrequency`, `bluffToValueRatio`, `valueToBluffRatio` |
 | **Sizing & commitment** | `betAsPotFraction`, `sprAfterCall`, `commitmentRatio` |
 | **Fold equity** | `breakevenFoldEquityPureBluff`, `breakevenFoldEquityPureBluffWithRake`, `breakevenFoldEquitySemiBluff`, `breakevenFoldEquitySemiBluffWithRake`, `twoStreetPureBluffSameFoldEquity`, `twoStreetPureBluffEv`, `breakevenFoldEquitySecondStreetPureBluff`, `breakevenFoldEquityFirstStreetPureBluff` |
 | **Multiway** | `multiwaySymmetricBreakevenCallEquity`, `multiwaySymmetricBreakevenCallEquityWithShare` |
-| **ICM** | `icmWinProbabilitiesHarville`, `icmHarvillePlacementProbabilities`, `icmExpectedPayouts`, `icmPairwiseBubbleFactor` |
+| **ICM** | `icmWinProbabilitiesHarville`, `icmHarvillePlacementProbabilities`, `icmTopKFinishProbabilities`, `icmExpectedPayouts`, `icmPairwiseBubbleFactor` |
 | **Side pots** | `sidePotLadderFromCommitments`, `layeredPotChipEvFromEquities` |
 
 **Breaking change (v1.2.0):** `poker-math.js` was removed; require `poker-calculations` (or the `.node` binding) for all math. Rebuild native artifacts after upgrading from a git clone.
@@ -90,7 +90,7 @@ Use this for **your own simulator, research, or automation you are permitted to 
 | **Strategy** | `decide_action(..., BotConfig, OpponentModel*)` using MC equity (or strength fallback when sim count is 0), pot odds, and call EV |
 | **Simulation** | `simulate_hand_outcome`, `parallel_hand_simulation` (chunked async workers, distinct seeds) |
 | **Config** | `BotConfig::load_from_config_file` / `save_to_config_file` (`key=value`, `#` comments) |
-| **Tests** | GoogleTest suite (deck, engine, evaluator, poker math, ICM, side pots, exact equity, strategy, opponent model, MC, config) |
+| **Tests** | GoogleTest suite (deck, engine, evaluator, card strings, poker math, ICM, side pots, exact equity, strategy, opponent model, MC, config) |
 
 ## Developing from source
 
