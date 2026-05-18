@@ -15,6 +15,12 @@ namespace poker {
 /// Harville first-place probabilities (column `r=0` of `icm_harville_placement_probabilities`).
 [[nodiscard]] std::vector<double> icm_win_probabilities_harville(const std::vector<double>& stacks);
 
+/**
+ * Per-player probability of finishing in **one of the first `k` places** under Harville placement
+ * (sum of first `k` columns of `icm_harville_placement_probabilities`). `k` in `1..n`.
+ */
+[[nodiscard]] std::vector<double> icm_top_k_finish_probabilities(const std::vector<double>& stacks, int k);
+
 /// Expected payout chips (or dollars) per seat for `payouts[0]` = first prize, etc.
 [[nodiscard]] std::vector<double> icm_expected_payouts(const std::vector<double>& stacks,
                                                        const std::vector<double>& payouts);

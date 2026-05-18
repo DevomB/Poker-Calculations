@@ -69,6 +69,16 @@ export interface PokerCalculations {
   evaluateBestHand(cards: string[]): HandEvalResult;
   evaluateHandStrength(holeCards: string[], board: string[]): string;
   evaluateHandCategory(holeCards: string[], board: string[]): string;
+  /** `true` if `card` parses as a single card (`Ah`, `10c`, …). */
+  validateCardString(card: string): boolean;
+  /**
+   * `true` if any two strings map to the same card. Throws if any entry is not a valid card string.
+   */
+  cardStringsHaveDuplicate(cards: string[]): boolean;
+  /**
+   * Compare best 1–7 card lists; returns `-1` / `0` / `1`. Throws on overlap between lists or invalid cards.
+   */
+  compareBestHands(cardsA: string[], cardsB: string[]): number;
   simulateHandOutcome(
     holeCards: string[],
     board: string[],
@@ -93,6 +103,17 @@ export interface PokerCalculations {
   potOddsRatio(pot: number, toCall: number): number;
   /** Chip EV of calling once vs folding (0); same semantics as C++ `expected_value_call`. */
   expectedValueCall(equity: number, pot: number, toCall: number): number;
+  /**
+   * Chip EV of calling vs folding when the final heads-up pot (after call) pays rake like
+   * `breakevenCallEquityWithRake`.
+   */
+  expectedValueCallWithRake(
+    equity: number,
+    potBeforeCall: number,
+    toCall: number,
+    rakeFraction: number,
+    rakeCap: number
+  ): number;
   /** Same fraction as `potOddsRatio(potBeforeCall, toCall)` for chip calls. */
   breakevenCallEquity(potBeforeCall: number, toCall: number): number;
   spr(potChips: number, effectiveStackChips: number): number;
@@ -101,13 +122,26 @@ export interface PokerCalculations {
   stackInBigBlinds(stackChips: number, bigBlind: number): number;
   potOddsRatioDisplay(potBeforeCall: number, toCall: number): number;
   formatPotOdds(potBeforeCall: number, toCall: number, decimals?: number): string;
+  /** NLHE combo count from shorthand (`AA`→6, `AKs`→4, `AKo`→12); throws on invalid notation. */
+  preflopCombosFromNotation(notation: string): number;
   ruleOfFourEquity(outs: number): number;
   ruleOfTwoEquity(outs: number): number;
+  /**
+   * Algebraic inverse of the uncapped rule-of-two line: `equity * unseen / 2` clamped to `[0, unseen]`
+   * (not a full inverse of capped `ruleOfTwoEquity`).
+   */
+  estimatedOutsFromRuleOfTwo(equity: number, unseenCards: number): number;
+  /** Same for two streets vs the rule-of-four line: `equity * unseen / 4` clamped to `[0, unseen]`. */
+  estimatedOutsFromRuleOfFour(equity: number, unseenCards: number): number;
   impliedBreakevenFutureWin(potBeforeCall: number, toCall: number, equity: number): number;
   bluffToValueRatio(potBeforeBet: number, betSize: number): number;
   /** `1 / bluffToValueRatio`; `Infinity` when `betSize` is 0. */
   valueToBluffRatio(potBeforeBet: number, betSize: number): number;
   betAsPotFraction(potBeforeBet: number, betSize: number): number;
+  /**
+   * NL toy: minimum **total** wager after a raise = `currentMaxWager + max(lastRaiseIncrement, bigBlind)`.
+   */
+  nlMinimumRaiseToTotal(currentMaxWager: number, lastRaiseIncrement: number, bigBlind: number): number;
   /**
    * SPR after a call: remaining stack divided by new pot.
    * Assumes heads-up single call: new pot = `potBeforeCall + 2 * toCall`. Throws if `toCall` exceeds stack.
@@ -209,10 +243,19 @@ export interface PokerCalculations {
     bigBlind: number,
     antesFromActiveSeats: number[]
   ): number;
+  /** Harrington Q: `heroStack / mean(stacks)` (vs average table stack); all stacks must be positive. */
+  harringtonQ(heroStack: number, stacks: number[]): number;
+  /** One orbit posted cost: `smallBlind + bigBlind + sum(antesFromSeats)`. */
+  orbitCostChips(smallBlind: number, bigBlind: number, antesFromSeats: number[]): number;
   /** P12: full Kelly for binary outcome, `netOdds` = net profit per unit staked when you win. */
   kellyCriterionBinary(winProbability: number, netOdds: number): number;
   /** P15: SE of binomial MC estimate. */
   monteCarloStandardError(pHat: number, nTrials: number): number;
+  /**
+   * Smallest integer `n` so `monteCarloStandardError(pHat, n) <= targetSe` (ceil of `p(1-p)/targetSe²`).
+   * Requires `pHat` strictly between `0` and `1`.
+   */
+  monteCarloTrialsForStandardErrorBound(pHat: number, targetSe: number): number;
   /** P24: Beta–Binomial update on fold frequency. */
   betaBinomialFoldPosterior(
     priorAlpha: number,
@@ -319,6 +362,11 @@ export interface PokerCalculations {
   icmWinProbabilitiesHarville(stacks: number[]): number[];
   /** P17: full Harville placement matrix `[player][finishRank]` (rank 0 = first). */
   icmHarvillePlacementProbabilities(stacks: number[]): number[][];
+  /**
+   * Per-player probability of finishing in one of the first `k` places (sum of first `k` columns of
+   * Harville placement); `k` in `1..stacks.length`.
+   */
+  icmTopKFinishProbabilities(stacks: number[], k: number): number[];
   /** P18: ICM expected payouts (prize vector length = players). */
   icmExpectedPayouts(stacks: number[], payouts: number[]): number[];
   /** P19: pairwise bubble factor (finite differences on P18). */

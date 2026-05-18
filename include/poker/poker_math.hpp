@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -185,6 +186,42 @@ enum class Multiway_symmetric_pot_share_model {
 
 /// P15: binomial SE for MC proportion estimate.
 [[nodiscard]] double monte_carlo_standard_error(double p_hat, int n_trials);
+
+/**
+ * Smallest integer trial count so binomial SE (at `p_hat`) is at most `target_se` (ceil of `p(1-p)/se²`).
+ * Throws if `p_hat` is not in `(0,1)` or `target_se` is not finite and positive.
+ */
+[[nodiscard]] std::int64_t monte_carlo_trials_for_standard_error_bound(double p_hat, double target_se);
+
+/**
+ * Uncapped algebraic inverse of the rule-of-two heuristic: `outs ≈ equity * unseen / 2`, clamped to
+ * `[0, unseen]` — not an exact inverse of `rule_ofTwoEquity` (which caps outs at 48 and equity at 1).
+ */
+[[nodiscard]] double estimated_outs_from_rule_of_two(double equity, double unseen_cards);
+
+/// Same idea for two streets vs `ruleOfFourEquity`: `outs ≈ equity * unseen / 4`, clamped to `[0, unseen]`.
+[[nodiscard]] double estimated_outs_from_rule_of_four(double equity, double unseen_cards);
+
+/**
+ * Chip EV of calling once vs folding (0), heads-up single call, when the **final** pot pays rake like
+ * `breakevenCallEquityWithRake`. `pot_before_call` is chips in the pot before hero's call.
+ */
+[[nodiscard]] double expected_value_call_with_rake(double equity, double pot_before_call, double to_call,
+                                                   double rake_fraction, double rake_cap);
+
+/// NL toy: minimum **total** wager after a raise = `current_max_wager + max(last_raise_increment, big_blind)`.
+[[nodiscard]] double nl_minimum_raise_to_total(double current_max_wager, double last_raise_increment,
+                                               double big_blind);
+
+/// One full orbit: `small_blind + big_blind + sum(antes_from_seats)`.
+[[nodiscard]] double orbit_cost_chips(double small_blind, double big_blind,
+                                     const std::vector<double>& antes_from_seats);
+
+/// Harrington Q: `hero_stack / mean(stacks)` (pressure vs table average); all stacks must be positive.
+[[nodiscard]] double harrington_q(double hero_stack, const std::vector<double>& stacks);
+
+/// NLHE preflop combo count from shorthand (`AA`, `AKs`, `AKo`); throws on invalid notation.
+[[nodiscard]] int preflop_combos_from_notation(const std::string& notation);
 
 struct Beta_binomial_fold_posterior {
     double alpha{};

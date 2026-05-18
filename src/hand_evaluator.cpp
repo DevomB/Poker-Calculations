@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <stdexcept>
 
 namespace poker {
 
@@ -268,6 +269,42 @@ HandRank evaluate_hand(const std::vector<Card>& hand, const std::vector<Card>& c
     std::vector<Card> all = hand;
     all.insert(all.end(), community_cards.begin(), community_cards.end());
     return evaluate_best_hand(all).rank;
+}
+
+int compare_best_hands(const std::vector<Card>& a, const std::vector<Card>& b) {
+    if (a.empty() || a.size() > 7 || b.empty() || b.size() > 7) {
+        throw std::invalid_argument("compareBestHands: each side needs 1..7 cards");
+    }
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        for (std::size_t j = i + 1; j < a.size(); ++j) {
+            if (a[i] == a[j]) {
+                throw std::invalid_argument("compareBestHands: duplicate card in cardsA");
+            }
+        }
+    }
+    for (std::size_t i = 0; i < b.size(); ++i) {
+        for (std::size_t j = i + 1; j < b.size(); ++j) {
+            if (b[i] == b[j]) {
+                throw std::invalid_argument("compareBestHands: duplicate card in cardsB");
+            }
+        }
+    }
+    for (const auto& ca : a) {
+        for (const auto& cb : b) {
+            if (ca == cb) {
+                throw std::invalid_argument("compareBestHands: overlapping cards between hands");
+            }
+        }
+    }
+    const HandEvaluation ea = evaluate_best_hand(a);
+    const HandEvaluation eb = evaluate_best_hand(b);
+    if (ea < eb) {
+        return -1;
+    }
+    if (eb < ea) {
+        return 1;
+    }
+    return 0;
 }
 
 }  // namespace poker

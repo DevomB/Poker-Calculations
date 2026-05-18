@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -774,51 +776,6 @@ double flop_to_river_at_least_one_hit_disjoint_outs_sum(
     return flop_to_river_at_least_one_hit_probability(sum, unseen_after_flop);
 }
 
-double chubukov_symmetric_jam_ev(double jam_stack_chips, double dead_money_chips, double equity) {
-    assert_non_neg_finite("jamStackChips", jam_stack_chips);
-    assert_non_neg_finite("deadMoneyChips", dead_money_chips);
-    if (!std::isfinite(equity)) {
-        throw std::invalid_argument("equity must be finite");
-    }
-    const double e = clamp01(equity);
-    return e * (2.0 * jam_stack_chips + dead_money_chips) - jam_stack_chips;
-}
-
-int chubukov_max_symmetric_jam_stack_chips_binary_search(double equity, double dead_money_chips,
-                                                         int max_stack_chips) {
-    if (!std::isfinite(equity)) {
-        throw std::invalid_argument("equity must be finite");
-    }
-    assert_non_neg_finite("deadMoneyChips", dead_money_chips);
-    if (max_stack_chips < 1) {
-        return 0;
-    }
-    const double e = clamp01(equity);
-    if (e > 0.5) {
-        return max_stack_chips;
-    }
-    if (e <= 0.0) {
-        return 0;
-    }
-    auto ev_at = [&](int s) { return chubukov_symmetric_jam_ev(static_cast<double>(s), dead_money_chips, e); };
-    if (ev_at(1) < 0.0) {
-        return 0;
-    }
-    int lo = 1;
-    int hi = max_stack_chips;
-    int ans = 1;
-    while (lo <= hi) {
-        const int mid = lo + (hi - lo) / 2;
-        if (ev_at(mid) >= 0.0) {
-            ans = mid;
-            lo = mid + 1;
-        } else {
-            hi = mid - 1;
-        }
-    }
-    return ans;
-}
-
 double chubukov_symmetric_jam_breakeven_stack(double dead_money_chips, double equity) {
     assert_non_neg_finite("deadMoneyChips", dead_money_chips);
     if (!std::isfinite(equity)) {
@@ -886,6 +843,157 @@ int chubukov_max_symmetric_jam_stack_chips_binary_search(double equity, double d
         }
     }
     return lo;
+}
+
+std::int64_t monte_carlo_trials_for_standard_error_bound(double p_hat, double target_se) {
+    if (!std::isfinite(p_hat)) {
+        throw std::invalid_argument("pHat must be finite");
+    }
+    if (!std::isfinite(target_se) || target_se <= 0.0) {
+        throw std::invalid_argument("targetSe must be finite and positive");
+    }
+    if (p_hat <= 0.0 || p_hat >= 1.0) {
+        throw std::invalid_argument("pHat must lie strictly between 0 and 1 for a positive binomial "
+                                    "variance");
+    }
+    const double v = p_hat * (1.0 - p_hat);
+    const double n_float = v / (target_se * target_se);
+    std::int64_t n = static_cast<std::int64_t>(std::ceil(n_float - 1e-15));
+    if (n < 1) {
+        n = 1;
+    }
+    return n;
+}
+
+double estimated_outs_from_rule_of_two(double equity, double unseen_cards) {
+    if (!std::isfinite(equity)) {
+        throw std::invalid_argument("equity must be finite");
+    }
+    assert_positive_finite("unseenCards", unseen_cards);
+    const double e = clamp01(equity);
+    return std::clamp(e * unseen_cards / 2.0, 0.0, unseen_cards);
+}
+
+double estimated_outs_from_rule_of_four(double equity, double unseen_cards) {
+    if (!std::isfinite(equity)) {
+        throw std::invalid_argument("equity must be finite");
+    }
+    assert_positive_finite("unseenCards", unseen_cards);
+    const double e = clamp01(equity);
+    return std::clamp(e * unseen_cards / 4.0, 0.0, unseen_cards);
+}
+
+double expected_value_call_with_rake(double equity, double pot_before_call, double to_call,
+                                     double rake_fraction, double rake_cap) {
+    if (!std::isfinite(equity)) {
+        throw std::invalid_argument("equity must be finite");
+    }
+    assert_non_neg_finite("potBeforeCall", pot_before_call);
+    assert_non_neg_finite("toCall", to_call);
+    const double e = clamp01(equity);
+    const double final_pot = pot_before_call + 2.0 * to_call;
+    const double rake = rake_from_pot(final_pot, rake_fraction, rake_cap);
+    const double win_net = pot_before_call + to_call - rake;
+    return e * win_net - (1.0 - e) * to_call;
+}
+
+double nl_minimum_raise_to_total(double current_max_wager, double last_raise_increment, double big_blind) {
+    assert_non_neg_finite("currentMaxWager", current_max_wager);
+    assert_non_neg_finite("lastRaiseIncrement", last_raise_increment);
+    assert_positive_finite("bigBlind", big_blind);
+    const double inc = std::max(last_raise_increment, big_blind);
+    return current_max_wager + inc;
+}
+
+double orbit_cost_chips(double small_blind, double big_blind, const std::vector<double>& antes_from_seats) {
+    assert_non_neg_finite("smallBlind", small_blind);
+    assert_non_neg_finite("bigBlind", big_blind);
+    double sum_antes = 0.0;
+    for (double a : antes_from_seats) {
+        assert_non_neg_finite("anteSeat", a);
+        sum_antes += a;
+    }
+    return small_blind + big_blind + sum_antes;
+}
+
+double harrington_q(double hero_stack, const std::vector<double>& stacks) {
+    assert_positive_finite("heroStack", hero_stack);
+    if (stacks.empty()) {
+        throw std::invalid_argument("stacks must be non-empty");
+    }
+    double sum = 0.0;
+    for (double s : stacks) {
+        assert_positive_finite("stack", s);
+        sum += s;
+    }
+    const double mean = sum / static_cast<double>(stacks.size());
+    return hero_stack / mean;
+}
+
+namespace {
+
+[[nodiscard]] int parse_sh_rank(const std::string& s, std::size_t& i) {
+    if (i >= s.size()) {
+        return -1;
+    }
+    const char c0 = static_cast<char>(std::toupper(static_cast<unsigned char>(s[i])));
+    if (c0 == '1' && i + 1 < s.size() && s[i + 1] == '0') {
+        i += 2;
+        return 8;  // Ten
+    }
+    static constexpr const char* kRanks = "23456789TJQKA";
+    for (int k = 0; k < 13; ++k) {
+        if (kRanks[k] == c0) {
+            ++i;
+            return k;
+        }
+    }
+    return -1;
+}
+
+}  // namespace
+
+int preflop_combos_from_notation(const std::string& notation_raw) {
+    std::string s;
+    s.reserve(notation_raw.size());
+    for (unsigned char ch : notation_raw) {
+        if (!std::isspace(ch)) {
+            s.push_back(static_cast<char>(ch));
+        }
+    }
+    if (s.empty()) {
+        throw std::invalid_argument("preflopCombosFromNotation: empty notation");
+    }
+    std::size_t i = 0;
+    const int r1 = parse_sh_rank(s, i);
+    if (r1 < 0) {
+        throw std::invalid_argument("preflopCombosFromNotation: invalid rank");
+    }
+    const int r2 = parse_sh_rank(s, i);
+    if (r2 < 0) {
+        throw std::invalid_argument("preflopCombosFromNotation: invalid rank");
+    }
+    if (i == s.size()) {
+        if (r1 != r2) {
+            throw std::invalid_argument(
+                "preflopCombosFromNotation: offsuit/suited suffix required for non-pairs");
+        }
+        return 6;
+    }
+    if (i + 1 != s.size()) {
+        throw std::invalid_argument("preflopCombosFromNotation: invalid notation length");
+    }
+    if (r1 == r2) {
+        throw std::invalid_argument("preflopCombosFromNotation: pocket pair must be two letters only");
+    }
+    const char suf = static_cast<char>(std::tolower(static_cast<unsigned char>(s[i])));
+    if (suf == 's') {
+        return 4;
+    }
+    if (suf == 'o') {
+        return 12;
+    }
+    throw std::invalid_argument("preflopCombosFromNotation: expected 's' or 'o' suffix");
 }
 
 }  // namespace poker

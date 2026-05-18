@@ -16,6 +16,7 @@ option(POKER_BUILD_TESTS "Build unit tests" ${_poker_build_tests_default})
 
 add_library(poker_lib STATIC
     src/card.cpp
+    src/card_string.cpp
     src/deck.cpp
     src/game_engine.cpp
     src/hand_evaluator.cpp
@@ -46,6 +47,7 @@ if(POKER_BUILD_TESTS)
     FetchContent_MakeAvailable(googletest)
     enable_testing()
     add_executable(poker_tests
+        tests/test_card_string.cpp
         tests/test_deck.cpp
         tests/test_game_engine.cpp
         tests/test_hand_evaluator.cpp

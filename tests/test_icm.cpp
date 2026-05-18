@@ -52,3 +52,20 @@ TEST(Icm, HarvillePlacementMatrixRowsAndColumns) {
         EXPECT_NEAR(cs, 1.0, 1e-6);
     }
 }
+
+TEST(Icm, TopKMatchesPlacementRowSum) {
+    const std::vector<double> stacks = {300.0, 200.0, 500.0};
+    const auto m = poker::icm_harville_placement_probabilities(stacks);
+    const auto t1 = poker::icm_top_k_finish_probabilities(stacks, 1);
+    const auto t3 = poker::icm_top_k_finish_probabilities(stacks, 3);
+    ASSERT_EQ(t1.size(), 3U);
+    ASSERT_EQ(t3.size(), 3U);
+    for (std::size_t i = 0; i < 3; ++i) {
+        EXPECT_NEAR(t1[i], m[i][0], 1e-9);
+        double sum = 0.0;
+        for (std::size_t r = 0; r < 3; ++r) {
+            sum += m[i][r];
+        }
+        EXPECT_NEAR(t3[i], sum, 1e-9);
+    }
+}

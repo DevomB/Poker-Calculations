@@ -33,4 +33,10 @@ struct HandEvaluation {
 [[nodiscard]] HandRank evaluate_hand(const std::vector<Card>& hand,
                                      const std::vector<Card>& community_cards);
 
+/**
+ * Compare best 1–7 card hands (no board mixing). Returns `-1` if `a` loses to `b`, `0` tie, `1` if `a`
+ * wins. Throws if lengths invalid, duplicate cards within `a` or `b`, or any card appears in both.
+ */
+[[nodiscard]] int compare_best_hands(const std::vector<Card>& a, const std::vector<Card>& b);
+
 }  // namespace poker
