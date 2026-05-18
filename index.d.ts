@@ -64,7 +64,7 @@ export interface SidePotLayer {
   playerCapContribution: number[];
 }
 
-/** N-API addon: hand engine, Monte Carlo, strategy, and chip / GTO math (all implemented in C++). */
+/** N-API addon: NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, and related helpers (all implemented in C++). */
 export interface PokerCalculations {
   evaluateBestHand(cards: string[]): HandEvalResult;
   evaluateHandStrength(holeCards: string[], board: string[]): string;

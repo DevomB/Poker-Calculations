@@ -1,6 +1,6 @@
-# poker-calculations — NL Hold’em engine & odds helpers (C++ core, Node addon)
+# poker-calculations — NL Hold’em engine & math library (C++20, N-API)
 
-**No-Limit Texas Hold’em** hand evaluation, **Monte Carlo equity** (single- and multi-threaded), pot-odds and chip-EV helpers, and a rule-based **`decideAction`** layer—implemented in **C++** and exposed to Node via **N-API**.
+**poker-calculations** is a **Node.js** library built on a **C++20** no-limit Hold’em core: **hand resolution** and **card utilities**, **Monte Carlo** and **exact** equity, a rule-based **`decideAction`** layer over serialized state, **chip / pot / rake** and **pot-odds** tooling, **stack and display** metrics, **draw and multi-street** probability helpers, **ICM** (Harville) and **side-pot** modeling, **GTO-style frequency** relationships, **Kelly / symmetric-jam** analysis helpers, **Monte Carlo statistics** and **bankroll / risk-of-ruin** utilities, plus the **C++ engine** pieces summarized under [Features (engine)](#features-engine). The full shipped surface is inventoried in [`FEATURES_ADDED.md`](FEATURES_ADDED.md) and the [API overview](#api-overview) below.
 
 Published releases ship **prebuilt native binaries** ([`node-gyp-build`](https://github.com/prebuild/node-gyp-build)), so **`npm install` does not require CMake, a compiler, or the Windows SDK** on the installing machine.
 
