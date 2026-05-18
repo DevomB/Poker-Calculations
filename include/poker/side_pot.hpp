@@ -24,4 +24,7 @@ struct Side_pot_layer {
     const std::vector<double>& layer_pot_chips,
     const std::vector<std::vector<double>>& equity_player_by_layer);
 
+/// Sum of `pot_chips` across layers (empty ladder → `0`).
+[[nodiscard]] double side_pot_layers_total_chips(const std::vector<Side_pot_layer>& layers);
+
 }  // namespace poker

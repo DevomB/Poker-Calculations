@@ -13,4 +13,13 @@ namespace poker {
 /// True if any two entries parse to the same card. Throws if any string is not a valid card.
 [[nodiscard]] bool card_strings_have_duplicate(const std::vector<std::string>& cards);
 
+/// Deterministic two-character rank+suit string (`Th`, `Ac`, …) after parse.
+[[nodiscard]] std::string canonical_card_string(const std::string& raw);
+
+/**
+ * Parse a run of cards from concatenated or whitespace-separated text (`AhKh`, `Ah Kh`, `10hKd`).
+ * Throws `std::invalid_argument` on invalid token or duplicate cards.
+ */
+[[nodiscard]] std::vector<std::string> parse_compact_card_list(const std::string& raw);
+
 }  // namespace poker
