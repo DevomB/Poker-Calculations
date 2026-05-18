@@ -2,6 +2,9 @@
 # workflow_dispatch to re-run after a failure without a new commit. The release gate skips the
 # native matrix + publish when that version is already on npm (scripts/should-npm-publish.js).
 #
+# linux-x64 glibc prebuilds compile in node:22.14-bullseye (older glibc than ubuntu-latest) for
+# broader compatibility on legacy distros. linux-arm (armv7) builds under QEMU via the same image.
+#
 # Auth: npm Trusted Publishing (OIDC). Configure at npmjs.com for this repo + workflow file
 # npm-publish.yml — no NPM_TOKEN. Requires Node ≥22.14 and npm CLI ≥11.5.1 on the publish job.
 
@@ -58,8 +61,6 @@ jobs:
             tuple: win32-x64
           - os: windows-11-arm
             tuple: win32-arm64
-          - os: ubuntu-latest
-            tuple: linux-x64
           - os: ubuntu-24.04-arm
             tuple: linux-arm64
           - os: macos-latest
@@ -102,6 +103,66 @@ jobs:
         with:
           name: native-${{ matrix.tuple }}
           path: ${{ matrix.tuple }}.napi.node
+
+  build-linux-x64-bullseye:
+    name: Build (Debian bullseye glibc, linux-x64)
+    needs: release-gate
+    if: needs.release-gate.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Build in bullseye (older glibc than ubuntu-latest)
+        run: |
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/ws" -w /ws \
+            node:22.14-bullseye \
+            bash -exc '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y python3 make g++ cmake git
+              npm ci
+              node scripts/build-native.js compile
+              node scripts/stage-prebuild.js linux-x64
+            '
+          cp prebuilds/linux-x64/node.napi.node linux-x64.napi.node
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native-linux-x64
+          path: linux-x64.napi.node
+
+  build-linux-arm:
+    name: Build (Debian bullseye glibc, linux-arm / armv7)
+    needs: release-gate
+    if: needs.release-gate.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: docker/setup-qemu-action@v3
+
+      - name: Build in armv7 bullseye (QEMU)
+        run: |
+          docker run --rm --platform linux/arm/v7 \
+            -v "$PWD:/ws" -w /ws \
+            node:22.14-bullseye \
+            bash -exc '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y python3 make g++ cmake git
+              npm ci
+              node scripts/build-native.js compile
+              node scripts/stage-prebuild.js linux-arm
+            '
+          cp prebuilds/linux-arm/node.napi.node linux-arm.napi.node
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native-linux-arm
+          path: linux-arm.napi.node
 
   build-musl-x64:
     name: Build (Alpine / musl, linux-x64)
@@ -172,7 +233,7 @@ jobs:
 
   publish:
     name: Publish to npm
-    needs: [release-gate, build, build-musl-x64, build-musl-arm64]
+    needs: [release-gate, build, build-linux-x64-bullseye, build-linux-arm, build-musl-x64, build-musl-arm64]
     if: needs.release-gate.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
