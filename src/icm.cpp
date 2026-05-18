@@ -95,6 +95,21 @@ std::vector<double> icm_win_probabilities_harville(const std::vector<double>& st
     return win;
 }
 
+std::vector<double> icm_top_k_finish_probabilities(const std::vector<double>& stacks, int k) {
+    const std::size_t n = stacks.size();
+    if (k < 1 || static_cast<std::size_t>(k) > n) {
+        throw std::invalid_argument("ICM top-k: k must be between 1 and number of players inclusive");
+    }
+    const auto placement = icm_harville_placement_probabilities(stacks);
+    std::vector<double> out(n, 0.0);
+    for (std::size_t i = 0; i < n; ++i) {
+        for (int r = 0; r < k; ++r) {
+            out[i] += placement[i][static_cast<std::size_t>(r)];
+        }
+    }
+    return out;
+}
+
 std::vector<double> icm_expected_payouts(const std::vector<double>& stacks,
                                          const std::vector<double>& payouts) {
     const std::size_t n = stacks.size();
