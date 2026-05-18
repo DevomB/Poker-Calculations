@@ -75,6 +75,13 @@ export interface PokerCalculations {
    * `true` if any two strings map to the same card. Throws if any entry is not a valid card string.
    */
   cardStringsHaveDuplicate(cards: string[]): boolean;
+  /** Canonical two-character form (`Th`, `Ac`, …); throws if invalid. */
+  canonicalCardString(card: string): string;
+  /**
+   * Parse concatenated or whitespace-separated cards (`AhKh`, `Ah Kh`, `10hKd`); throws on invalid
+   * token or duplicate cards.
+   */
+  parseCompactCardList(text: string): string[];
   /**
    * Compare best 1–7 card lists; returns `-1` / `0` / `1`. Throws on overlap between lists or invalid cards.
    */
@@ -118,12 +125,36 @@ export interface PokerCalculations {
   breakevenCallEquity(potBeforeCall: number, toCall: number): number;
   spr(potChips: number, effectiveStackChips: number): number;
   effectiveStack(...stacks: number[]): number;
+  /** Each stack divided by the sum of stacks (tournament chip share; not Harville ICM). */
+  normalizedStackFractions(stacks: number[]): number[];
   minimumDefenseFrequency(potBeforeOpponentBet: number, opponentBetSize: number): number;
   stackInBigBlinds(stackChips: number, bigBlind: number): number;
   potOddsRatioDisplay(potBeforeCall: number, toCall: number): number;
   formatPotOdds(potBeforeCall: number, toCall: number, decimals?: number): string;
+  /**
+   * Breakeven call equity from `potOddsRatioDisplay` ratio `R = potBeforeCall / toCall`: `1 / (1 + R)`.
+   * `0` when `R` is `+Infinity`.
+   */
+  breakevenCallEquityFromPotOddsDisplayRatio(displayPotToCallRatio: number): number;
+  /**
+   * Inverse of `breakevenCallEquityFromPotOddsDisplayRatio`: `(1 - e) / e` for `e` in `(0,1]`; `Infinity`
+   * when `e === 0`; `0` when `e === 1`.
+   */
+  potOddsDisplayRatioFromBreakevenCallEquity(breakevenEquity: number): number;
+  /** Reduced integer `pot : to_call` string (e.g. `100`, `50` → `"2:1"`); `toCall === 0` → `∞:1`. */
+  formatPotOddsReducedFraction(potBeforeCall: number, toCall: number): string;
+  /** Book-style winning odds-against `(1 - equity) / equity`; `Infinity` at `equity === 0`. */
+  equityToWinningOddsAgainst(equity: number): number;
+  /** `1 / (1 + oddsAgainst)` for `oddsAgainst >= 0`; `0` when `oddsAgainst` is `+Infinity`. */
+  winningOddsAgainstToEquity(oddsAgainst: number): number;
   /** NLHE combo count from shorthand (`AA`→6, `AKs`→4, `AKo`→12); throws on invalid notation. */
   preflopCombosFromNotation(notation: string): number;
+  /** Sum of `preflopCombosFromNotation` over the list; empty list → `0`. */
+  preflopCombosFromNotationsList(notations: string[]): number;
+  /**
+   * Integer order `0..9` for `evaluateHandCategory` labels (`highCard` … `royalFlush`); throws if unknown.
+   */
+  handRankCategoryOrder(category: string): number;
   ruleOfFourEquity(outs: number): number;
   ruleOfTwoEquity(outs: number): number;
   /**
@@ -275,6 +306,17 @@ export interface PokerCalculations {
   ): number;
   /** P16: Wilson score interval for a binomial proportion. */
   wilsonScoreInterval(successes: number, nTrials: number, z: number): WilsonScoreInterval;
+  /** Agresti–Coull interval; same `{ lower, upper }` shape as Wilson. */
+  agrestiCoullInterval(successes: number, nTrials: number, z: number): WilsonScoreInterval;
+  /**
+   * Normal (Wald) interval `p_hat ± z * SE` clamped to `[0,1]`; weak near `0`/`1` with small `n`.
+   */
+  normalWaldBinomialInterval(successes: number, nTrials: number, z: number): WilsonScoreInterval;
+  /**
+   * Hoeffding: smallest integer `n` with `n >= ln(2/delta) / (2*epsilon^2)` for MC proportion error
+   * `epsilon` with probability at least `1-delta` (any underlying `p`).
+   */
+  monteCarloTrialsForHoeffdingBound(epsilon: number, delta: number): number;
   /** Rake model: min(fraction×pot, cap). */
   rakeFromPot(potChips: number, rakeFraction: number, rakeCap: number): number;
   /** P9: breakeven call equity with rake taken from final pot. */
@@ -367,6 +409,8 @@ export interface PokerCalculations {
    * Harville placement); `k` in `1..stacks.length`.
    */
   icmTopKFinishProbabilities(stacks: number[], k: number): number[];
+  /** Harville probability each player finishes last (placement matrix last column). */
+  icmLastPlaceProbabilitiesHarville(stacks: number[]): number[];
   /** P18: ICM expected payouts (prize vector length = players). */
   icmExpectedPayouts(stacks: number[], payouts: number[]): number[];
   /** P19: pairwise bubble factor (finite differences on P18). */
@@ -384,6 +428,8 @@ export interface PokerCalculations {
     layerPotChips: number[],
     equityPlayerByLayer: number[][]
   ): number[];
+  /** Sum of `potChips` over side-pot layers. */
+  sidePotLayersTotalChips(layers: SidePotLayer[]): number;
   /** P22: exact HU vs random villain hand; board must have 3–5 cards. */
   exactHuEquityVsRandomHand(heroHoleCards: string[], boardCards: string[]): number;
   /**

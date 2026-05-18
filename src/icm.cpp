@@ -110,6 +110,17 @@ std::vector<double> icm_top_k_finish_probabilities(const std::vector<double>& st
     return out;
 }
 
+std::vector<double> icm_last_place_probabilities_harville(const std::vector<double>& stacks) {
+    const auto placement = icm_harville_placement_probabilities(stacks);
+    const std::size_t n = stacks.size();
+    std::vector<double> out(n, 0.0);
+    const std::size_t last = n - 1;
+    for (std::size_t i = 0; i < n; ++i) {
+        out[i] = placement[i][last];
+    }
+    return out;
+}
+
 std::vector<double> icm_expected_payouts(const std::vector<double>& stacks,
                                          const std::vector<double>& payouts) {
     const std::size_t n = stacks.size();

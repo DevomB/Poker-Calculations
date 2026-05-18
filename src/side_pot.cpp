@@ -91,4 +91,15 @@ std::vector<double> layered_pot_chip_ev_from_equities(
     return ev;
 }
 
+double side_pot_layers_total_chips(const std::vector<Side_pot_layer>& layers) {
+    double sum = 0.0;
+    for (const auto& layer : layers) {
+        if (!std::isfinite(layer.pot_chips) || layer.pot_chips < 0.0) {
+            throw std::invalid_argument("side pot layer potChips must be finite and non-negative");
+        }
+        sum += layer.pot_chips;
+    }
+    return sum;
+}
+
 }  // namespace poker

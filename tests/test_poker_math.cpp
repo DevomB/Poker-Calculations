@@ -228,3 +228,56 @@ TEST(PokerMath, EstimatedOutsFromRuleClamped) {
     EXPECT_DOUBLE_EQ(poker::estimated_outs_from_rule_of_two(1.0, 40.0), 40.0);
     EXPECT_DOUBLE_EQ(poker::estimated_outs_from_rule_of_four(1.0, 40.0), 40.0);
 }
+
+TEST(PokerMath, AgrestiCoullContainsWilsonStyleInterior) {
+    const auto ac = poker::agresti_coull_interval(2, 10, 1.96);
+    EXPECT_GE(ac.lower, 0.0);
+    EXPECT_LE(ac.upper, 1.0);
+    EXPECT_LT(ac.lower, ac.upper);
+}
+
+TEST(PokerMath, NormalWaldAtAllSuccess) {
+    const auto w = poker::normal_wald_binomial_interval(10, 10, 1.96);
+    EXPECT_DOUBLE_EQ(w.lower, 1.0);
+    EXPECT_DOUBLE_EQ(w.upper, 1.0);
+}
+
+TEST(PokerMath, HoeffdingTrialsPositive) {
+    const std::int64_t n = poker::monte_carlo_trials_for_hoeffding_bound(0.05, 0.05);
+    EXPECT_GE(n, 1);
+}
+
+TEST(PokerMath, BreakevenEquityDisplayRatioRoundTrip) {
+    const double r = 3.0;
+    const double e = poker::breakeven_call_equity_from_pot_odds_display_ratio(r);
+    EXPECT_NEAR(e, 0.25, 1e-12);
+    EXPECT_NEAR(poker::pot_odds_display_ratio_from_breakeven_call_equity(e), r, 1e-12);
+}
+
+TEST(PokerMath, NormalizedStackFractions) {
+    const auto f = poker::normalized_stack_fractions({100, 300});
+    ASSERT_EQ(f.size(), 2U);
+    EXPECT_DOUBLE_EQ(f[0], 0.25);
+    EXPECT_DOUBLE_EQ(f[1], 0.75);
+}
+
+TEST(PokerMath, PreflopCombosListSum) {
+    EXPECT_EQ(poker::preflop_combos_from_notations_list({"AA", "AKs"}), 10);
+    EXPECT_EQ(poker::preflop_combos_from_notations_list({}), 0);
+}
+
+TEST(PokerMath, FormatPotOddsReducedFraction) {
+    EXPECT_EQ(poker::format_pot_odds_reduced_fraction(100, 50), "2:1");
+}
+
+TEST(PokerMath, HandRankCategoryOrder) {
+    EXPECT_EQ(poker::hand_rank_category_order("flush"), 5);
+    EXPECT_THROW(poker::hand_rank_category_order("nope"), std::invalid_argument);
+}
+
+TEST(PokerMath, EquityOddsRoundTrip) {
+    const double e = 0.25;
+    const double o = poker::equity_to_winning_odds_against(e);
+    EXPECT_NEAR(o, 3.0, 1e-12);
+    EXPECT_NEAR(poker::winning_odds_against_to_equity(o), e, 1e-12);
+}

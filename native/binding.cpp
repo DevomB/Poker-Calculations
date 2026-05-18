@@ -539,6 +539,25 @@ Napi::Value EffectiveStack(const Napi::CallbackInfo& info) {
     }
 }
 
+Napi::Value NormalizedStackFractions(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsArray()) {
+            throw std::invalid_argument("normalizedStackFractions(stacks[])");
+        }
+        const std::vector<double> stacks = doubles_from_js_array(info[0].As<Napi::Array>(), "stacks");
+        const auto fr = poker::normalized_stack_fractions(stacks);
+        Napi::Array a = Napi::Array::New(env, static_cast<uint32_t>(fr.size()));
+        for (uint32_t i = 0; i < fr.size(); ++i) {
+            a[i] = Napi::Number::New(env, fr[static_cast<std::size_t>(i)]);
+        }
+        return a;
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
 Napi::Value BreakevenCallEquity(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
@@ -612,6 +631,77 @@ Napi::Value FormatPotOdds(const Napi::CallbackInfo& info) {
             decimals = info[2].As<Napi::Number>().Int32Value();
         }
         return Napi::String::New(env, poker::format_pot_odds(pot, to_call, decimals));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value BreakevenCallEquityFromPotOddsDisplayRatio(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsNumber()) {
+            throw std::invalid_argument("breakevenCallEquityFromPotOddsDisplayRatio(displayPotToCallRatio)");
+        }
+        const double r = info[0].As<Napi::Number>().DoubleValue();
+        return Napi::Number::New(env, poker::breakeven_call_equity_from_pot_odds_display_ratio(r));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value PotOddsDisplayRatioFromBreakevenCallEquity(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsNumber()) {
+            throw std::invalid_argument("potOddsDisplayRatioFromBreakevenCallEquity(breakevenEquity)");
+        }
+        const double e = info[0].As<Napi::Number>().DoubleValue();
+        return Napi::Number::New(env, poker::pot_odds_display_ratio_from_breakeven_call_equity(e));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value FormatPotOddsReducedFraction(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsNumber()) {
+            throw std::invalid_argument("formatPotOddsReducedFraction(potBeforeCall, toCall)");
+        }
+        const double pot = info[0].As<Napi::Number>().DoubleValue();
+        const double to_call = info[1].As<Napi::Number>().DoubleValue();
+        return Napi::String::New(env, poker::format_pot_odds_reduced_fraction(pot, to_call));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value EquityToWinningOddsAgainst(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsNumber()) {
+            throw std::invalid_argument("equityToWinningOddsAgainst(equity)");
+        }
+        const double e = info[0].As<Napi::Number>().DoubleValue();
+        return Napi::Number::New(env, poker::equity_to_winning_odds_against(e));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value WinningOddsAgainstToEquity(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsNumber()) {
+            throw std::invalid_argument("winningOddsAgainstToEquity(oddsAgainst)");
+        }
+        const double o = info[0].As<Napi::Number>().DoubleValue();
+        return Napi::Number::New(env, poker::winning_odds_against_to_equity(o));
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -1028,6 +1118,62 @@ Napi::Value WilsonScoreInterval(const Napi::CallbackInfo& info) {
     }
 }
 
+Napi::Value AgrestiCoullInterval(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
+            throw std::invalid_argument("agrestiCoullInterval(successes, nTrials, z)");
+        }
+        const int s = info[0].As<Napi::Number>().Int32Value();
+        const int n = info[1].As<Napi::Number>().Int32Value();
+        const double z = info[2].As<Napi::Number>().DoubleValue();
+        const auto w = poker::agresti_coull_interval(s, n, z);
+        Napi::Object o = Napi::Object::New(env);
+        o.Set("lower", Napi::Number::New(env, w.lower));
+        o.Set("upper", Napi::Number::New(env, w.upper));
+        return o;
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value NormalWaldBinomialInterval(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
+            throw std::invalid_argument("normalWaldBinomialInterval(successes, nTrials, z)");
+        }
+        const int s = info[0].As<Napi::Number>().Int32Value();
+        const int n = info[1].As<Napi::Number>().Int32Value();
+        const double z = info[2].As<Napi::Number>().DoubleValue();
+        const auto w = poker::normal_wald_binomial_interval(s, n, z);
+        Napi::Object o = Napi::Object::New(env);
+        o.Set("lower", Napi::Number::New(env, w.lower));
+        o.Set("upper", Napi::Number::New(env, w.upper));
+        return o;
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value MonteCarloTrialsForHoeffdingBound(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsNumber()) {
+            throw std::invalid_argument("monteCarloTrialsForHoeffdingBound(epsilon, delta)");
+        }
+        const double eps = info[0].As<Napi::Number>().DoubleValue();
+        const double delta = info[1].As<Napi::Number>().DoubleValue();
+        const std::int64_t n = poker::monte_carlo_trials_for_hoeffding_bound(eps, delta);
+        return Napi::Number::New(env, static_cast<double>(n));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
 Napi::Value RakeFromPot(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
@@ -1271,6 +1417,35 @@ Napi::Value LayeredPotChipEvFromEquities(const Napi::CallbackInfo& info) {
             a[i] = Napi::Number::New(env, ev[static_cast<std::size_t>(i)]);
         }
         return a;
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value SidePotLayersTotalChips(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsArray()) {
+            throw std::invalid_argument("sidePotLayersTotalChips(sidePotLayers[])");
+        }
+        const Napi::Array arr = info[0].As<Napi::Array>();
+        std::vector<poker::Side_pot_layer> layers;
+        layers.reserve(arr.Length());
+        for (uint32_t i = 0; i < arr.Length(); ++i) {
+            const Napi::Value v = arr[i];
+            if (!v.IsObject()) {
+                throw std::invalid_argument("sidePotLayersTotalChips: each layer must be an object");
+            }
+            const Napi::Object o = v.As<Napi::Object>();
+            if (!o.Has("potChips") || !o.Get("potChips").IsNumber()) {
+                throw std::invalid_argument("sidePotLayersTotalChips: each layer needs numeric potChips");
+            }
+            poker::Side_pot_layer L{};
+            L.pot_chips = o.Get("potChips").As<Napi::Number>().DoubleValue();
+            layers.push_back(std::move(L));
+        }
+        return Napi::Number::New(env, poker::side_pot_layers_total_chips(layers));
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -1727,6 +1902,38 @@ Napi::Value CardStringsHaveDuplicate(const Napi::CallbackInfo& info) {
     }
 }
 
+Napi::Value CanonicalCardString(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsString()) {
+            throw std::invalid_argument("canonicalCardString(card: string)");
+        }
+        const std::string s = poker::canonical_card_string(info[0].As<Napi::String>().Utf8Value());
+        return Napi::String::New(env, s);
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value ParseCompactCardList(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsString()) {
+            throw std::invalid_argument("parseCompactCardList(cards: string)");
+        }
+        const auto cards = poker::parse_compact_card_list(info[0].As<Napi::String>().Utf8Value());
+        Napi::Array a = Napi::Array::New(env, static_cast<uint32_t>(cards.size()));
+        for (uint32_t i = 0; i < cards.size(); ++i) {
+            a[i] = Napi::String::New(env, cards[static_cast<std::size_t>(i)]);
+        }
+        return a;
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
 Napi::Value EstimatedOutsFromRuleOfTwo(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
@@ -1801,6 +2008,35 @@ Napi::Value PreflopCombosFromNotation(const Napi::CallbackInfo& info) {
         }
         const int n = poker::preflop_combos_from_notation(info[0].As<Napi::String>().Utf8Value());
         return Napi::Number::New(env, n);
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value PreflopCombosFromNotationsList(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsArray()) {
+            throw std::invalid_argument("preflopCombosFromNotationsList(notations: string[])");
+        }
+        const auto strs = strings_from_js_array(info[0].As<Napi::Array>(), "preflopCombosFromNotationsList");
+        const int sum = poker::preflop_combos_from_notations_list(strs);
+        return Napi::Number::New(env, sum);
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value HandRankCategoryOrder(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsString()) {
+            throw std::invalid_argument("handRankCategoryOrder(category: string)");
+        }
+        const int ord = poker::hand_rank_category_order(info[0].As<Napi::String>().Utf8Value());
+        return Napi::Number::New(env, ord);
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -1899,6 +2135,25 @@ Napi::Value IcmTopKFinishProbabilities(const Napi::CallbackInfo& info) {
     }
 }
 
+Napi::Value IcmLastPlaceProbabilitiesHarville(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 1 || !info[0].IsArray()) {
+            throw std::invalid_argument("icmLastPlaceProbabilitiesHarville(stacks[])");
+        }
+        const std::vector<double> stacks = doubles_from_js_array(info[0].As<Napi::Array>(), "stacks");
+        const auto probs = poker::icm_last_place_probabilities_harville(stacks);
+        Napi::Array out = Napi::Array::New(env, probs.size());
+        for (std::size_t i = 0; i < probs.size(); ++i) {
+            out[static_cast<uint32_t>(i)] = Napi::Number::New(env, probs[i]);
+        }
+        return out;
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
 Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "evaluateBestHand"), Napi::Function::New(env, EvaluateBestHand));
     exports.Set(Napi::String::New(env, "evaluateHandStrength"),
@@ -1908,6 +2163,8 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "validateCardString"), Napi::Function::New(env, ValidateCardString));
     exports.Set(Napi::String::New(env, "cardStringsHaveDuplicate"),
                 Napi::Function::New(env, CardStringsHaveDuplicate));
+    exports.Set(Napi::String::New(env, "canonicalCardString"), Napi::Function::New(env, CanonicalCardString));
+    exports.Set(Napi::String::New(env, "parseCompactCardList"), Napi::Function::New(env, ParseCompactCardList));
     exports.Set(Napi::String::New(env, "compareBestHands"), Napi::Function::New(env, CompareBestHands));
     exports.Set(Napi::String::New(env, "simulateHandOutcome"),
                 Napi::Function::New(env, SimulateHandOutcome));
@@ -1920,6 +2177,8 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
                 Napi::Function::New(env, ExpectedValueCallWithRake));
     exports.Set(Napi::String::New(env, "spr"), Napi::Function::New(env, Spr));
     exports.Set(Napi::String::New(env, "effectiveStack"), Napi::Function::New(env, EffectiveStack));
+    exports.Set(Napi::String::New(env, "normalizedStackFractions"),
+                Napi::Function::New(env, NormalizedStackFractions));
     exports.Set(Napi::String::New(env, "breakevenCallEquity"),
                 Napi::Function::New(env, BreakevenCallEquity));
     exports.Set(Napi::String::New(env, "minimumDefenseFrequency"),
@@ -1928,6 +2187,16 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "potOddsRatioDisplay"),
                 Napi::Function::New(env, PotOddsRatioDisplay));
     exports.Set(Napi::String::New(env, "formatPotOdds"), Napi::Function::New(env, FormatPotOdds));
+    exports.Set(Napi::String::New(env, "breakevenCallEquityFromPotOddsDisplayRatio"),
+                Napi::Function::New(env, BreakevenCallEquityFromPotOddsDisplayRatio));
+    exports.Set(Napi::String::New(env, "potOddsDisplayRatioFromBreakevenCallEquity"),
+                Napi::Function::New(env, PotOddsDisplayRatioFromBreakevenCallEquity));
+    exports.Set(Napi::String::New(env, "formatPotOddsReducedFraction"),
+                Napi::Function::New(env, FormatPotOddsReducedFraction));
+    exports.Set(Napi::String::New(env, "equityToWinningOddsAgainst"),
+                Napi::Function::New(env, EquityToWinningOddsAgainst));
+    exports.Set(Napi::String::New(env, "winningOddsAgainstToEquity"),
+                Napi::Function::New(env, WinningOddsAgainstToEquity));
     exports.Set(Napi::String::New(env, "ruleOfFourEquity"), Napi::Function::New(env, RuleOfFourEquity));
     exports.Set(Napi::String::New(env, "ruleOfTwoEquity"), Napi::Function::New(env, RuleOfTwoEquity));
     exports.Set(Napi::String::New(env, "estimatedOutsFromRuleOfTwo"),
@@ -1976,6 +2245,10 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
                 Napi::Function::New(env, NlMinimumRaiseToTotal));
     exports.Set(Napi::String::New(env, "preflopCombosFromNotation"),
                 Napi::Function::New(env, PreflopCombosFromNotation));
+    exports.Set(Napi::String::New(env, "preflopCombosFromNotationsList"),
+                Napi::Function::New(env, PreflopCombosFromNotationsList));
+    exports.Set(Napi::String::New(env, "handRankCategoryOrder"),
+                Napi::Function::New(env, HandRankCategoryOrder));
     exports.Set(Napi::String::New(env, "kellyCriterionBinary"), Napi::Function::New(env, KellyCriterionBinary));
     exports.Set(Napi::String::New(env, "monteCarloStandardError"),
                 Napi::Function::New(env, MonteCarloStandardError));
@@ -1990,6 +2263,11 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "bankrollForTargetRorDiffusion"),
                 Napi::Function::New(env, BankrollForTargetRorDiffusion));
     exports.Set(Napi::String::New(env, "wilsonScoreInterval"), Napi::Function::New(env, WilsonScoreInterval));
+    exports.Set(Napi::String::New(env, "agrestiCoullInterval"), Napi::Function::New(env, AgrestiCoullInterval));
+    exports.Set(Napi::String::New(env, "normalWaldBinomialInterval"),
+                Napi::Function::New(env, NormalWaldBinomialInterval));
+    exports.Set(Napi::String::New(env, "monteCarloTrialsForHoeffdingBound"),
+                Napi::Function::New(env, MonteCarloTrialsForHoeffdingBound));
     exports.Set(Napi::String::New(env, "rakeFromPot"), Napi::Function::New(env, RakeFromPot));
     exports.Set(Napi::String::New(env, "breakevenCallEquityWithRake"),
                 Napi::Function::New(env, BreakevenCallEquityWithRake));
@@ -2020,6 +2298,8 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
                 Napi::Function::New(env, IcmHarvillePlacementProbabilities));
     exports.Set(Napi::String::New(env, "icmTopKFinishProbabilities"),
                 Napi::Function::New(env, IcmTopKFinishProbabilities));
+    exports.Set(Napi::String::New(env, "icmLastPlaceProbabilitiesHarville"),
+                Napi::Function::New(env, IcmLastPlaceProbabilitiesHarville));
     exports.Set(Napi::String::New(env, "icmExpectedPayouts"), Napi::Function::New(env, IcmExpectedPayouts));
     exports.Set(Napi::String::New(env, "icmPairwiseBubbleFactor"),
                 Napi::Function::New(env, IcmPairwiseBubbleFactor));
@@ -2027,6 +2307,8 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
                 Napi::Function::New(env, SidePotLadderFromCommitments));
     exports.Set(Napi::String::New(env, "layeredPotChipEvFromEquities"),
                 Napi::Function::New(env, LayeredPotChipEvFromEquities));
+    exports.Set(Napi::String::New(env, "sidePotLayersTotalChips"),
+                Napi::Function::New(env, SidePotLayersTotalChips));
     exports.Set(Napi::String::New(env, "exactHuEquityVsRandomHand"),
                 Napi::Function::New(env, ExactHuEquityVsRandomHand));
     exports.Set(Napi::String::New(env, "straightMadeFlopToRiverExactProbability"),

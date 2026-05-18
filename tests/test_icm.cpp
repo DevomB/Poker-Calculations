@@ -69,3 +69,16 @@ TEST(Icm, TopKMatchesPlacementRowSum) {
         EXPECT_NEAR(t3[i], sum, 1e-9);
     }
 }
+
+TEST(Icm, LastPlaceProbabilitiesSumToOne) {
+    const std::vector<double> stacks = {300.0, 200.0, 500.0};
+    const auto m = poker::icm_harville_placement_probabilities(stacks);
+    const auto last = poker::icm_last_place_probabilities_harville(stacks);
+    ASSERT_EQ(last.size(), 3U);
+    double s = 0.0;
+    for (std::size_t i = 0; i < 3; ++i) {
+        EXPECT_NEAR(last[i], m[i][2], 1e-9);
+        s += last[i];
+    }
+    EXPECT_NEAR(s, 1.0, 1e-6);
+}

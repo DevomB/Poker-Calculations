@@ -82,4 +82,48 @@ bool card_strings_have_duplicate(const std::vector<std::string>& cards) {
     return false;
 }
 
+std::string canonical_card_string(const std::string& raw) {
+    Card c{};
+    if (!parse_card_string(raw, c)) {
+        throw std::invalid_argument("canonicalCardString: invalid card string");
+    }
+    return c.to_string();
+}
+
+std::vector<std::string> parse_compact_card_list(const std::string& raw) {
+    std::vector<std::string> out;
+    std::vector<Card> seen;
+    std::size_t pos = 0;
+    const std::size_t n = raw.size();
+    while (pos < n) {
+        while (pos < n && std::isspace(static_cast<unsigned char>(raw[pos]))) {
+            ++pos;
+        }
+        if (pos >= n) {
+            break;
+        }
+        std::size_t len = 2;
+        if (pos + 2 < n && raw[pos] == '1' && raw[pos + 1] == '0') {
+            len = 3;
+        }
+        if (pos + len > n) {
+            throw std::invalid_argument("parseCompactCardList: truncated card token");
+        }
+        const std::string piece = raw.substr(pos, len);
+        Card c{};
+        if (!parse_card_string(piece, c)) {
+            throw std::invalid_argument("parseCompactCardList: invalid card at offset " + std::to_string(pos));
+        }
+        for (const Card& o : seen) {
+            if (o == c) {
+                throw std::invalid_argument("parseCompactCardList: duplicate card");
+            }
+        }
+        seen.push_back(c);
+        out.push_back(c.to_string());
+        pos += len;
+    }
+    return out;
+}
+
 }  // namespace poker

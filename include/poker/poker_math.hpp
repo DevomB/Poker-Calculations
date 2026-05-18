@@ -257,6 +257,56 @@ struct Wilson_interval {
 /// P16: Wilson score interval for binomial proportion; `z` e.g. 1.96 for ~95%.
 [[nodiscard]] Wilson_interval wilson_score_interval(int successes, int n_trials, double z);
 
+/// Agresti–Coull interval for a binomial proportion (adds `z^2/2` pseudo-counts); `z` e.g. 1.96.
+[[nodiscard]] Wilson_interval agresti_coull_interval(int successes, int n_trials, double z);
+
+/**
+ * Normal (Wald) interval `p_hat ± z * sqrt(p_hat(1-p_hat)/n)` clamped to `[0,1]`.
+ * Weak when `p_hat` is near 0 or 1 with small `n` (can hit boundaries or collapse).
+ */
+[[nodiscard]] Wilson_interval normal_wald_binomial_interval(int successes, int n_trials, double z);
+
+/**
+ * Hoeffding: smallest integer `n` with `n >= ln(2/delta) / (2*epsilon^2)` so that with probability at
+ * least `1-delta`, `|p_hat - p| <= epsilon` for any underlying `p` (MC proportion; independent trials).
+ */
+[[nodiscard]] std::int64_t monte_carlo_trials_for_hoeffding_bound(double epsilon, double delta);
+
+/**
+ * Breakeven call equity from `potOddsRatioDisplay` ratio `R = pot_before_call / to_call`:
+ * `1 / (1 + R)` when `R` is finite; `0` when `R` is `+infinity` (no call to match).
+ */
+[[nodiscard]] double breakeven_call_equity_from_pot_odds_display_ratio(double display_pot_to_call_ratio);
+
+/**
+ * Inverse of `breakeven_call_equity_from_pot_odds_display_ratio`: `(1 - e) / e` for `e` in `(0,1]`;
+ * `+infinity` when `e == 0`; `0` when `e == 1`.
+ */
+[[nodiscard]] double pot_odds_display_ratio_from_breakeven_call_equity(double breakeven_equity);
+
+/// Each stack divided by the sum of stacks (not Harville ICM); all stacks finite and non-negative, sum positive.
+[[nodiscard]] std::vector<double> normalized_stack_fractions(const std::vector<double>& stacks);
+
+/// Sum of `preflop_combos_from_notation` over `notations` (empty list → `0`).
+[[nodiscard]] int preflop_combos_from_notations_list(const std::vector<std::string>& notations);
+
+/**
+ * Reduced integer ratio string `pot : to_call` (e.g. `100` and `50` → `"2:1"`). Uses `std::gcd` on
+ * rounded chip integers; `to_call == 0` → same infinity token as `format_pot_odds`.
+ */
+[[nodiscard]] std::string format_pot_odds_reduced_fraction(double pot_before_call, double to_call);
+
+/**
+ * Integer order `0..9` for `evaluateHandCategory` labels (`highCard` … `royalFlush`); throws if unknown.
+ */
+[[nodiscard]] int hand_rank_category_order(const std::string& category_camel_case);
+
+/// Book-style winning odds-against: `(1 - equity) / equity` for `equity` in `(0,1]`; `+infinity` at `0`.
+[[nodiscard]] double equity_to_winning_odds_against(double equity);
+
+/// Inverse: `1 / (1 + odds_against)` for finite `odds_against >= 0`; `0` if `odds_against` is `+infinity`.
+[[nodiscard]] double winning_odds_against_to_equity(double odds_against);
+
 // --- P9 / P10 rake (winner-takes pot after rake from final pot) ---
 
 [[nodiscard]] double rake_from_pot(double pot_chips, double rake_fraction, double rake_cap);
