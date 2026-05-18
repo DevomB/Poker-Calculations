@@ -47,7 +47,10 @@ const require = createRequire(import.meta.url);
 const poker = require('poker-calculations');
 ```
 
-Runnable samples: **[`examples/demo.mjs`](examples/demo.mjs)** runs every per-feature script under **`examples/`** plus **[`examples/native-binding-exports.mjs`](examples/native-binding-exports.mjs)** (prints the full N-API function list). Each other file matches a group in [`FEATURES_ADDED.md`](FEATURES_ADDED.md). From repo root: `node examples/demo.mjs` or `node examples/<name>.mjs`.
+Runnable samples are **separate ESM scripts** under [`examples/`](examples/): one topic per file (see the header comment in each script; names align with groups in [`FEATURES_ADDED.md`](FEATURES_ADDED.md)). From the repo root: `node examples/<name>.mjs`.
+
+- **[`examples/native-binding-exports.mjs`](examples/native-binding-exports.mjs)** — print every N-API export at runtime.
+- **Topic demos** — `fold-equity.mjs`, `gto-frequency.mjs`, `hand-resolution.mjs`, `heuristics-draws.mjs`, `icm.mjs`, `intervals-and-odds-bridge.mjs`, `kelly-chubukov-jam.mjs`, `monte-carlo-equity.mjs`, `multiway.mjs`, `pot-chip-ev-rake.mjs`, `reverse-implied-geometry.mjs`, `side-pots.mjs`, `sizing-commitment.mjs`, `stacks-display.mjs`, `stats-risk.mjs`, `strategy-decide-action.mjs`.
 
 Cards are strings like `"Ah"`, `"Td"` (ten may be `"10h"`).
 
@@ -57,20 +60,20 @@ All symbols below are exported from the **native addon** (C++ via N-API). **`bre
 
 | Area | Exports |
 | --- | --- |
-| **Hands & equity** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandCategory`, `validateCardString`, `cardStringsHaveDuplicate`, `compareBestHands`, `simulateHandOutcome`, `parallelHandSimulation`, `exactHuEquityVsRandomHand`, `straightMadeFlopToRiverExactProbability` |
+| **Hands & equity** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandCategory`, `handRankCategoryOrder`, `validateCardString`, `cardStringsHaveDuplicate`, `canonicalCardString`, `parseCompactCardList`, `compareBestHands`, `simulateHandOutcome`, `parallelHandSimulation`, `exactHuEquityVsRandomHand`, `straightMadeFlopToRiverExactProbability` |
 | **Strategy** | `decideAction` |
-| **Pot / EV** | `potOddsRatio`, `expectedValueCall`, `expectedValueCallWithRake`, `breakevenCallEquity`, `breakevenCallEquityWithRake`, `rakeFromPot` |
-| **Stacks & display** | `spr`, `effectiveStack`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds`, `harringtonM`, `harringtonMEffective`, `harringtonMEffectiveActiveAntes`, `harringtonQ`, `orbitCostChips`, `nlMinimumRaiseToTotal`, `preflopCombosFromNotation` |
+| **Pot / EV** | `potOddsRatio`, `expectedValueCall`, `expectedValueCallWithRake`, `breakevenCallEquity`, `breakevenCallEquityFromPotOddsDisplayRatio`, `potOddsDisplayRatioFromBreakevenCallEquity`, `breakevenCallEquityWithRake`, `rakeFromPot`, `formatPotOddsReducedFraction`, `equityToWinningOddsAgainst`, `winningOddsAgainstToEquity` |
+| **Stacks & display** | `spr`, `effectiveStack`, `normalizedStackFractions`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds`, `harringtonM`, `harringtonMEffective`, `harringtonMEffectiveActiveAntes`, `harringtonQ`, `orbitCostChips`, `nlMinimumRaiseToTotal`, `preflopCombosFromNotation`, `preflopCombosFromNotationsList` |
 | **Heuristics & draws** | `ruleOfFourEquity`, `ruleOfTwoEquity`, `estimatedOutsFromRuleOfTwo`, `estimatedOutsFromRuleOfFour`, `impliedBreakevenFutureWin`, `hypergeometricOneCardHitProbability`, `runnerRunnerBackdoorFlushTwoCardProbability`, `runnerRunnerStraightDrawHitProbability`, `flopToRiverAtLeastOneHitProbability`, `flopToRiverAtLeastOneHitUnionTwoCategories`, `flopToRiverAtLeastOneHitUnionThreeCategories`, `flopToRiverAtLeastOneHitUnionFourCategories`, `flopToRiverAtLeastOneHitDisjointOutsSum`, `duplicationAdjustedOuts` |
 | **Reverse implied / geometry** | `reverseImpliedOddsMaxFutureLoss`, `geometricPotAfterMatchedPotFractions` |
-| **Stats & risk** | `monteCarloStandardError`, `monteCarloTrialsForStandardErrorBound`, `wilsonScoreInterval`, `riskOfRuinDiffusionApprox`, `bankrollForTargetRorDiffusion`, `betaBinomialFoldPosterior` |
+| **Stats & risk** | `monteCarloStandardError`, `monteCarloTrialsForStandardErrorBound`, `monteCarloTrialsForHoeffdingBound`, `wilsonScoreInterval`, `agrestiCoullInterval`, `normalWaldBinomialInterval`, `riskOfRuinDiffusionApprox`, `bankrollForTargetRorDiffusion`, `betaBinomialFoldPosterior` |
 | **Kelly & jam toys** | `kellyCriterionBinary`, `chubukovSymmetricJamBreakevenStack`, `chubukovSymmetricJamEv`, `chubukovMaxSymmetricJamStackChipsBinarySearch`, `chubukovMaxSymmetricJamStackBinarySearch`, `chubukovMaxSymmetricJamStackFromHandBinarySearch` |
 | **GTO-style** | `minimumDefenseFrequency`, `alphaFrequency`, `bluffToValueRatio`, `valueToBluffRatio` |
 | **Sizing & commitment** | `betAsPotFraction`, `sprAfterCall`, `commitmentRatio` |
 | **Fold equity** | `breakevenFoldEquityPureBluff`, `breakevenFoldEquityPureBluffWithRake`, `breakevenFoldEquitySemiBluff`, `breakevenFoldEquitySemiBluffWithRake`, `twoStreetPureBluffSameFoldEquity`, `twoStreetPureBluffEv`, `breakevenFoldEquitySecondStreetPureBluff`, `breakevenFoldEquityFirstStreetPureBluff` |
 | **Multiway** | `multiwaySymmetricBreakevenCallEquity`, `multiwaySymmetricBreakevenCallEquityWithShare` |
-| **ICM** | `icmWinProbabilitiesHarville`, `icmHarvillePlacementProbabilities`, `icmTopKFinishProbabilities`, `icmExpectedPayouts`, `icmPairwiseBubbleFactor` |
-| **Side pots** | `sidePotLadderFromCommitments`, `layeredPotChipEvFromEquities` |
+| **ICM** | `icmWinProbabilitiesHarville`, `icmHarvillePlacementProbabilities`, `icmTopKFinishProbabilities`, `icmLastPlaceProbabilitiesHarville`, `icmExpectedPayouts`, `icmPairwiseBubbleFactor` |
+| **Side pots** | `sidePotLadderFromCommitments`, `layeredPotChipEvFromEquities`, `sidePotLayersTotalChips` |
 
 **Breaking change (v1.2.0):** `poker-math.js` was removed; require `poker-calculations` (or the `.node` binding) for all math. Rebuild native artifacts after upgrading from a git clone.
 
@@ -158,7 +161,7 @@ include/poker/     Public headers (Card, Deck, GameEngine, HandEvaluator, poker_
 src/               Implementations (`poker_math.cpp` — SPR, MDF, fold equity, …)
 native/            Node-API binding (built when CMAKE_JS_INC is set by cmake-js)
 tests/             Unit tests
-examples/          Node ESM demos (`demo.mjs` runs all groups + `native-binding-exports.mjs`)
+examples/          Node ESM sample scripts (one feature area per file; see FEATURES_ADDED.md)
 CMakeLists.txt     Static poker_lib; optional poker_tests; optional poker_calculations.node when built by cmake-js
 ```
 

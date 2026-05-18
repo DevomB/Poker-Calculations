@@ -8,6 +8,8 @@ This file is the **single index** for shipped math, how to extend the library, a
 
 All **P1–P25** roadmap items from the former [`FEATURES_IN_PROGRESS.md`](FEATURES_IN_PROGRESS.md) table are **implemented** and exposed on `PokerCalculations` (see [`index.d.ts`](index.d.ts)).
 
+Additional **small DX / statistics / notation** helpers (Agresti–Coull and Wald intervals, Hoeffding MC trial bound, pot-odds display bridges, compact card parsing, ICM last-place vector, side-pot layer total chips, etc.) are listed in [`FEATURES_ADDED.md`](FEATURES_ADDED.md) and are not assigned P-numbers.
+
 | Phase | IDs | Topic |
 | --- | --- | --- |
 | A | P1, P3, P6, P7, P11, P12, P15, P24, P25 | Hypergeometric one-card, RR flush, reverse implied ceiling, geometric pot, Harrington M / effective M, Kelly, MC SE, Beta–Binomial, duplication heuristic |

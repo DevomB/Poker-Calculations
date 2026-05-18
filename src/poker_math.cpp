@@ -6,8 +6,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <numeric>
 #include <sstream>
 #include <stdexcept>
+#include <string>
+#include <unordered_map>
 
 namespace poker {
 
@@ -557,6 +560,179 @@ Wilson_interval wilson_score_interval(int successes, int n_trials, double z) {
     return w;
 }
 
+Wilson_interval agresti_coull_interval(int successes, int n_trials, double z) {
+    if (successes < 0 || n_trials < 0) {
+        throw std::invalid_argument("successes and nTrials must be non-negative");
+    }
+    if (successes > n_trials) {
+        throw std::invalid_argument("successes cannot exceed nTrials");
+    }
+    if (!std::isfinite(z) || z <= 0.0) {
+        throw std::invalid_argument("z must be finite and positive");
+    }
+    Wilson_interval w{};
+    if (n_trials == 0) {
+        w.lower = 0.0;
+        w.upper = 1.0;
+        return w;
+    }
+    const double n = static_cast<double>(n_trials);
+    const double x = static_cast<double>(successes);
+    const double z2 = z * z;
+    const double n_tilde = n + z2;
+    const double p_tilde = (x + z2 / 2.0) / n_tilde;
+    const double half = z * std::sqrt(p_tilde * (1.0 - p_tilde) / n_tilde);
+    w.lower = clamp01(p_tilde - half);
+    w.upper = clamp01(p_tilde + half);
+    return w;
+}
+
+Wilson_interval normal_wald_binomial_interval(int successes, int n_trials, double z) {
+    if (successes < 0 || n_trials < 0) {
+        throw std::invalid_argument("successes and nTrials must be non-negative");
+    }
+    if (successes > n_trials) {
+        throw std::invalid_argument("successes cannot exceed nTrials");
+    }
+    if (!std::isfinite(z) || z <= 0.0) {
+        throw std::invalid_argument("z must be finite and positive");
+    }
+    Wilson_interval w{};
+    if (n_trials == 0) {
+        w.lower = 0.0;
+        w.upper = 1.0;
+        return w;
+    }
+    const double n = static_cast<double>(n_trials);
+    const double p_hat = static_cast<double>(successes) / n;
+    const double se = std::sqrt(p_hat * (1.0 - p_hat) / n);
+    const double half = z * se;
+    w.lower = clamp01(p_hat - half);
+    w.upper = clamp01(p_hat + half);
+    return w;
+}
+
+std::int64_t monte_carlo_trials_for_hoeffding_bound(double epsilon, double delta) {
+    if (!std::isfinite(epsilon) || epsilon <= 0.0) {
+        throw std::invalid_argument("epsilon must be finite and positive");
+    }
+    if (!std::isfinite(delta) || delta <= 0.0 || delta >= 1.0) {
+        throw std::invalid_argument("delta must be finite and in (0, 1)");
+    }
+    const double num = std::log(2.0 / delta);
+    const double den = 2.0 * epsilon * epsilon;
+    const double raw = num / den;
+    if (!std::isfinite(raw) || raw <= 0.0) {
+        throw std::invalid_argument("hoeffding trial bound overflowed");
+    }
+    return static_cast<std::int64_t>(std::ceil(raw - 1e-15));
+}
+
+double breakeven_call_equity_from_pot_odds_display_ratio(double display_pot_to_call_ratio) {
+    if (!std::isfinite(display_pot_to_call_ratio)) {
+        if (std::isinf(display_pot_to_call_ratio) && display_pot_to_call_ratio > 0.0) {
+            return 0.0;
+        }
+        throw std::invalid_argument("displayPotToCallRatio must be finite or +infinity");
+    }
+    if (display_pot_to_call_ratio < 0.0) {
+        throw std::invalid_argument("displayPotToCallRatio must be non-negative");
+    }
+    return 1.0 / (1.0 + display_pot_to_call_ratio);
+}
+
+double pot_odds_display_ratio_from_breakeven_call_equity(double breakeven_equity) {
+    if (!std::isfinite(breakeven_equity)) {
+        throw std::invalid_argument("breakevenEquity must be finite");
+    }
+    const double e = clamp01(breakeven_equity);
+    if (e <= 0.0) {
+        return std::numeric_limits<double>::infinity();
+    }
+    if (e >= 1.0) {
+        return 0.0;
+    }
+    return (1.0 - e) / e;
+}
+
+std::vector<double> normalized_stack_fractions(const std::vector<double>& stacks) {
+    if (stacks.empty()) {
+        throw std::invalid_argument("normalizedStackFractions: stacks must be non-empty");
+    }
+    double sum = 0.0;
+    for (double s : stacks) {
+        assert_non_neg_finite("stack", s);
+        sum += s;
+    }
+    if (sum <= 0.0) {
+        throw std::invalid_argument("normalizedStackFractions: sum of stacks must be positive");
+    }
+    std::vector<double> out;
+    out.reserve(stacks.size());
+    for (double s : stacks) {
+        out.push_back(s / sum);
+    }
+    return out;
+}
+
+std::string format_pot_odds_reduced_fraction(double pot_before_call, double to_call) {
+    assert_non_neg_finite("potBeforeCall", pot_before_call);
+    assert_non_neg_finite("toCall", to_call);
+    if (to_call == 0.0) {
+        return "\u221e:1";
+    }
+    long long p = static_cast<long long>(std::llround(pot_before_call));
+    long long c = static_cast<long long>(std::llround(to_call));
+    if (p < 0 || c <= 0) {
+        throw std::invalid_argument(
+            "formatPotOddsReducedFraction: rounded pot must be non-negative and rounded toCall positive");
+    }
+    const long long g = std::gcd(p, c);
+    p /= g;
+    c /= g;
+    return std::to_string(p) + ":" + std::to_string(c);
+}
+
+int hand_rank_category_order(const std::string& category_camel_case) {
+    static const std::unordered_map<std::string, int> kOrder = {
+        {"highCard", 0},      {"onePair", 1},       {"twoPair", 2},    {"threeOfAKind", 3},
+        {"straight", 4},    {"flush", 5},         {"fullHouse", 6},  {"fourOfAKind", 7},
+        {"straightFlush", 8}, {"royalFlush", 9},
+    };
+    const auto it = kOrder.find(category_camel_case);
+    if (it == kOrder.end()) {
+        throw std::invalid_argument("handRankCategoryOrder: unknown category label");
+    }
+    return it->second;
+}
+
+double equity_to_winning_odds_against(double equity) {
+    if (!std::isfinite(equity)) {
+        throw std::invalid_argument("equity must be finite");
+    }
+    const double e = clamp01(equity);
+    if (e <= 0.0) {
+        return std::numeric_limits<double>::infinity();
+    }
+    if (e >= 1.0) {
+        return 0.0;
+    }
+    return (1.0 - e) / e;
+}
+
+double winning_odds_against_to_equity(double odds_against) {
+    if (!std::isfinite(odds_against)) {
+        if (std::isinf(odds_against) && odds_against > 0.0) {
+            return 0.0;
+        }
+        throw std::invalid_argument("oddsAgainst must be finite or +infinity");
+    }
+    if (odds_against < 0.0) {
+        throw std::invalid_argument("oddsAgainst must be non-negative");
+    }
+    return 1.0 / (1.0 + odds_against);
+}
+
 double rake_from_pot(double pot_chips, double rake_fraction, double rake_cap) {
     assert_non_neg_finite("potChips", pot_chips);
     assert_non_neg_finite("rakeFraction", rake_fraction);
@@ -994,6 +1170,14 @@ int preflop_combos_from_notation(const std::string& notation_raw) {
         return 12;
     }
     throw std::invalid_argument("preflopCombosFromNotation: expected 's' or 'o' suffix");
+}
+
+int preflop_combos_from_notations_list(const std::vector<std::string>& notations) {
+    int sum = 0;
+    for (const std::string& n : notations) {
+        sum += preflop_combos_from_notation(n);
+    }
+    return sum;
 }
 
 }  // namespace poker

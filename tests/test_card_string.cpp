@@ -30,3 +30,19 @@ TEST(CardString, DuplicateDetection) {
     EXPECT_TRUE(poker::card_strings_have_duplicate({"Ah", "Ah"}));
     EXPECT_THROW(poker::card_strings_have_duplicate({"Ah", "bad"}), std::invalid_argument);
 }
+
+TEST(CardString, CanonicalTen) {
+    EXPECT_EQ(poker::canonical_card_string("10h"), "Th");
+}
+
+TEST(CardString, ParseCompact) {
+    const auto a = poker::parse_compact_card_list("AhKh");
+    ASSERT_EQ(a.size(), 2U);
+    EXPECT_EQ(a[0], "Ah");
+    EXPECT_EQ(a[1], "Kh");
+    const auto b = poker::parse_compact_card_list(" 10h Kd ");
+    ASSERT_EQ(b.size(), 2U);
+    EXPECT_EQ(b[0], "Th");
+    EXPECT_EQ(b[1], "Kd");
+    EXPECT_THROW(poker::parse_compact_card_list("AhAh"), std::invalid_argument);
+}

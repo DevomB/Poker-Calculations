@@ -18,6 +18,9 @@ These are the symbols consumers `require('poker-calculations')` receive. All are
 | | `validateCardString(card)` | `true` if `card` parses as one card (`Ah`, `10c`, …). |
 | | `cardStringsHaveDuplicate(cards[])` | `true` if two entries parse to the same card; throws if any string is invalid. |
 | | `compareBestHands(cardsA[], cardsB[])` | `-1` / `0` / `1` best-hand order; throws on overlap or invalid cards. |
+| | `canonicalCardString(card)` | Canonical two-character card (`Th`, `Ac`, …); throws if invalid. |
+| | `parseCompactCardList(text)` | Parse concatenated or whitespace-separated cards (`AhKh`, `10h Kd`); throws on duplicate or invalid token. |
+| | `handRankCategoryOrder(category)` | Integer order `0..9` for `evaluateHandCategory` labels (`highCard` … `royalFlush`). |
 | **Monte Carlo equity** | `simulateHandOutcome(holeCards, board, numSimulations, seed, villains?)` | Estimated equity vs one or more random villain hands. |
 | | `parallelHandSimulation(holeCards, board, numSimulations, baseSeed, villains, numThreads)` | Same idea with worker threads and distinct seeds. |
 | | `exactHuEquityVsRandomHand(heroHoleCards, boardCards)` | **P22** Exact HU equity vs uniform random villain hand; board must have **3–5** cards (full runout enumeration). |
@@ -26,10 +29,16 @@ These are the symbols consumers `require('poker-calculations')` receive. All are
 | | `expectedValueCall(equity, pot, toCall)` | Chip EV of calling once vs folding (0); no future streets. |
 | | `expectedValueCallWithRake(equity, potBeforeCall, toCall, rakeFraction, rakeCap)` | Chip EV of call vs fold when the final HU pot pays rake (same rake model as breakeven-with-rake). |
 | | `breakevenCallEquity(potBeforeCall, toCall)` | Same fraction as `potOddsRatio` for chip calls. |
+| | `breakevenCallEquityFromPotOddsDisplayRatio(displayPotToCallRatio)` | `1/(1+R)` from `potOddsRatioDisplay` ratio `R`; `0` when `R` is `+∞`. |
+| | `potOddsDisplayRatioFromBreakevenCallEquity(breakevenEquity)` | Inverse: `(1−e)/e`; `+∞` when `e=0`; `0` when `e=1`. |
+| | `formatPotOddsReducedFraction(potBeforeCall, toCall)` | Reduced integer ratio string `pot : to_call` (e.g. `100`,`50`→`2:1`); `toCall=0`→`∞:1`. |
+| | `equityToWinningOddsAgainst(equity)` | Book-style `(1−p)/p`; `+∞` at `p=0`. |
+| | `winningOddsAgainstToEquity(oddsAgainst)` | `1/(1+o)` for `o≥0`; `0` when `o=+∞`. |
 | | `rakeFromPot(potChips, rakeFraction, rakeCap)` | Rake `min(fraction×pot, cap)` for rake-adjusted helpers. |
 | | `breakevenCallEquityWithRake(potBeforeCall, toCall, rakeFraction, rakeCap)` | **P9** Breakeven equity when the **final** pot (after call) pays rake under that model. |
 | **Stacks & display** | `spr(potChips, effectiveStackChips)` | Stack-to-pot ratio. |
 | | `effectiveStack(...stacks)` | Minimum stack; empty → `0`. |
+| | `normalizedStackFractions(stacks[])` | Each stack divided by sum of stacks (chip shares; not Harville ICM). |
 | | `stackInBigBlinds(stackChips, bigBlind)` | Stack size in big blinds. |
 | | `potOddsRatioDisplay(potBeforeCall, toCall)` | Display ratio `pot : to_call` (e.g. `3.5` means 3.5:1). |
 | | `formatPotOdds(potBeforeCall, toCall, decimals?)` | Human-readable `"x:1"` string. |
@@ -40,6 +49,7 @@ These are the symbols consumers `require('poker-calculations')` receive. All are
 | | `orbitCostChips(smallBlind, bigBlind, antesFromSeats[])` | One orbit posted cost: sb + bb + sum of antes. |
 | | `nlMinimumRaiseToTotal(currentMaxWager, lastRaiseIncrement, bigBlind)` | NL toy minimum **total** wager after a raise: current + `max(last increment, BB)`. |
 | | `preflopCombosFromNotation(notation)` | NLHE combo count from shorthand (`AA`, `AKs`, `AKo`). |
+| | `preflopCombosFromNotationsList(notations[])` | Sum of combo counts over a list; empty → `0`. |
 | **Heuristics** | `ruleOfFourEquity(outs)` | Out-count × 4% cap heuristic (turn+river). |
 | | `ruleOfTwoEquity(outs)` | Out-count × 2% cap heuristic (one card). |
 | | `estimatedOutsFromRuleOfTwo(equity, unseenCards)` | Uncapped inverse-style estimate `equity×unseen/2` clamped to `[0, unseen]` (not exact inverse of capped rule-of-two). |
@@ -60,6 +70,9 @@ These are the symbols consumers `require('poker-calculations')` receive. All are
 | **Stats & risk** | `monteCarloStandardError(pHat, nTrials)` | **P15** Binomial SE `√(p̂(1−p̂)/n)`. |
 | | `monteCarloTrialsForStandardErrorBound(pHat, targetSe)` | Smallest integer `n` with SE ≤ `targetSe` at interior `pHat` (ceil of `p(1−p)/se²`). |
 | | `wilsonScoreInterval(successes, nTrials, z)` | **P16** Wilson interval; returns `{ lower, upper }`. |
+| | `agrestiCoullInterval(successes, nTrials, z)` | Agresti–Coull interval (same `{ lower, upper }` shape). |
+| | `normalWaldBinomialInterval(successes, nTrials, z)` | Normal (Wald) `p̂ ± z·SE` clamped to `[0,1]` (weak near 0/1 with small `n`). |
+| | `monteCarloTrialsForHoeffdingBound(epsilon, delta)` | Hoeffding: smallest `n` with `n ≥ ln(2/δ)/(2ε²)` for uniform MC error bound. |
 | | `riskOfRuinDiffusionApprox(driftPerHand, variancePerHand, bankroll)` | **P13** `exp(−2μB/σ²)` style ROR; returns `1` if drift ≤ 0. |
 | | `bankrollForTargetRorDiffusion(driftPerHand, variancePerHand, targetRor)` | **P14** Inverse of P13 for bankroll `B`. |
 | | `betaBinomialFoldPosterior(priorAlpha, priorBeta, folds, calls)` | **P24** Conjugate Beta update; returns `{ alpha, beta, posteriorMean }`. |
@@ -89,10 +102,12 @@ These are the symbols consumers `require('poker-calculations')` receive. All are
 | **ICM** | `icmWinProbabilitiesHarville(stacks[])` | **P17** Harville first-place probabilities. |
 | | `icmHarvillePlacementProbabilities(stacks[])` | **P17** Full `n×n` Harville placement matrix (per player, per finish rank). |
 | | `icmTopKFinishProbabilities(stacks[], k)` | Sum of Harville placement over first `k` finish ranks per player (convenience on **P17**). |
+| | `icmLastPlaceProbabilitiesHarville(stacks[])` | Harville probability each player finishes **last** (placement matrix last column). |
 | | `icmExpectedPayouts(stacks[], payouts[])` | **P18** Expected payout per seat. |
 | | `icmPairwiseBubbleFactor(stacks[], payouts[], heroIndex, villainIndex, potChips)` | **P19** Loss/gain ratio from finite differences on P18. |
 | **Side pots** | `sidePotLadderFromCommitments(committedChips[])` | **P20** Main + side layers; each layer `{ potChips, playerCapContribution[] }`. |
 | | `layeredPotChipEvFromEquities(layerPotChips[], equityPlayerByLayer[][])` | **P21** Chip EV; each column sums to `1`. |
+| | `sidePotLayersTotalChips(layers[])` | Sum of `potChips` across layers from `sidePotLadderFromCommitments`. |
 
 Supporting types: `NativePokerState`, `NativeBotConfig`, `NativeOpponentModel`, `HandEvalResult`, `DecisionResult`, `WilsonScoreInterval`, `BetaBinomialFoldPosterior`, `SidePotLayer`.
 
@@ -102,10 +117,10 @@ Supporting types: `NativePokerState`, `NativeBotConfig`, `NativeOpponentModel`, 
 
 | Module | Headers | Role |
 | --- | --- | --- |
-| Core chip / odds / probability | [`include/poker/poker_math.hpp`](include/poker/poker_math.hpp) | Pot odds, MDF, fold FE, heuristics, P1–P16 (except ICM), P23 toy jam + P2/P4/P5/P8/P9/P10/P11, rake helpers, NL orbit / Q / min-raise / preflop combo toys, inverse rule-of-2/4 outs, MC trial planner, EV call with rake. |
-| Card strings | [`include/poker/card_string.hpp`](include/poker/card_string.hpp) | Shared parse + duplicate detection for `"Ah"`-style strings. |
-| ICM | [`include/poker/icm.hpp`](include/poker/icm.hpp) | Harville full placement matrix, win probs, top‑k finish sums, $EV, bubble factor (**P17–P19**). |
-| Side pots | [`include/poker/side_pot.hpp`](include/poker/side_pot.hpp) | Side-pot ladder and layered EV (**P20–P21**). |
+| Core chip / odds / probability | [`include/poker/poker_math.hpp`](include/poker/poker_math.hpp) | Pot odds, MDF, fold FE, heuristics, P1–P16 (except ICM), P23 toy jam + P2/P4/P5/P8/P9/P10/P11, rake helpers, NL orbit / Q / min-raise / preflop combo toys + list sum, inverse rule-of-2/4 outs, MC trial planner (SE + Hoeffding), Wilson / Agresti–Coull / Wald intervals, pot-odds display ↔ breakeven equity, reduced-fraction pot odds, equity ↔ winning odds-against, normalized stack shares, `hand_rank_category_order`. |
+| Card strings | [`include/poker/card_string.hpp`](include/poker/card_string.hpp) | Shared parse + duplicate detection; `canonical_card_string`, `parse_compact_card_list`. |
+| ICM | [`include/poker/icm.hpp`](include/poker/icm.hpp) | Harville full placement matrix, win probs, top‑k finish sums, last-place probabilities, $EV, bubble factor (**P17–P19**). |
+| Side pots | [`include/poker/side_pot.hpp`](include/poker/side_pot.hpp) | Side-pot ladder, layered EV (**P20–P21**), `side_pot_layers_total_chips`. |
 | Exact HU | [`include/poker/exact_equity.hpp`](include/poker/exact_equity.hpp) | Enumeration equity vs random hand (**P22**); exact flop→river straight-or-better (**P4**); Chubukov max integer jam stack from hand (**P23**). |
 
 ---

@@ -28,3 +28,10 @@ TEST(SidePot, LayeredEv) {
     EXPECT_DOUBLE_EQ(ev[0], 100.0 * 0.6 + 50.0 * 0.5);
     EXPECT_DOUBLE_EQ(ev[1], 100.0 * 0.4 + 50.0 * 0.5);
 }
+
+TEST(SidePot, LayersTotalChips) {
+    const std::vector<double> committed = {50.0, 100.0, 150.0};
+    const auto layers = poker::side_pot_ladder_from_commitments(committed);
+    EXPECT_DOUBLE_EQ(poker::side_pot_layers_total_chips(layers), 300.0);
+    EXPECT_DOUBLE_EQ(poker::side_pot_layers_total_chips({}), 0.0);
+}
