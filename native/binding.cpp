@@ -9,6 +9,7 @@
 #include "poker/icm.hpp"
 #include "poker/side_pot.hpp"
 #include "poker/exact_equity.hpp"
+#include "poker/fast_evaluator.hpp"
 #include "poker/strategy.hpp"
 #include "poker/types.hpp"
 
@@ -324,6 +325,52 @@ Napi::Value EvaluateHandStrength(const Napi::CallbackInfo& info) {
         }
         const std::uint64_t s = poker::evaluate_hand_strength(hole, board);
         return Napi::String::New(env, std::to_string(s));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value EvaluateHandStrengthFast(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
+            throw std::invalid_argument("evaluateHandStrengthFast(holeCards: string[], board: string[])");
+        }
+        std::string err;
+        auto hole = parse_card_strings(env, info[0].As<Napi::Array>(), &err);
+        if (!err.empty()) {
+            throw std::invalid_argument(err);
+        }
+        auto board = parse_card_strings(env, info[1].As<Napi::Array>(), &err);
+        if (!err.empty()) {
+            throw std::invalid_argument(err);
+        }
+        const std::uint64_t s = poker::evaluate_hand_strength_fast(hole, board);
+        return Napi::String::New(env, std::to_string(s));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value BenchmarkEvaluatorThroughput(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        std::size_t iterations = 200000;
+        if (info.Length() >= 1 && info[0].IsNumber()) {
+            const double n = info[0].As<Napi::Number>().DoubleValue();
+            if (n < 1.0) {
+                throw std::invalid_argument("benchmarkEvaluatorThroughput(iterations): iterations must be >= 1");
+            }
+            iterations = static_cast<std::size_t>(n);
+        }
+        const auto bench = poker::benchmark_evaluator_throughput(iterations);
+        Napi::Object out = Napi::Object::New(env);
+        out.Set("legacyEvalsPerSecond", Napi::Number::New(env, bench.legacy_evals_per_second));
+        out.Set("fastEvalsPerSecond", Napi::Number::New(env, bench.fast_evals_per_second));
+        out.Set("implementation", Napi::String::New(env, bench.implementation));
+        return out;
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -2158,6 +2205,10 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "evaluateBestHand"), Napi::Function::New(env, EvaluateBestHand));
     exports.Set(Napi::String::New(env, "evaluateHandStrength"),
                 Napi::Function::New(env, EvaluateHandStrength));
+    exports.Set(Napi::String::New(env, "evaluateHandStrengthFast"),
+                Napi::Function::New(env, EvaluateHandStrengthFast));
+    exports.Set(Napi::String::New(env, "benchmarkEvaluatorThroughput"),
+                Napi::Function::New(env, BenchmarkEvaluatorThroughput));
     exports.Set(Napi::String::New(env, "evaluateHandCategory"),
                 Napi::Function::New(env, EvaluateHandCategory));
     exports.Set(Napi::String::New(env, "validateCardString"), Napi::Function::New(env, ValidateCardString));

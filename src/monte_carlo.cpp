@@ -1,6 +1,6 @@
 #include "poker/monte_carlo.hpp"
 
-#include "poker/hand_evaluator.hpp"
+#include "poker/fast_evaluator.hpp"
 
 #include <algorithm>
 #include <future>
@@ -11,27 +11,23 @@ namespace poker {
 
 namespace {
 
-bool hand_ties(const HandEvaluation& a, const HandEvaluation& b) {
-    return !(a < b) && !(b < a);
-}
-
-double hero_showdown_equity(const std::vector<HandEvaluation>& hands) {
-    if (hands.empty()) {
+double hero_showdown_equity_strengths(const std::vector<std::uint64_t>& strengths) {
+    if (strengths.empty()) {
         return 0.0;
     }
-    if (hands.size() == 1) {
+    if (strengths.size() == 1) {
         return 1.0;
     }
-    HandEvaluation best = hands[0];
+    std::uint64_t best = strengths[0];
     int tied_at_best = 1;
     bool hero_tied = true;
-    for (std::size_t i = 1; i < hands.size(); ++i) {
-        const HandEvaluation& h = hands[i];
-        if (best < h) {
-            best = h;
+    for (std::size_t i = 1; i < strengths.size(); ++i) {
+        const std::uint64_t s = strengths[i];
+        if (best < s) {
+            best = s;
             tied_at_best = 1;
             hero_tied = false;
-        } else if (hand_ties(h, best)) {
+        } else if (s == best) {
             ++tied_at_best;
         }
     }
@@ -87,12 +83,12 @@ float accumulate_showdown_equity(Rng& rng, const std::vector<Card>& player_hand,
     }
 
     double equity_sum = 0.0;
-    std::vector<HandEvaluation> evals;
-    evals.reserve(static_cast<std::size_t>(villains) + 1);
-    std::vector<Card> combined;
-    combined.reserve(7);
+    std::vector<std::uint64_t> strengths;
+    strengths.reserve(static_cast<std::size_t>(villains) + 1);
     std::vector<Card> runout;
     runout.reserve(5);
+    std::uint8_t ranks[7]{};
+    std::uint8_t suits[7]{};
 
     for (int i = 0; i < iterations; ++i) {
         std::shuffle(pool.begin(), pool.end(), rng);
@@ -109,18 +105,24 @@ float accumulate_showdown_equity(Rng& rng, const std::vector<Card>& player_hand,
             runout.push_back(pool[idx++]);
         }
 
-        evals.clear();
-        combined.clear();
-        combined.insert(combined.end(), player_hand.begin(), player_hand.end());
-        combined.insert(combined.end(), runout.begin(), runout.end());
-        evals.push_back(evaluate_best_hand(combined));
-        for (const auto& vh : villain_holes) {
-            combined.clear();
-            combined.insert(combined.end(), vh.begin(), vh.end());
-            combined.insert(combined.end(), runout.begin(), runout.end());
-            evals.push_back(evaluate_best_hand(combined));
+        strengths.clear();
+        ranks[0] = player_hand[0].rank();
+        suits[0] = player_hand[0].suit();
+        ranks[1] = player_hand[1].rank();
+        suits[1] = player_hand[1].suit();
+        for (std::size_t b = 0; b < runout.size(); ++b) {
+            ranks[2 + b] = runout[b].rank();
+            suits[2 + b] = runout[b].suit();
         }
-        equity_sum += hero_showdown_equity(evals);
+        strengths.push_back(evaluate_seven_strength_fast(ranks, suits));
+        for (const auto& vh : villain_holes) {
+            ranks[0] = vh[0].rank();
+            suits[0] = vh[0].suit();
+            ranks[1] = vh[1].rank();
+            suits[1] = vh[1].suit();
+            strengths.push_back(evaluate_seven_strength_fast(ranks, suits));
+        }
+        equity_sum += hero_showdown_equity_strengths(strengths);
     }
     return static_cast<float>(equity_sum / static_cast<double>(iterations));
 }
