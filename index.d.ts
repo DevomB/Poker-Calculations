@@ -68,6 +68,19 @@ export interface SidePotLayer {
 export interface PokerCalculations {
   evaluateBestHand(cards: string[]): HandEvalResult;
   evaluateHandStrength(holeCards: string[], board: string[]): string;
+  /**
+   * Same encoding as `evaluateHandStrength`, using the in-house stack-only evaluator
+   * (`poker-calculations-forge`) used by Monte Carlo and exact enumeration hot paths.
+   */
+  evaluateHandStrengthFast(holeCards: string[], board: string[]): string;
+  /**
+   * Benchmark legacy vs forge evaluator throughput on random 7-card spots.
+   */
+  benchmarkEvaluatorThroughput(iterations?: number): {
+    legacyEvalsPerSecond: number;
+    fastEvalsPerSecond: number;
+    implementation: string;
+  };
   evaluateHandCategory(holeCards: string[], board: string[]): string;
   /** `true` if `card` parses as a single card (`Ah`, `10c`, …). */
   validateCardString(card: string): boolean;
