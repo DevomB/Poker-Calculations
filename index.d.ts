@@ -1,3 +1,11 @@
+/**
+ * TypeScript definitions for `poker-calculations`.
+ *
+ * Full API reference, examples, and guides: https://poker-calculator.devomb.com
+ *
+ * @see https://poker-calculator.devomb.com/docs/api
+ */
+
 /** Serialized game state (camelCase) passed to `decideAction`. */
 export interface NativePokerState {
   players: Array<{
