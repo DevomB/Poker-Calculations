@@ -2,6 +2,8 @@
 
 **Poker-Calculations** is a **Node.js** library built on a **C++20** no-limit Hold’em core: **hand resolution** and **card utilities**, **Monte Carlo** and **exact** equity, a rule-based **`decideAction`** layer over serialized state, **chip / pot / rake** and **pot-odds** tooling, **stack and display** metrics, **draw and multi-street** probability helpers, **ICM** (Harville) and **side-pot** modeling, **GTO-style frequency** relationships, **Kelly / symmetric-jam** analysis helpers, **Monte Carlo statistics** and **bankroll / risk-of-ruin** utilities, plus the **C++ engine** pieces summarized under [Features (engine)](#features-engine). The full shipped surface is inventoried in [`FEATURES_ADDED.md`](FEATURES_ADDED.md) and the [API overview](#api-overview) below.
 
+**Documentation (API reference, examples, guides):** [poker-calculator.devomb.com](https://poker-calculator.devomb.com)
+
 Published releases ship **prebuilt native binaries** ([`node-gyp-build`](https://github.com/prebuild/node-gyp-build)), so **`npm install` does not require CMake, a compiler, or the Windows SDK** on the installing machine.
 
 Full TypeScript types: **[`index.d.ts`](index.d.ts)**.
@@ -23,7 +25,7 @@ Linux **glibc** binaries are linked with **`-static-libstdc++`** / **`-static-li
 
 ### Bundlers and Next.js
 
-Load this p`ackage from **runtime** code paths (for example a lazy **`require()`** inside a route handler) if your bundler or **`next build`** evaluates server modules statically. That avoids optional build-time native resolution issues; you still need a **prebuild that matches** the deployment OS and libc (glibc vs musl).
+Load this package from **runtime** code paths (for example a lazy **`require()`** inside a route handler) if your bundler or **`next build`** evaluates server modules statically. That avoids optional build-time native resolution issues; you still need a **prebuild that matches** the deployment OS and libc (glibc vs musl).
 
 ## Quick start
 
@@ -47,10 +49,7 @@ const require = createRequire(import.meta.url);
 const poker = require('poker-calculations');
 ```
 
-Runnable samples are **separate ESM scripts** under [`examples/`](examples/): one topic per file (see the header comment in each script; names align with groups in [`FEATURES_ADDED.md`](FEATURES_ADDED.md)). From the repo root: `node examples/<name>.mjs`.
-
-- **[`examples/native-binding-exports.mjs`](examples/native-binding-exports.mjs)** — print every N-API export at runtime.
-- **Topic demos** — `fold-equity.mjs`, `gto-frequency.mjs`, `hand-resolution.mjs`, `heuristics-draws.mjs`, `icm.mjs`, `intervals-and-odds-bridge.mjs`, `kelly-chubukov-jam.mjs`, `monte-carlo-equity.mjs`, `multiway.mjs`, `pot-chip-ev-rake.mjs`, `reverse-implied-geometry.mjs`, `side-pots.mjs`, `sizing-commitment.mjs`, `stacks-display.mjs`, `stats-risk.mjs`, `strategy-decide-action.mjs`.
+For **examples**, **per-export walkthroughs**, and **when-to-use** notes, use the documentation site: [poker-calculator.devomb.com](https://poker-calculator.devomb.com) ([introduction](https://poker-calculator.devomb.com/docs/intro), [API reference](https://poker-calculator.devomb.com/docs/api)). Repo scripts under `examples/` were removed in favor of that site.
 
 Cards are strings like `"Ah"`, `"Td"` (ten may be `"10h"`).
 
@@ -161,7 +160,7 @@ include/poker/     Public headers (Card, Deck, GameEngine, HandEvaluator, poker_
 src/               Implementations (`poker_math.cpp` — SPR, MDF, fold equity, …)
 native/            Node-API binding (built when CMAKE_JS_INC is set by cmake-js)
 tests/             Unit tests
-examples/          Node ESM sample scripts (one feature area per file; see FEATURES_ADDED.md)
+examples/          Pointer to the docs site (see examples/README.md)
 CMakeLists.txt     Static poker_lib; optional poker_tests; optional poker_calculations.node when built by cmake-js
 ```
 

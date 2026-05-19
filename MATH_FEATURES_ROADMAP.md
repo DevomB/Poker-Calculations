@@ -1,6 +1,6 @@
 # Math features — canonical roadmap
 
-This file is the **single index** for shipped math, how to extend the library, and a **quality-gated** backlog of esoteric ideas. Detailed export tables: [`FEATURES_ADDED.md`](FEATURES_ADDED.md).
+This file is the **single index** for shipped math, how to extend the library, and a **quality-gated** backlog of esoteric ideas. Detailed export tables: [`FEATURES_ADDED.md`](FEATURES_ADDED.md). Examples and API walkthroughs: [poker-calculator.devomb.com](https://poker-calculator.devomb.com).
 
 ---
 

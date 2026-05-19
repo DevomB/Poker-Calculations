@@ -1,6 +1,6 @@
 # Math features — contributor notes
 
-**Roadmap IDs P1–P25 are implemented** in the native addon. Shipped API inventory: [`FEATURES_ADDED.md`](FEATURES_ADDED.md). Types and names: [`index.d.ts`](index.d.ts), [`README.md`](README.md).
+**Roadmap IDs P1–P25 are implemented** in the native addon. Shipped API inventory: [`FEATURES_ADDED.md`](FEATURES_ADDED.md). Types and names: [`index.d.ts`](index.d.ts), [`README.md`](README.md). User-facing examples and API walkthroughs: [poker-calculator.devomb.com](https://poker-calculator.devomb.com).
 
 Future **esoteric** ideas and quality-gated backlog: [`MATH_FEATURES_ROADMAP.md`](MATH_FEATURES_ROADMAP.md).
 
@@ -40,6 +40,7 @@ Follow the same pipeline the project already uses for chip / GTO math.
 1. Add a row to the **API overview** table in [`README.md`](README.md) when the symbol is public.
 2. For esoteric features, prefer **one short paragraph** in README plus a longer “Assumptions / limitations” subsection in this file or in [`MATH_FEATURES_ROADMAP.md`](MATH_FEATURES_ROADMAP.md).
 3. When a feature ships, add it to [`FEATURES_ADDED.md`](FEATURES_ADDED.md).
+4. Regenerate or update the **documentation site** under `Website/` (`node scripts/gen-api-docs.mjs` from `Website/`, then build/deploy) so examples and API pages stay in sync — do not add new `NPM/examples/*.mjs` scripts.
 
 ### Step 6 — Release discipline
 
