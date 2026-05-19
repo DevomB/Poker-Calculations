@@ -1,5 +1,6 @@
 #include "poker/exact_equity.hpp"
 
+#include "poker/fast_evaluator.hpp"
 #include "poker/hand_evaluator.hpp"
 #include "poker/poker_math.hpp"
 #include "poker/types.hpp"
@@ -119,16 +120,29 @@ double exact_hu_equity_vs_random_hand(const std::vector<Card>& hero_hole_cards,
                 full_board.emplace_back(static_cast<std::uint8_t>(rank),
                                         static_cast<std::uint8_t>(suit));
             }
-            std::vector<Card> hero_cards = hero_hole_cards;
-            hero_cards.insert(hero_cards.end(), full_board.begin(), full_board.end());
-            std::vector<Card> vil_cards = villain_cards;
-            vil_cards.insert(vil_cards.end(), full_board.begin(), full_board.end());
-            const HandEvaluation h1 = evaluate_best_hand(hero_cards);
-            const HandEvaluation h2 = evaluate_best_hand(vil_cards);
+            std::uint8_t hero_r[7]{};
+            std::uint8_t hero_s[7]{};
+            std::uint8_t vil_r[7]{};
+            std::uint8_t vil_s[7]{};
+            hero_r[0] = hero_hole_cards[0].rank();
+            hero_s[0] = hero_hole_cards[0].suit();
+            hero_r[1] = hero_hole_cards[1].rank();
+            hero_s[1] = hero_hole_cards[1].suit();
+            vil_r[0] = villain_cards[0].rank();
+            vil_s[0] = villain_cards[0].suit();
+            vil_r[1] = villain_cards[1].rank();
+            vil_s[1] = villain_cards[1].suit();
+            for (std::size_t bi = 0; bi < full_board.size(); ++bi) {
+                hero_r[2 + bi] = full_board[bi].rank();
+                hero_s[2 + bi] = full_board[bi].suit();
+                vil_r[2 + bi] = full_board[bi].rank();
+                vil_s[2 + bi] = full_board[bi].suit();
+            }
+            const int cmp = compare_seven_strength_fast(hero_r, hero_s, vil_r, vil_s);
             total += 1.0;
-            if (h2 < h1) {
+            if (cmp > 0) {
                 win_weight += 1.0;
-            } else if (h1 == h2) {
+            } else if (cmp == 0) {
                 win_weight += 0.5;
             }
         }

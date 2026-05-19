@@ -60,7 +60,7 @@ All symbols below are exported from the **native addon** (C++ via N-API). **`bre
 
 | Area | Exports |
 | --- | --- |
-| **Hands & equity** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandCategory`, `handRankCategoryOrder`, `validateCardString`, `cardStringsHaveDuplicate`, `canonicalCardString`, `parseCompactCardList`, `compareBestHands`, `simulateHandOutcome`, `parallelHandSimulation`, `exactHuEquityVsRandomHand`, `straightMadeFlopToRiverExactProbability` |
+| **Hands & equity** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandStrengthFast`, `benchmarkEvaluatorThroughput`, `evaluateHandCategory`, `handRankCategoryOrder`, `validateCardString`, `cardStringsHaveDuplicate`, `canonicalCardString`, `parseCompactCardList`, `compareBestHands`, `simulateHandOutcome`, `parallelHandSimulation`, `exactHuEquityVsRandomHand`, `straightMadeFlopToRiverExactProbability` |
 | **Strategy** | `decideAction` |
 | **Pot / EV** | `potOddsRatio`, `expectedValueCall`, `expectedValueCallWithRake`, `breakevenCallEquity`, `breakevenCallEquityFromPotOddsDisplayRatio`, `potOddsDisplayRatioFromBreakevenCallEquity`, `breakevenCallEquityWithRake`, `rakeFromPot`, `formatPotOddsReducedFraction`, `equityToWinningOddsAgainst`, `winningOddsAgainstToEquity` |
 | **Stacks & display** | `spr`, `effectiveStack`, `normalizedStackFractions`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds`, `harringtonM`, `harringtonMEffective`, `harringtonMEffectiveActiveAntes`, `harringtonQ`, `orbitCostChips`, `nlMinimumRaiseToTotal`, `preflopCombosFromNotation`, `preflopCombosFromNotationsList` |

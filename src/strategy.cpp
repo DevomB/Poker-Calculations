@@ -1,5 +1,6 @@
 #include "poker/strategy.hpp"
 
+#include "poker/fast_evaluator.hpp"
 #include "poker/hand_evaluator.hpp"
 #include "poker/monte_carlo.hpp"
 #include "poker/poker_math.hpp"
@@ -30,7 +31,7 @@ double equity_estimate(const PokerGameState& state, const std::vector<Card>& hol
                        const BotConfig& cfg, std::mt19937& rng) {
     if (cfg.monte_carlo_simulations <= 0) {
         const std::uint64_t s =
-            evaluate_hand_strength(hole, state.community_cards);
+            evaluate_hand_strength_fast(hole, state.community_cards);
         return std::min(1.0, static_cast<double>(s) / static_cast<double>(1ULL << 40));
     }
     return static_cast<double>(

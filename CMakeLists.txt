@@ -27,6 +27,7 @@ add_library(poker_lib STATIC
     src/strategy.cpp
     src/opponent_model.cpp
     src/monte_carlo.cpp
+    src/fast_evaluator.cpp
     src/bot_config.cpp
     src/poker_bot_interface.cpp
 )
@@ -58,6 +59,7 @@ if(POKER_BUILD_TESTS)
         tests/test_strategy.cpp
         tests/test_opponent_model.cpp
         tests/test_monte_carlo.cpp
+        tests/test_fast_evaluator.cpp
         tests/test_bot_config.cpp
     )
     target_link_libraries(poker_tests PRIVATE poker_lib GTest::gtest_main)
