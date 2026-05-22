@@ -2,7 +2,7 @@
 
 **Poker-Calculations** is a **Node.js** library built on a **C++20** no-limit Hold’em core: **hand resolution** and **card utilities**, **Monte Carlo** and **exact** equity, a rule-based **`decideAction`** layer over serialized state, **chip / pot / rake** and **pot-odds** tooling, **stack and display** metrics, **draw and multi-street** probability helpers, **ICM** (Harville) and **side-pot** modeling, **GTO-style frequency** relationships, **Kelly / symmetric-jam** analysis helpers, **Monte Carlo statistics** and **bankroll / risk-of-ruin** utilities, plus the **C++ engine** pieces summarized under [Features (engine)](#features-engine). The full shipped surface is inventoried in [`FEATURES_ADDED.md`](FEATURES_ADDED.md) and the [API overview](#api-overview) below.
 
-**Documentation (API reference, examples, guides):** [poker-calculator.devomb.com](https://poker-calculator.devomb.com)
+**Documentation (API reference, examples, guides):** [poker-calculations.devomb.com](https://poker-calculations.devomb.com)
 
 Published releases ship **prebuilt native binaries** ([`node-gyp-build`](https://github.com/prebuild/node-gyp-build)), so **`npm install` does not require CMake, a compiler, or the Windows SDK** on the installing machine.
 
@@ -49,7 +49,7 @@ const require = createRequire(import.meta.url);
 const poker = require('poker-calculations');
 ```
 
-For **examples**, **per-export walkthroughs**, and **when-to-use** notes, use the documentation site: [poker-calculator.devomb.com](https://poker-calculator.devomb.com) ([introduction](https://poker-calculator.devomb.com/docs/intro), [API reference](https://poker-calculator.devomb.com/docs/api)). Repo scripts under `examples/` were removed in favor of that site.
+For **examples**, **per-export walkthroughs**, and **when-to-use** notes, use the documentation site: [poker-calculations.devomb.com](https://poker-calculations.devomb.com) ([introduction](https://poker-calculations.devomb.com/docs/intro), [API reference](https://poker-calculations.devomb.com/docs/reference/api)). Repo scripts under `examples/` were removed in favor of that site.
 
 Cards are strings like `"Ah"`, `"Td"` (ten may be `"10h"`).
 
