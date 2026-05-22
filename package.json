@@ -44,7 +44,7 @@
   "bugs": {
     "url": "https://github.com/DevomB/Poker-Calculations/issues"
   },
-  "homepage": "https://poker-calculator.devomb.com",
+  "homepage": "https://poker-calculations.devomb.com/",
   "binary": {
     "napi_versions": [8]
   },
