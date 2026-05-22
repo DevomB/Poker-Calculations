@@ -1,6 +1,6 @@
 # Math features — contributor notes
 
-**Roadmap IDs P1–P25 are implemented** in the native addon. Shipped API inventory: [`FEATURES_ADDED.md`](FEATURES_ADDED.md). Types and names: [`index.d.ts`](index.d.ts), [`README.md`](README.md). User-facing examples and API walkthroughs: [poker-calculator.devomb.com](https://poker-calculator.devomb.com).
+**Roadmap IDs P1–P25 are implemented** in the native addon. Shipped API inventory: [`FEATURES_ADDED.md`](FEATURES_ADDED.md). Types and names: [`index.d.ts`](index.d.ts), [`README.md`](README.md). User-facing examples and API walkthroughs: [poker-calculations.devomb.com](https://poker-calculations.devomb.com).
 
 Future **esoteric** ideas and quality-gated backlog: [`MATH_FEATURES_ROADMAP.md`](MATH_FEATURES_ROADMAP.md).
 

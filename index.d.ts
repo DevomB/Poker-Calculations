@@ -1,9 +1,9 @@
 /**
  * TypeScript definitions for `poker-calculations`.
  *
- * Full API reference, examples, and guides: https://poker-calculator.devomb.com
+ * Full API reference, examples, and guides: https://poker-calculations.devomb.com
  *
- * @see https://poker-calculator.devomb.com/docs/api
+ * @see https://poker-calculations.devomb.com/docs/reference/api
  */
 
 /** Serialized game state (camelCase) passed to `decideAction`. */

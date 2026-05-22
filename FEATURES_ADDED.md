@@ -2,9 +2,9 @@
 
 Complete inventory of what the **npm package** ships: **98** native JavaScript functions, **7** TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
 
-**Authoritative sources:** [`index.d.ts`](index.d.ts) (types + JSDoc), [`README.md`](README.md) (overview tables), [`native/binding.cpp`](native/binding.cpp) (`exports.Set`), [documentation site](https://poker-calculator.devomb.com/docs/api) (examples + when-to-use), [`scripts/list-native-exports.mjs`](scripts/list-native-exports.mjs) (runtime export list).
+**Authoritative sources:** [`index.d.ts`](index.d.ts) (types + JSDoc), [`README.md`](README.md) (overview tables), [`native/binding.cpp`](native/binding.cpp) (`exports.Set`), [documentation site](https://poker-calculations.devomb.com/docs/reference/api) (examples + when-to-use), [`scripts/list-native-exports.mjs`](scripts/list-native-exports.mjs) (runtime export list).
 
-**Documentation:** [poker-calculator.devomb.com](https://poker-calculator.devomb.com) — API reference, examples, and guides (replaces repo `examples/*.mjs` scripts).
+**Documentation:** [poker-calculations.devomb.com](https://poker-calculations.devomb.com) — API reference, examples, and guides (replaces repo `examples/*.mjs` scripts).
 
 **Package metadata (v1.3.2):** Node **18+**; entry `index.js` + `index.d.ts`; prebuilt N-API binaries under `prebuilds/` (glibc + musl on Linux). No separate `poker-math.js` layer — all math is C++ via N-API.
 
@@ -195,8 +195,8 @@ Serialized table state (camelCase JSON-shaped object) plus bot config; optional 
 
 Runnable samples and per-export guidance live on the **documentation site**, not in repo scripts:
 
-- [Introduction & quick start](https://poker-calculator.devomb.com/docs/intro)
-- [API reference](https://poker-calculator.devomb.com/docs/api) (grouped by the same categories as the tables above)
+- [Introduction & quick start](https://poker-calculations.devomb.com/docs/intro)
+- [API reference](https://poker-calculations.devomb.com/docs/reference/api) (grouped by the same categories as the tables above)
 
 To print every N-API export at runtime (maintainers): `node scripts/list-native-exports.mjs`.
 
