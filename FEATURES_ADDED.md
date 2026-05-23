@@ -123,7 +123,7 @@ Implemented in C++ and registered in [`native/binding.cpp`](native/binding.cpp).
 
 | Rule | Detail |
 | --- | --- |
-| Ranks | `2`–`9`, `T`, `J`, `Q`, `K`, `A`, or `10` |
+| Ranks | `2`–`9`, `J`, `Q`, `K`, `A`; ten as `T` or `10` (canonical output uses `T`) |
 | Suits | `c`, `d`, `h`, `s` (case-insensitive rank/suit in parser) |
 | Canonical form | Two characters after parse (`Th`, `Ac`); tens use `T` in canonical output |
 | Lists | Space or concatenation (`AhKh`, `Ah Kh`, `10hKd`); duplicates throw |
