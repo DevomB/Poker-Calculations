@@ -1,44 +1,74 @@
-# Poker-Calculations — NL Hold’em engine & math library (C++20, N-API)
+<p align="center">
+  <img src="Poker-Calculations-Image.png" alt="Poker-Calculations — poker math solved" width="720" />
+</p>
 
-**Poker-Calculations** is a **Node.js** library built on a **C++20** no-limit Hold’em core: **hand resolution** and **card utilities**, **Monte Carlo** and **exact** equity, a rule-based **`decideAction`** layer over serialized state, **chip / pot / rake** and **pot-odds** tooling, **stack and display** metrics, **draw and multi-street** probability helpers, **ICM** (Harville) and **side-pot** modeling, **GTO-style frequency** relationships, **Kelly / symmetric-jam** analysis helpers, **Monte Carlo statistics** and **bankroll / risk-of-ruin** utilities, plus the **C++ engine** pieces summarized under [Features (engine)](#features-engine). The full shipped surface is inventoried in [`FEATURES_ADDED.md`](FEATURES_ADDED.md) and the [API overview](#api-overview) below.
+<h1 align="center">Poker-Calculations</h1>
 
-**Documentation (API reference, examples, guides):** [poker-calculations.devomb.com](https://poker-calculations.devomb.com)
+<p align="center">
+  <strong>No-limit Hold’em math and simulation for Node.js</strong><br />
+  C++20 core · N-API prebuilds · full TypeScript types
+</p>
 
-Published releases ship **prebuilt native binaries** ([`node-gyp-build`](https://github.com/prebuild/node-gyp-build)), so **`npm install` does not require CMake, a compiler, or the Windows SDK** on the installing machine.
+<p align="center">
+  <a href="https://www.npmjs.com/package/poker-calculations">npm</a> ·
+  <a href="https://poker-calculations.devomb.com">Documentation</a> ·
+  <a href="https://github.com/DevomB/Poker-Calculations">GitHub</a>
+</p>
 
-Full TypeScript types: **[`index.d.ts`](index.d.ts)**.
+---
+
+**Poker-Calculations** is a production-ready Node library for NL Hold’em: fast hand evaluation, Monte Carlo and exact equity, pot odds and chip EV, ICM and side pots, draw probabilities, GTO-style frequencies, fold-equity models, Kelly and jam analysis, and a rule-based **`decideAction`** layer over serialized table state. Everything runs in native code and ships with **prebuilt binaries**—`npm install` does not require CMake, a compiler, or the Windows SDK.
+
+## What you can build
+
+- **Equity calculators** and training tools with reproducible Monte Carlo seeds
+- **Simulators and bots** tuned via `BotConfig` and optional opponent models
+- **Tournament tools** with Harville ICM, bubble factors, and layered side-pot EV
+- **Analysis backends** (wrap the library yourself—there are no built-in HTTP endpoints)
+
+## Highlights
+
+| | |
+| --- | --- |
+| **Hands & equity** | Best-five evaluation, parallel MC simulation, exact HU equity vs a random hand, draw and runner-runner probabilities |
+| **Table math** | SPR, pot odds, rake-aware call EV, breakeven equity, Harrington *M* / *Q*, sizing and commitment |
+| **Strategy** | `decideAction` from serialized state using MC equity, pot odds, and call EV |
+| **Tournaments** | ICM (Harville), placement and payout expectations, pairwise bubble factor, side-pot ladders |
+| **Theory helpers** | MDF / alpha, fold-equity breakevens, Kelly and Chubukov symmetric-jam search, Wilson and Agresti–Coull intervals, risk-of-ruin approximations |
+| **Developer experience** | **[`index.d.ts`](index.d.ts)** typings, **98** native exports, docs with examples at [poker-calculations.devomb.com](https://poker-calculations.devomb.com) |
+
+Published releases include **N-API prebuilds** for Linux (glibc and musl), macOS, and Windows via [`node-gyp-build`](https://github.com/prebuild/node-gyp-build). Linux glibc builds use static libstdc++/libgcc where needed so older server and serverless images avoid `GLIBCXX_*` mismatches.
 
 ## Install
 
-**Requirements:** Node.js 18+.
+**Node.js 18+**
 
 ```bash
 npm install poker-calculations
 ```
 
-Published tarballs include **N-API** prebuilds under `prebuilds/<platform>-<arch>/`:
-
-- **`node.napi.node`** — glibc Linux, macOS, Windows (default).
-- **`node.napi.musl.node`** — same directory on **linux-x64** / **linux-arm64** when you install on **Alpine** / musl.
-
-Linux **glibc** binaries are linked with **`-static-libstdc++`** / **`-static-libgcc`** so they do not require as new a system **`libstdc++.so`** as a binary built on the latest Ubuntu runner (this avoids **`GLIBCXX_*`** version errors on older Linux images, including many **serverless** hosts).
-
-### Bundlers and Next.js
-
-Load this package from **runtime** code paths (for example a lazy **`require()`** inside a route handler) if your bundler or **`next build`** evaluates server modules statically. That avoids optional build-time native resolution issues; you still need a **prebuild that matches** the deployment OS and libc (glibc vs musl).
-
 ## Quick start
 
-This is a **Node.js library**—`require` or `import` it and call functions. There are **no HTTP endpoints** unless you wrap it yourself.
+Cards use strings like `"Ah"` and `"Td"` (ten may be `"10h"`).
 
 ### CommonJS
 
 ```js
 const poker = require('poker-calculations');
 
-poker.evaluateBestHand(['Ah', 'Ac', 'Kd', 'Ks', 'Qh']); // native — best 5 of 7
-const equity = poker.simulateHandOutcome(['Ah', 'Kh'], ['Qh', 'Jh', 'Th'], 2000, 42, 1);
-const spr = poker.spr(90, 270); // native (C++ chip math)
+poker.evaluateBestHand(['Ah', 'Ac', 'Kd', 'Ks', 'Qh', 'Jh', 'Th']);
+// → best five of seven
+
+const equity = poker.simulateHandOutcome(
+  ['Ah', 'Kh'],
+  ['Qh', 'Jh', 'Th'],
+  10_000,
+  42,
+  1
+);
+
+const spr = poker.spr(90, 270);
+const mdf = poker.minimumDefenseFrequency(100, 50);
 ```
 
 ### ESM
@@ -49,54 +79,45 @@ const require = createRequire(import.meta.url);
 const poker = require('poker-calculations');
 ```
 
-For **examples**, **per-export walkthroughs**, and **when-to-use** notes, use the documentation site: [poker-calculations.devomb.com](https://poker-calculations.devomb.com) ([introduction](https://poker-calculations.devomb.com/docs/intro), [API reference](https://poker-calculations.devomb.com/docs/reference/api)). Repo scripts under `examples/` were removed in favor of that site.
+Walkthroughs, guides, and the full API live on the docs site: [introduction](https://poker-calculations.devomb.com/docs/intro) · [API reference](https://poker-calculations.devomb.com/docs/reference/api).
 
-Cards are strings like `"Ah"`, `"Td"` (ten may be `"10h"`).
+## API at a glance
 
-## API overview
+All exports come from the native addon. Grouped overview—see the [reference](https://poker-calculations.devomb.com/docs/reference/api) for signatures and examples.
 
-All symbols below are exported from the **native addon** (C++ via N-API). **`breakevenCallEquity(potBeforeCall, toCall)`** equals **`potOddsRatio(pot, toCall)`** when the same pot and call amounts are used.
-
-| Area | Exports |
+| Area | Examples |
 | --- | --- |
-| **Hands & equity** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandStrengthFast`, `benchmarkEvaluatorThroughput`, `evaluateHandCategory`, `handRankCategoryOrder`, `validateCardString`, `cardStringsHaveDuplicate`, `canonicalCardString`, `parseCompactCardList`, `compareBestHands`, `simulateHandOutcome`, `parallelHandSimulation`, `exactHuEquityVsRandomHand`, `straightMadeFlopToRiverExactProbability` |
+| **Hands & equity** | `evaluateBestHand`, `simulateHandOutcome`, `parallelHandSimulation`, `exactHuEquityVsRandomHand` |
 | **Strategy** | `decideAction` |
-| **Pot / EV** | `potOddsRatio`, `expectedValueCall`, `expectedValueCallWithRake`, `breakevenCallEquity`, `breakevenCallEquityFromPotOddsDisplayRatio`, `potOddsDisplayRatioFromBreakevenCallEquity`, `breakevenCallEquityWithRake`, `rakeFromPot`, `formatPotOddsReducedFraction`, `equityToWinningOddsAgainst`, `winningOddsAgainstToEquity` |
-| **Stacks & display** | `spr`, `effectiveStack`, `normalizedStackFractions`, `stackInBigBlinds`, `potOddsRatioDisplay`, `formatPotOdds`, `harringtonM`, `harringtonMEffective`, `harringtonMEffectiveActiveAntes`, `harringtonQ`, `orbitCostChips`, `nlMinimumRaiseToTotal`, `preflopCombosFromNotation`, `preflopCombosFromNotationsList` |
-| **Heuristics & draws** | `ruleOfFourEquity`, `ruleOfTwoEquity`, `estimatedOutsFromRuleOfTwo`, `estimatedOutsFromRuleOfFour`, `impliedBreakevenFutureWin`, `hypergeometricOneCardHitProbability`, `runnerRunnerBackdoorFlushTwoCardProbability`, `runnerRunnerStraightDrawHitProbability`, `flopToRiverAtLeastOneHitProbability`, `flopToRiverAtLeastOneHitUnionTwoCategories`, `flopToRiverAtLeastOneHitUnionThreeCategories`, `flopToRiverAtLeastOneHitUnionFourCategories`, `flopToRiverAtLeastOneHitDisjointOutsSum`, `duplicationAdjustedOuts` |
-| **Reverse implied / geometry** | `reverseImpliedOddsMaxFutureLoss`, `geometricPotAfterMatchedPotFractions` |
-| **Stats & risk** | `monteCarloStandardError`, `monteCarloTrialsForStandardErrorBound`, `monteCarloTrialsForHoeffdingBound`, `wilsonScoreInterval`, `agrestiCoullInterval`, `normalWaldBinomialInterval`, `riskOfRuinDiffusionApprox`, `bankrollForTargetRorDiffusion`, `betaBinomialFoldPosterior` |
-| **Kelly & jam toys** | `kellyCriterionBinary`, `chubukovSymmetricJamBreakevenStack`, `chubukovSymmetricJamEv`, `chubukovMaxSymmetricJamStackChipsBinarySearch`, `chubukovMaxSymmetricJamStackBinarySearch`, `chubukovMaxSymmetricJamStackFromHandBinarySearch` |
-| **GTO-style** | `minimumDefenseFrequency`, `alphaFrequency`, `bluffToValueRatio`, `valueToBluffRatio` |
-| **Sizing & commitment** | `betAsPotFraction`, `sprAfterCall`, `commitmentRatio` |
-| **Fold equity** | `breakevenFoldEquityPureBluff`, `breakevenFoldEquityPureBluffWithRake`, `breakevenFoldEquitySemiBluff`, `breakevenFoldEquitySemiBluffWithRake`, `twoStreetPureBluffSameFoldEquity`, `twoStreetPureBluffEv`, `breakevenFoldEquitySecondStreetPureBluff`, `breakevenFoldEquityFirstStreetPureBluff` |
-| **Multiway** | `multiwaySymmetricBreakevenCallEquity`, `multiwaySymmetricBreakevenCallEquityWithShare` |
-| **ICM** | `icmWinProbabilitiesHarville`, `icmHarvillePlacementProbabilities`, `icmTopKFinishProbabilities`, `icmLastPlaceProbabilitiesHarville`, `icmExpectedPayouts`, `icmPairwiseBubbleFactor` |
-| **Side pots** | `sidePotLadderFromCommitments`, `layeredPotChipEvFromEquities`, `sidePotLayersTotalChips` |
+| **Pot / EV** | `potOddsRatio`, `expectedValueCall`, `breakevenCallEquity`, `rakeFromPot` |
+| **Stacks & display** | `spr`, `harringtonM`, `harringtonQ`, `stackInBigBlinds`, `formatPotOdds` |
+| **Draws & heuristics** | `ruleOfTwoEquity`, `hypergeometricOneCardHitProbability`, `flopToRiverAtLeastOneHitProbability` |
+| **GTO-style** | `minimumDefenseFrequency`, `alphaFrequency`, `bluffToValueRatio` |
+| **Fold equity** | `breakevenFoldEquityPureBluff`, `breakevenFoldEquitySemiBluff` |
+| **ICM & side pots** | `icmExpectedPayouts`, `icmPairwiseBubbleFactor`, `sidePotLadderFromCommitments` |
+| **Stats & risk** | `wilsonScoreInterval`, `riskOfRuinDiffusionApprox`, `monteCarloStandardError` |
+| **Kelly & jam** | `kellyCriterionBinary`, `chubukovSymmetricJamEv`, `chubukovMaxSymmetricJamStackBinarySearch` |
 
-**Breaking change (v1.2.0):** `poker-math.js` was removed; require `poker-calculations` (or the `.node` binding) for all math. Rebuild native artifacts after upgrading from a git clone.
+A complete inventory is in [`FEATURES_ADDED.md`](FEATURES_ADDED.md).
 
-**API note:** `chubukovMaxSymmetricJamStackBinarySearch` / `chubukovMaxSymmetricJamStackFromHandBinarySearch` take hole cards, board (3–5 cards), dead money, and max stack; they return the largest **integer** jam size with nonnegative symmetric-jam EV using exact HU equity vs a random hand. The `FromHand` variant uses **int32** coercion for `maxStackChips` in native code.
+## Bundlers and serverless
+
+Load from **runtime** code paths (for example a lazy `require()` inside a route handler) if your bundler or `next build` evaluates server modules at build time. You still need a **prebuild that matches** deployment OS and libc (glibc vs musl on Linux).
 
 ## Responsible use
 
-Use this for **your own simulator, research, or automation you are permitted to run**. It is not intended to help bypass third-party terms of service on real-money sites.
+Use this for simulators, research, and automation you are permitted to run. It is not intended to bypass third-party terms of service on real-money sites.
 
-## Features (engine)
+## License
 
-| Area | What’s included |
-| --- | --- |
-| **Cards / deck** | 52-card deck, shuffle with injected `std::mt19937`, deal, burn on board deals in `GameEngine` |
-| **State & rules** | `PokerGameState`, blinds, pot, per-street commits, phase machine (pre-flop → river → showdown), `GameEngine::apply_action` with `Decision` |
-| **Evaluation** | Best five of up to seven cards, full ranking + kickers, `evaluate_hand_strength` scalar |
-| **Strategy** | `decide_action(..., BotConfig, OpponentModel*)` using MC equity (or strength fallback when sim count is 0), pot odds, and call EV |
-| **Simulation** | `simulate_hand_outcome`, `parallel_hand_simulation` (chunked async workers, distinct seeds) |
-| **Config** | `BotConfig::load_from_config_file` / `save_to_config_file` (`key=value`, `#` comments) |
-| **Tests** | GoogleTest suite (deck, engine, evaluator, card strings, poker math, ICM, side pots, exact equity, strategy, opponent model, MC, config) |
+[ISC](LICENSE)
 
-## Developing from source
+---
 
-If you **clone** the repo or install from a **git URL** without local prebuilds, you need a **C++ toolchain** (CMake 3.16+, and MSVC with C++ workload on Windows, Xcode CLI tools on macOS, or GCC on Linux). Published tarballs from npm do not compile native code during install.
+<details>
+<summary><strong>Developing from source</strong></summary>
+
+Clone installs without local prebuilds need CMake 3.16+ and a C++ toolchain (MSVC on Windows, Xcode CLI on macOS, GCC on Linux).
 
 ```bash
 npm ci
@@ -104,141 +125,32 @@ npm run build:native
 node scripts/stage-prebuild.js <platform-arch>
 ```
 
-Use the `<platform-arch>` tuple [`node-gyp-build` expects](https://github.com/prebuild/node-gyp-build) (for example `win32-x64`, `linux-x64`, `darwin-arm64`). For **Alpine/musl**, stage with `node scripts/stage-prebuild.js linux-x64 musl` (writes `node.napi.musl.node`). On Windows, delete a stale `build` folder if configure fails; ensure the **Windows SDK** is installed if you see resource-compiler (`rc`) or manifest (`mt`) errors.
+Use tuples like `win32-x64`, `linux-x64`, `darwin-arm64`. For Alpine/musl: `node scripts/stage-prebuild.js linux-x64 musl`. Run native tests with `npm test`.
 
-Rebuild after changing C++:
-
-```bash
-npm run build:native
-```
-
-### Native tests
-
-```bash
-npm test
-```
-
-On Windows this expects MSVC on `PATH` like the build steps above.
-
-## Maintainers: publishing
-
-Publishing uses [`.github/workflows/npm-publish.yml`](.github/workflows/npm-publish.yml). It **starts automatically** when **`package.json`** or **`package-lock.json`** changes on **`main`** (for example merging a version bump). The release gate still **skips** the native build and `npm publish` when that **`version` is already on npm**, so dependency-only lockfile edits do not republish. You can also **re-run** from Actions → **npm publish** → **Run workflow** (same branch as the failed run, usually `main`) without a new commit.
-
-### npm Trusted Publishing (OIDC)
-
-Publishing uses **[trusted publishing](https://docs.npmjs.com/trusted-publishers)** — GitHub Actions proves identity to npm with **OIDC**; you **do not** store an **`NPM_TOKEN`** secret for `npm publish`.
-
-1. On [npmjs.com](https://www.npmjs.com/) → package **`poker-calculations`** → **Settings** → **Trusted Publisher**, connect **GitHub Actions** using:
-   - Repository that matches **`repository.url`** in [`package.json`](package.json) **exactly** (npm validates at publish time; npm does not validate when you save). Current value: `git+https://github.com/DevomB/Poker-Calculations.git`
-   - Workflow filename **`npm-publish.yml`** (same casing and `.yml` extension). If you previously used **`native-prebuild.yml`**, update the trusted publisher entry on npm to this filename (or add a second allowed workflow and remove the old one).
-2. After proving publishes work, optionally tighten **Publishing access** (“Require 2FA and disallow tokens”) and revoke old automation tokens, per npm’s migration guidance.
-
-All dependencies used during CI are public; **`npm ci`** does not need a read token. If you later add **private** npm dependencies, use a **read-only** granular token only on install steps, not for publish.
-
-### Release steps
-
-1. On **`main`**, bump **`package.json`** `version` and keep **`package-lock.json`** in sync (for example `npm install --package-lock-only` after dependency or version changes), then push or merge to **`main`**.
-2. The **npm publish** workflow runs from that push. If it failed before npm accepted the package, fix and push (or use **Run workflow** on **`main`** to retry without changing files).
-
-The release gate runs **`npm ci`** (so a broken or stale lockfile fails fast), then checks whether **`name@version` already exists** on npm. If not, it builds native targets (including **musl** artifacts as `node.napi.musl.node`), merges them under `prebuilds/`, and runs **`npm publish`** via OIDC. **No git tags** — the version field is the release input. With trusted publishing on a **public** repo, npm records **provenance** automatically. If that version is already on npm, the workflow skips build and publish.
-
-**If publish fails:** fix the underlying issue, push commits **without** bumping `version` again, and **re-run the same workflow** until it succeeds — then increment only for the *next* release. That keeps npm version numbers from skipping.
-
-Use **GitHub-hosted** runners for this workflow: OIDC trusted publishing does not support **self-hosted** runners yet ([npm docs](https://docs.npmjs.com/trusted-publishers)). The workflow pins **Node ≥22.14** to satisfy npm’s trusted-publishing runtime requirement alongside **npm CLI ≥11.5.1** in the publish job.
-
-In the GitHub repo, under **Settings → Actions → General → Workflow permissions**, use the default that allows Actions to run; the **publish** job sets **`id-token: write`** so OIDC works for `npm publish`.
-
-**Manual publish:** assemble binaries under `prebuilds/`, then `npm publish`. Without binaries, `prepack` fails unless `SKIP_PREBUILD_CHECK=1`.
+</details>
 
 <details>
-<summary>Plain CMake (library / C++ consumers)</summary>
+<summary><strong>Maintainers — publishing</strong></summary>
 
-### Repository layout
+Publishing is automated via [`.github/workflows/npm-publish.yml`](.github/workflows/npm-publish.yml) on `main` when `package.json` / `package-lock.json` change, using [npm trusted publishing (OIDC)](https://docs.npmjs.com/trusted-publishers). Bump `version` on `main`, keep the lockfile in sync, and let CI build prebuilds and publish when that version is not already on npm.
 
-```text
-include/poker/     Public headers (Card, Deck, GameEngine, HandEvaluator, poker_math, …)
-src/               Implementations (`poker_math.cpp` — SPR, MDF, fold equity, …)
-native/            Node-API binding (built when CMAKE_JS_INC is set by cmake-js)
-tests/             Unit tests
-examples/          Pointer to the docs site (see examples/README.md)
-CMakeLists.txt     Static poker_lib; optional poker_tests; optional poker_calculations.node when built by cmake-js
-```
+Trusted publisher settings on npm must match `repository.url` in [`package.json`](package.json) and workflow filename `npm-publish.yml`. Manual publish: stage binaries under `prebuilds/`, then `npm publish` (or set `SKIP_PREBUILD_CHECK=1` only when intentionally publishing without binaries).
 
-### Generic (single-configuration generators)
+</details>
+
+<details>
+<summary><strong>C++ consumers (CMake)</strong></summary>
+
+Headers under `include/poker/`. Build the static `poker_lib` and optional tests:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
+cd build && ctest --output-on-failure
 ```
 
-Run tests:
+When built via cmake-js for Node, only `poker_calculations.node` and `poker_lib` are produced (tests off by default).
 
-```bash
-cd build
-ctest --output-on-failure
-```
-
-### Windows: MSVC with NMake (when `cl` is not on PATH)
-
-Open **x64 Native Tools** or run `vcvars64.bat`, then:
-
-```bat
-cmake -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -S . -B build_nmake
-cmake --build build_nmake
-cd build_nmake
-ctest --output-on-failure
-```
-
-### CMake options
-
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `POKER_BUILD_TESTS` | `ON` (non–cmake-js); `OFF` if `CMAKE_JS_INC` is set | Build `poker_tests` and GoogleTest. Off for fast npm addon builds. |
-
-When **cmake-js** configures the project, it defines `CMAKE_JS_INC` and only **`poker_calculations.node`** plus **`poker_lib`** are built—tests are skipped so the addon build stays fast and does not pull GoogleTest.
-
-Disable tests manually:
-
-```bash
-cmake -S . -B build -DPOKER_BUILD_TESTS=OFF
-```
-
-### GCC note
-
-Tests link `libstdc++fs` when using GNU C++ for `std::filesystem` in config tests.
+**Sketch:** `PokerGameState`, `GameEngine::apply_action`, `evaluate_best_hand`, `simulate_hand_outcome`, `decide_action`, and chip math in `poker_math.hpp`.
 
 </details>
-
-## Configuration file (`BotConfig`)
-
-```ini
-# bot.txt
-aggression_threshold=0.55
-risk_tolerance=0.92
-monte_carlo_simulations=800
-monte_carlo_villains=1
-raise_pot_fraction=0.55
-opponent_aggression_weight=0.05
-rng_seed=2463534242
-```
-
-Load with `BotConfig::load_from_config_file("bot.txt")`.
-
-## Quick C++ API sketch
-
-- **State & engine**: `poker::PokerGameState`, `poker::GameEngine::start_new_hand`, `apply_action`, `advance_phase_if_ready`
-- **Hands**: `poker::evaluate_best_hand`, `poker::evaluate_hand_strength`, `poker::evaluate_hand`
-- **Equity**: `poker::simulate_hand_outcome`, `poker::parallel_hand_simulation`
-- **Decision**: `poker::decide_action(state, hero_hole_cards, cfg, opponent_model, hero_seat)`
-- **Chip / GTO math**: `poker::spr`, `poker::minimum_defense_frequency`, `poker::breakeven_fold_equity_pure_bluff`, … (`poker_math.hpp`)
-- **Integration**: subclass `poker::PokerBotInterface` or use `poker::MockPokerBotInterface` for tests
-
-Headers live under `include/poker/`. Link against **`poker_lib`**.
-
-## Contributing
-
-Strategy thresholds and MC counts are centralized in **`BotConfig`**. After changes, run **`npm test`** or **`ctest`**; MC-heavy tests use statistical bands (e.g. AA pre-flop equity vs one random hand).
-
-## License
-
-[ISC](LICENSE) — see [`LICENSE`](LICENSE) in this repository.
