@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="Poker-Calculations-Image.png" alt="Poker-Calculations — poker math solved" width="720" />
-</p>
-
 <h1 align="center">Poker-Calculations</h1>
 
 <p align="center">
@@ -10,7 +6,11 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/poker-calculations">npm</a> ·
+  <img src="Poker-Calculations-Image.png" alt="Poker-Calculations — poker math solved" width="720" />
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/poker-calculations">NPM</a> ·
   <a href="https://poker-calculations.devomb.com">Documentation</a> ·
   <a href="https://github.com/DevomB/Poker-Calculations">GitHub</a>
 </p>
