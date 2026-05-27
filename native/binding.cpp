@@ -1,5 +1,6 @@
 #include <napi.h>
 
+#include "async_workers.hpp"
 #include "poker/card_string.hpp"
 #include "poker/game_state.hpp"
 #include "poker/hand_evaluator.hpp"
@@ -14,6 +15,7 @@
 #include "poker/types.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
@@ -65,7 +67,7 @@ constexpr const char* kHandRankNames[] = {"highCard",      "onePair",       "two
         const Napi::Value v = arr[i];
         if (!v.IsString()) {
             if (err) {
-                *err = "cards must be strings like \"Ah\"";
+                *err = "cards must be strings like \"Ah\" or a Uint8Array of deck ids 0..51";
             }
             return {};
         }
@@ -79,6 +81,63 @@ constexpr const char* kHandRankNames[] = {"highCard",      "onePair",       "two
         out.push_back(c);
     }
     return out;
+}
+
+[[nodiscard]] bool is_card_input(const Napi::Value& v) {
+    if (v.IsArray()) {
+        return true;
+    }
+    if (v.IsBuffer()) {
+        return true;
+    }
+    if (v.IsTypedArray()) {
+        return v.As<Napi::TypedArray>().TypedArrayType() == napi_uint8_array;
+    }
+    return false;
+}
+
+[[nodiscard]] bool packed_card_bytes(const Napi::Value& v, const std::uint8_t** data, std::size_t* len,
+                                     std::string* err) {
+    if (v.IsBuffer()) {
+        const Napi::Buffer<std::uint8_t> buf = v.As<Napi::Buffer<std::uint8_t>>();
+        *data = buf.Data();
+        *len = buf.Length();
+        return true;
+    }
+    if (v.IsTypedArray()) {
+        const Napi::TypedArray ta = v.As<Napi::TypedArray>();
+        if (ta.TypedArrayType() != napi_uint8_array) {
+            if (err) {
+                *err = "packed cards must be Uint8Array (each byte 0..51)";
+            }
+            return false;
+        }
+        Napi::ArrayBuffer ab = ta.ArrayBuffer();
+        *data = static_cast<const std::uint8_t*>(ab.Data()) + ta.ByteOffset();
+        *len = ta.ByteLength();
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] std::vector<poker::Card> parse_cards_from_js(const Napi::Env& env, const Napi::Value& v,
+                                                             std::string* err) {
+    const std::uint8_t* data = nullptr;
+    std::size_t len = 0;
+    if (packed_card_bytes(v, &data, &len, err)) {
+        std::vector<poker::Card> out;
+        if (!poker::parse_packed_cards(data, len, out, err)) {
+            return {};
+        }
+        return out;
+    }
+    if (v.IsArray()) {
+        return parse_card_strings(env, v.As<Napi::Array>(), err);
+    }
+    if (err) {
+        *err = "cards must be string[] or Uint8Array of deck indices (0..51)";
+    }
+    return {};
 }
 
 [[nodiscard]] std::string hand_rank_js(poker::HandRank r) {
@@ -167,14 +226,14 @@ constexpr const char* kHandRankNames[] = {"highCard",      "onePair",       "two
         if (p.Has("name") && p.Get("name").IsString()) {
             pl.name = p.Get("name").As<Napi::String>().Utf8Value();
         }
-        if (!p.Has("holeCards") || !p.Get("holeCards").IsArray()) {
+        if (!p.Has("holeCards")) {
             if (err) {
-                *err = "player.holeCards must be an array of card strings";
+                *err = "player.holeCards is required (string[] or Uint8Array)";
             }
             return false;
         }
         std::string cerr;
-        pl.hole_cards = parse_card_strings(Napi::Env(p.Env()), p.Get("holeCards").As<Napi::Array>(), &cerr);
+        pl.hole_cards = parse_cards_from_js(Napi::Env(p.Env()), p.Get("holeCards"), &cerr);
         if (!cerr.empty()) {
             if (err) {
                 *err = cerr;
@@ -189,15 +248,14 @@ constexpr const char* kHandRankNames[] = {"highCard",      "onePair",       "two
         out.players.push_back(std::move(pl));
     }
 
-    if (!src.Has("communityCards") || !src.Get("communityCards").IsArray()) {
+    if (!src.Has("communityCards")) {
         if (err) {
-            *err = "state.communityCards must be an array";
+            *err = "state.communityCards is required (string[] or Uint8Array)";
         }
         return false;
     }
     std::string cerr2;
-    out.community_cards =
-        parse_card_strings(Napi::Env(src.Env()), src.Get("communityCards").As<Napi::Array>(), &cerr2);
+    out.community_cards = parse_cards_from_js(Napi::Env(src.Env()), src.Get("communityCards"), &cerr2);
     if (!cerr2.empty()) {
         if (err) {
             *err = cerr2;
@@ -286,14 +344,208 @@ constexpr const char* kHandRankNames[] = {"highCard",      "onePair",       "two
     }
 }
 
+struct SimulateHandParsed {
+    std::vector<poker::Card> hole;
+    std::vector<poker::Card> board;
+    int num_sim{0};
+    std::uint32_t seed{0};
+    int villains{1};
+};
+
+[[nodiscard]] bool parse_simulate_hand_args(const Napi::CallbackInfo& info, SimulateHandParsed& out,
+                                            std::string* err) {
+    if (info.Length() < 4 || !info[2].IsNumber() || !info[3].IsNumber()) {
+        if (err) {
+            *err = "simulateHandOutcome(holeCards: CardInput, board: CardInput, numSimulations, seed, villains?)";
+        }
+        return false;
+    }
+    const Napi::Env env = info.Env();
+    out.hole = parse_cards_from_js(env, info[0], err);
+    if (err && !err->empty()) {
+        return false;
+    }
+    out.board = parse_cards_from_js(env, info[1], err);
+    if (err && !err->empty()) {
+        return false;
+    }
+    out.num_sim = info[2].As<Napi::Number>().Int32Value();
+    out.seed = static_cast<std::uint32_t>(info[3].As<Napi::Number>().Uint32Value());
+    out.villains = 1;
+    if (info.Length() >= 5 && info[4].IsNumber()) {
+        out.villains = info[4].As<Napi::Number>().Int32Value();
+    }
+    return true;
+}
+
+struct ParallelSimParsed {
+    std::vector<poker::Card> hole;
+    std::vector<poker::Card> board;
+    int num_sim{0};
+    std::uint32_t base_seed{0};
+    int villains{1};
+    std::size_t num_threads{1};
+};
+
+[[nodiscard]] bool parse_parallel_sim_args(const Napi::CallbackInfo& info, ParallelSimParsed& out, std::string* err) {
+    if (info.Length() < 6) {
+        if (err) {
+            *err = "parallelHandSimulation(hole: CardInput, board: CardInput, numSimulations, baseSeed, "
+                   "villains, numThreads)";
+        }
+        return false;
+    }
+    const Napi::Env env = info.Env();
+    out.hole = parse_cards_from_js(env, info[0], err);
+    if (err && !err->empty()) {
+        return false;
+    }
+    out.board = parse_cards_from_js(env, info[1], err);
+    if (err && !err->empty()) {
+        return false;
+    }
+    out.num_sim = info[2].As<Napi::Number>().Int32Value();
+    out.base_seed = static_cast<std::uint32_t>(info[3].As<Napi::Number>().Uint32Value());
+    out.villains = info[4].As<Napi::Number>().Int32Value();
+    out.num_threads = static_cast<std::size_t>(info[5].As<Napi::Number>().Uint32Value());
+    return true;
+}
+
+struct ExactHuParsed {
+    std::vector<poker::Card> hero;
+    std::vector<poker::Card> board;
+};
+
+[[nodiscard]] bool parse_exact_hu_args(const Napi::CallbackInfo& info, ExactHuParsed& out, std::string* err) {
+    if (info.Length() < 2) {
+        if (err) {
+            *err = "exactHuEquityVsRandomHand(heroHoleCards: CardInput, boardCards: CardInput)";
+        }
+        return false;
+    }
+    const Napi::Env env = info.Env();
+    out.hero = parse_cards_from_js(env, info[0], err);
+    if (err && !err->empty()) {
+        return false;
+    }
+    out.board = parse_cards_from_js(env, info[1], err);
+    if (err && !err->empty()) {
+        return false;
+    }
+    return true;
+}
+
+struct StraightMadeParsed {
+    std::vector<poker::Card> hero;
+    std::vector<poker::Card> flop;
+    std::vector<poker::Card> dead;
+};
+
+[[nodiscard]] bool parse_straight_made_args(const Napi::CallbackInfo& info, StraightMadeParsed& out,
+                                            std::string* err) {
+    if (info.Length() < 3 || !is_card_input(info[0]) || !is_card_input(info[1]) || !is_card_input(info[2])) {
+        if (err) {
+            *err = "straightMadeFlopToRiverExactProbability(heroHoleCards: CardInput, flopThree: CardInput, "
+                   "knownDead: CardInput)";
+        }
+        return false;
+    }
+    const Napi::Env env = info.Env();
+    out.hero = parse_cards_from_js(env, info[0], err);
+    if (err && !err->empty()) {
+        return false;
+    }
+    out.flop = parse_cards_from_js(env, info[1], err);
+    if (err && !err->empty()) {
+        return false;
+    }
+    out.dead = parse_cards_from_js(env, info[2], err);
+    if (err && !err->empty()) {
+        return false;
+    }
+    return true;
+}
+
+struct DecideActionParsed {
+    poker::PokerGameState state{};
+    poker::BotConfig cfg{};
+    std::optional<poker::OpponentModel> opponent;
+    int hero_seat{-1};
+    std::vector<poker::Card> hero_hole;
+};
+
+[[nodiscard]] void resolve_hero_hole(const poker::PokerGameState& state, int hero_seat,
+                                     std::vector<poker::Card>& hero_hole) {
+    hero_hole.clear();
+    int resolved = hero_seat;
+    if (resolved < 0 && state.acting_index >= 0 &&
+        state.acting_index < static_cast<int>(state.players.size())) {
+        resolved = state.players[static_cast<std::size_t>(state.acting_index)].seat;
+    }
+    if (resolved < 0 && !state.players.empty()) {
+        resolved = state.players[0].seat;
+    }
+    for (const auto& p : state.players) {
+        if (p.seat == resolved) {
+            hero_hole = p.hole_cards;
+            break;
+        }
+    }
+    if (hero_hole.empty() && !state.players.empty()) {
+        hero_hole = state.players[0].hole_cards;
+    }
+}
+
+[[nodiscard]] bool parse_decide_action_inputs(const Napi::CallbackInfo& info, DecideActionParsed& out,
+                                              std::string* err) {
+    if (info.Length() < 2 || !info[0].IsObject() || !info[1].IsObject()) {
+        if (err) {
+            *err = "decideAction(state, config, opponentModel?, heroSeat?)";
+        }
+        return false;
+    }
+    if (!parse_game_state(info[0].As<Napi::Object>(), out.state, err)) {
+        if (err && err->empty()) {
+            *err = "invalid state";
+        }
+        return false;
+    }
+    out.cfg = parse_bot_config(info[1].As<Napi::Object>());
+    out.opponent.reset();
+    if (info.Length() >= 3 && info[2].IsObject()) {
+        out.opponent = parse_opponent_model(info[2].As<Napi::Object>());
+    }
+    out.hero_seat = -1;
+    if (info.Length() >= 4 && info[3].IsNumber()) {
+        out.hero_seat = info[3].As<Napi::Number>().Int32Value();
+    }
+    resolve_hero_hole(out.state, out.hero_seat, out.hero_hole);
+    return true;
+}
+
+[[nodiscard]] std::size_t parse_benchmark_iterations(const Napi::CallbackInfo& info, std::string* err) {
+    std::size_t iterations = 200000;
+    if (info.Length() >= 1 && info[0].IsNumber()) {
+        const double n = info[0].As<Napi::Number>().DoubleValue();
+        if (n < 1.0) {
+            if (err) {
+                *err = "benchmarkEvaluatorThroughput(iterations): iterations must be >= 1";
+            }
+            return 0;
+        }
+        iterations = static_cast<std::size_t>(n);
+    }
+    return iterations;
+}
+
 Napi::Value EvaluateBestHand(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        if (info.Length() < 1 || !info[0].IsArray()) {
-            throw std::invalid_argument("evaluateBestHand(cards: string[])");
+        if (info.Length() < 1) {
+            throw std::invalid_argument("evaluateBestHand(cards: CardInput)");
         }
         std::string err;
-        auto cards = parse_card_strings(env, info[0].As<Napi::Array>(), &err);
+        auto cards = parse_cards_from_js(env, info[0], &err);
         if (!err.empty()) {
             throw std::invalid_argument(err);
         }
@@ -311,15 +563,15 @@ Napi::Value EvaluateBestHand(const Napi::CallbackInfo& info) {
 static void parse_hole_and_board_or_throw(const Napi::CallbackInfo& info, const Napi::Env& env,
                                            std::vector<poker::Card>& hole,
                                            std::vector<poker::Card>& board, const char* signature) {
-    if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
+    if (info.Length() < 2) {
         throw std::invalid_argument(signature);
     }
     std::string err;
-    hole = parse_card_strings(env, info[0].As<Napi::Array>(), &err);
+    hole = parse_cards_from_js(env, info[0], &err);
     if (!err.empty()) {
         throw std::invalid_argument(err);
     }
-    board = parse_card_strings(env, info[1].As<Napi::Array>(), &err);
+    board = parse_cards_from_js(env, info[1], &err);
     if (!err.empty()) {
         throw std::invalid_argument(err);
     }
@@ -329,15 +581,22 @@ static Napi::Value HandStrengthAsNumber(const Napi::Env& env, std::uint64_t s) {
     return Napi::Number::New(env, static_cast<double>(s));
 }
 
+static Napi::Value EvalHandStrength(const Napi::CallbackInfo& info, bool use_fast) {
+    const Napi::Env env = info.Env();
+    const char* sig = use_fast ? "evaluateHandStrengthFast(holeCards: CardInput, board: CardInput)"
+                               : "evaluateHandStrength(holeCards: CardInput, board: CardInput)";
+    std::vector<poker::Card> hole;
+    std::vector<poker::Card> board;
+    parse_hole_and_board_or_throw(info, env, hole, board, sig);
+    const std::uint64_t s =
+        use_fast ? poker::evaluate_hand_strength_fast(hole, board) : poker::evaluate_hand_strength(hole, board);
+    return HandStrengthAsNumber(env, s);
+}
+
 Napi::Value EvaluateHandStrength(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        std::vector<poker::Card> hole;
-        std::vector<poker::Card> board;
-        parse_hole_and_board_or_throw(
-            info, env, hole, board, "evaluateHandStrength(holeCards: string[], board: string[])");
-        const std::uint64_t s = poker::evaluate_hand_strength(hole, board);
-        return Napi::String::New(env, std::to_string(s));
+        return EvalHandStrength(info, false);
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -347,42 +606,7 @@ Napi::Value EvaluateHandStrength(const Napi::CallbackInfo& info) {
 Napi::Value EvaluateHandStrengthFast(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        std::vector<poker::Card> hole;
-        std::vector<poker::Card> board;
-        parse_hole_and_board_or_throw(
-            info, env, hole, board, "evaluateHandStrengthFast(holeCards: string[], board: string[])");
-        const std::uint64_t s = poker::evaluate_hand_strength_fast(hole, board);
-        return Napi::String::New(env, std::to_string(s));
-    } catch (const std::exception& e) {
-        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
-        return env.Null();
-    }
-}
-
-Napi::Value EvaluateHandStrengthScalar(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    try {
-        std::vector<poker::Card> hole;
-        std::vector<poker::Card> board;
-        parse_hole_and_board_or_throw(
-            info, env, hole, board, "evaluateHandStrengthScalar(holeCards: string[], board: string[])");
-        const std::uint64_t s = poker::evaluate_hand_strength(hole, board);
-        return HandStrengthAsNumber(env, s);
-    } catch (const std::exception& e) {
-        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
-        return env.Null();
-    }
-}
-
-Napi::Value EvaluateHandStrengthFastScalar(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    try {
-        std::vector<poker::Card> hole;
-        std::vector<poker::Card> board;
-        parse_hole_and_board_or_throw(
-            info, env, hole, board, "evaluateHandStrengthFastScalar(holeCards: string[], board: string[])");
-        const std::uint64_t s = poker::evaluate_hand_strength_fast(hole, board);
-        return HandStrengthAsNumber(env, s);
+        return EvalHandStrength(info, true);
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -392,13 +616,10 @@ Napi::Value EvaluateHandStrengthFastScalar(const Napi::CallbackInfo& info) {
 Napi::Value BenchmarkEvaluatorThroughput(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        std::size_t iterations = 200000;
-        if (info.Length() >= 1 && info[0].IsNumber()) {
-            const double n = info[0].As<Napi::Number>().DoubleValue();
-            if (n < 1.0) {
-                throw std::invalid_argument("benchmarkEvaluatorThroughput(iterations): iterations must be >= 1");
-            }
-            iterations = static_cast<std::size_t>(n);
+        std::string err;
+        const std::size_t iterations = parse_benchmark_iterations(info, &err);
+        if (!err.empty()) {
+            throw std::invalid_argument(err);
         }
         const auto bench = poker::benchmark_evaluator_throughput(iterations);
         Napi::Object out = Napi::Object::New(env);
@@ -412,18 +633,33 @@ Napi::Value BenchmarkEvaluatorThroughput(const Napi::CallbackInfo& info) {
     }
 }
 
-Napi::Value EvaluateHandCategory(const Napi::CallbackInfo& info) {
+Napi::Value BenchmarkEvaluatorThroughputAsync(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
-            throw std::invalid_argument("evaluateHandCategory(holeCards: string[], board: string[])");
-        }
         std::string err;
-        auto hole = parse_card_strings(env, info[0].As<Napi::Array>(), &err);
+        const std::size_t iterations = parse_benchmark_iterations(info, &err);
         if (!err.empty()) {
             throw std::invalid_argument(err);
         }
-        auto board = parse_card_strings(env, info[1].As<Napi::Array>(), &err);
+        return poker_async::enqueue_benchmark(env, iterations);
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value EvaluateHandCategory(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        if (info.Length() < 2) {
+            throw std::invalid_argument("evaluateHandCategory(holeCards: CardInput, board: CardInput)");
+        }
+        std::string err;
+        auto hole = parse_cards_from_js(env, info[0], &err);
+        if (!err.empty()) {
+            throw std::invalid_argument(err);
+        }
+        auto board = parse_cards_from_js(env, info[1], &err);
         if (!err.empty()) {
             throw std::invalid_argument(err);
         }
@@ -438,30 +674,37 @@ Napi::Value EvaluateHandCategory(const Napi::CallbackInfo& info) {
 Napi::Value SimulateHandOutcome(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        if (info.Length() < 4 || !info[0].IsArray() || !info[1].IsArray() || !info[2].IsNumber() ||
-            !info[3].IsNumber()) {
-            throw std::invalid_argument(
-                "simulateHandOutcome(holeCards, board, numSimulations, seed, villains?)");
-        }
+        SimulateHandParsed args{};
         std::string err;
-        auto hole = parse_card_strings(env, info[0].As<Napi::Array>(), &err);
-        if (!err.empty()) {
+        if (!parse_simulate_hand_args(info, args, &err)) {
             throw std::invalid_argument(err);
         }
-        auto board = parse_card_strings(env, info[1].As<Napi::Array>(), &err);
-        if (!err.empty()) {
-            throw std::invalid_argument(err);
-        }
-        const int num_sim = info[2].As<Napi::Number>().Int32Value();
-        const std::uint32_t seed = static_cast<std::uint32_t>(info[3].As<Napi::Number>().Uint32Value());
-        int villains = 1;
-        if (info.Length() >= 5 && info[4].IsNumber()) {
-            villains = info[4].As<Napi::Number>().Int32Value();
-        }
-        std::mt19937 rng(seed);
-        const float eq =
-            poker::simulate_hand_outcome(hole, board, num_sim, rng, villains);
+        std::mt19937 rng(args.seed);
+        const float eq = poker::simulate_hand_outcome(args.hole, args.board, args.num_sim, rng, args.villains);
         return Napi::Number::New(env, static_cast<double>(eq));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value SimulateHandOutcomeAsync(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        SimulateHandParsed args{};
+        std::string err;
+        if (!parse_simulate_hand_args(info, args, &err)) {
+            throw std::invalid_argument(err);
+        }
+        const auto hole = std::move(args.hole);
+        const auto board = std::move(args.board);
+        const int num_sim = args.num_sim;
+        const std::uint32_t seed = args.seed;
+        const int villains = args.villains;
+        return poker_async::enqueue_float_work(env, [hole, board, num_sim, seed, villains]() {
+            std::mt19937 rng(seed);
+            return static_cast<double>(poker::simulate_hand_outcome(hole, board, num_sim, rng, villains));
+        });
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -471,26 +714,38 @@ Napi::Value SimulateHandOutcome(const Napi::CallbackInfo& info) {
 Napi::Value ParallelHandSimulation(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        if (info.Length() < 6 || !info[0].IsArray() || !info[1].IsArray()) {
-            throw std::invalid_argument(
-                "parallelHandSimulation(hole, board, numSimulations, baseSeed, villains, numThreads)");
-        }
+        ParallelSimParsed args{};
         std::string err;
-        auto hole = parse_card_strings(env, info[0].As<Napi::Array>(), &err);
-        if (!err.empty()) {
+        if (!parse_parallel_sim_args(info, args, &err)) {
             throw std::invalid_argument(err);
         }
-        auto board = parse_card_strings(env, info[1].As<Napi::Array>(), &err);
-        if (!err.empty()) {
-            throw std::invalid_argument(err);
-        }
-        const int num_sim = info[2].As<Napi::Number>().Int32Value();
-        const std::uint32_t base_seed =
-            static_cast<std::uint32_t>(info[3].As<Napi::Number>().Uint32Value());
-        const int villains = info[4].As<Napi::Number>().Int32Value();
-        const std::size_t num_threads = static_cast<std::size_t>(info[5].As<Napi::Number>().Uint32Value());
-        const float eq = poker::parallel_hand_simulation(hole, board, num_sim, base_seed, villains, num_threads);
+        const float eq = poker::parallel_hand_simulation(args.hole, args.board, args.num_sim, args.base_seed,
+                                                         args.villains, args.num_threads);
         return Napi::Number::New(env, static_cast<double>(eq));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value ParallelHandSimulationAsync(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        ParallelSimParsed args{};
+        std::string err;
+        if (!parse_parallel_sim_args(info, args, &err)) {
+            throw std::invalid_argument(err);
+        }
+        const auto hole = std::move(args.hole);
+        const auto board = std::move(args.board);
+        const int num_sim = args.num_sim;
+        const std::uint32_t base_seed = args.base_seed;
+        const int villains = args.villains;
+        const std::size_t num_threads = args.num_threads;
+        return poker_async::enqueue_float_work(env, [hole, board, num_sim, base_seed, villains, num_threads]() {
+            return static_cast<double>(
+                poker::parallel_hand_simulation(hole, board, num_sim, base_seed, villains, num_threads));
+        });
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -500,54 +755,35 @@ Napi::Value ParallelHandSimulation(const Napi::CallbackInfo& info) {
 Napi::Value DecideAction(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        if (info.Length() < 2 || !info[0].IsObject() || !info[1].IsObject()) {
-            throw std::invalid_argument("decideAction(state, config, opponentModel?, heroSeat?)");
-        }
-        poker::PokerGameState state{};
+        DecideActionParsed args{};
         std::string err;
-        if (!parse_game_state(info[0].As<Napi::Object>(), state, &err)) {
+        if (!parse_decide_action_inputs(info, args, &err)) {
             throw std::invalid_argument(err.empty() ? "invalid state" : err);
         }
-        const poker::BotConfig cfg = parse_bot_config(info[1].As<Napi::Object>());
-
-        const poker::OpponentModel* opp_ptr = nullptr;
-        poker::OpponentModel opp_storage{};
-        if (info.Length() >= 3 && info[2].IsObject()) {
-            opp_storage = parse_opponent_model(info[2].As<Napi::Object>());
-            opp_ptr = &opp_storage;
-        }
-
-        int hero_seat = -1;
-        if (info.Length() >= 4 && info[3].IsNumber()) {
-            hero_seat = info[3].As<Napi::Number>().Int32Value();
-        }
-
-        std::vector<poker::Card> hero_hole;
-        int resolved = hero_seat;
-        if (resolved < 0 && state.acting_index >= 0 &&
-            state.acting_index < static_cast<int>(state.players.size())) {
-            resolved = state.players[static_cast<std::size_t>(state.acting_index)].seat;
-        }
-        if (resolved < 0 && !state.players.empty()) {
-            resolved = state.players[0].seat;
-        }
-        for (const auto& p : state.players) {
-            if (p.seat == resolved) {
-                hero_hole = p.hole_cards;
-                break;
-            }
-        }
-        if (hero_hole.empty() && !state.players.empty()) {
-            hero_hole = state.players[0].hole_cards;
-        }
-
+        const poker::OpponentModel* opp_ptr = args.opponent ? &(*args.opponent) : nullptr;
         const poker::Decision d =
-            poker::decide_action(state, hero_hole, cfg, opp_ptr, hero_seat);
+            poker::decide_action(args.state, args.hero_hole, args.cfg, opp_ptr, args.hero_seat);
 
         Napi::Object out = Napi::Object::New(env);
         out.Set("action", Napi::String::New(env, action_name(d.action)));
         out.Set("raiseBy", Napi::Number::New(env, d.raise_by));
         return out;
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value DecideActionAsync(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        DecideActionParsed args{};
+        std::string err;
+        if (!parse_decide_action_inputs(info, args, &err)) {
+            throw std::invalid_argument(err.empty() ? "invalid state" : err);
+        }
+        return poker_async::enqueue_decide_action(env, std::move(args.state), std::move(args.hero_hole),
+                                                  args.cfg, args.opponent, args.hero_seat);
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -1537,22 +1773,32 @@ Napi::Value SidePotLayersTotalChips(const Napi::CallbackInfo& info) {
 Napi::Value ExactHuEquityVsRandomHand(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
-            throw std::invalid_argument("exactHuEquityVsRandomHand(heroHoleCards[], boardCards[])");
-        }
+        ExactHuParsed args{};
         std::string err;
-        std::vector<poker::Card> hero =
-            parse_card_strings(env, info[0].As<Napi::Array>(), &err);
-        if (!err.empty()) {
+        if (!parse_exact_hu_args(info, args, &err)) {
             throw std::invalid_argument(err);
         }
-        std::vector<poker::Card> board =
-            parse_card_strings(env, info[1].As<Napi::Array>(), &err);
-        if (!err.empty()) {
-            throw std::invalid_argument(err);
-        }
-        const double eq = poker::exact_hu_equity_vs_random_hand(hero, board);
+        const double eq = poker::exact_hu_equity_vs_random_hand(args.hero, args.board);
         return Napi::Number::New(env, eq);
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value ExactHuEquityVsRandomHandAsync(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        ExactHuParsed args{};
+        std::string err;
+        if (!parse_exact_hu_args(info, args, &err)) {
+            throw std::invalid_argument(err);
+        }
+        const auto hero = std::move(args.hero);
+        const auto board = std::move(args.board);
+        return poker_async::enqueue_float_work(env, [hero, board]() {
+            return poker::exact_hu_equity_vs_random_hand(hero, board);
+        });
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -1562,28 +1808,33 @@ Napi::Value ExactHuEquityVsRandomHand(const Napi::CallbackInfo& info) {
 Napi::Value StraightMadeFlopToRiverExactProbability(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        if (info.Length() < 3 || !info[0].IsArray() || !info[1].IsArray() || !info[2].IsArray()) {
-            throw std::invalid_argument(
-                "straightMadeFlopToRiverExactProbability(heroHoleCards[], flopThree[], knownDead[])");
-        }
+        StraightMadeParsed args{};
         std::string err;
-        std::vector<poker::Card> hero =
-            parse_card_strings(env, info[0].As<Napi::Array>(), &err);
-        if (!err.empty()) {
+        if (!parse_straight_made_args(info, args, &err)) {
             throw std::invalid_argument(err);
         }
-        std::vector<poker::Card> flop =
-            parse_card_strings(env, info[1].As<Napi::Array>(), &err);
-        if (!err.empty()) {
-            throw std::invalid_argument(err);
-        }
-        std::vector<poker::Card> dead =
-            parse_card_strings(env, info[2].As<Napi::Array>(), &err);
-        if (!err.empty()) {
-            throw std::invalid_argument(err);
-        }
-        const double p = poker::straight_made_flop_to_river_exact_probability(hero, flop, dead);
+        const double p = poker::straight_made_flop_to_river_exact_probability(args.hero, args.flop, args.dead);
         return Napi::Number::New(env, p);
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value StraightMadeFlopToRiverExactProbabilityAsync(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        StraightMadeParsed args{};
+        std::string err;
+        if (!parse_straight_made_args(info, args, &err)) {
+            throw std::invalid_argument(err);
+        }
+        const auto hero = std::move(args.hero);
+        const auto flop = std::move(args.flop);
+        const auto dead = std::move(args.dead);
+        return poker_async::enqueue_float_work(env, [hero, flop, dead]() {
+            return poker::straight_made_flop_to_river_exact_probability(hero, flop, dead);
+        });
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -1593,20 +1844,17 @@ Napi::Value StraightMadeFlopToRiverExactProbability(const Napi::CallbackInfo& in
 Napi::Value ChubukovMaxSymmetricJamStackBinarySearch(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        if (info.Length() < 4 || !info[0].IsArray() || !info[1].IsArray() || !info[2].IsNumber() ||
-            !info[3].IsNumber()) {
+        if (info.Length() < 4 || !info[2].IsNumber() || !info[3].IsNumber()) {
             throw std::invalid_argument(
-                "chubukovMaxSymmetricJamStackBinarySearch(heroHoleCards[], boardCards[], "
+                "chubukovMaxSymmetricJamStackBinarySearch(heroHoleCards: CardInput, boardCards: CardInput, "
                 "deadMoneyChips, maxStackChips)");
         }
         std::string err;
-        std::vector<poker::Card> hero =
-            parse_card_strings(env, info[0].As<Napi::Array>(), &err);
+        std::vector<poker::Card> hero = parse_cards_from_js(env, info[0], &err);
         if (!err.empty()) {
             throw std::invalid_argument(err);
         }
-        std::vector<poker::Card> board =
-            parse_card_strings(env, info[1].As<Napi::Array>(), &err);
+        std::vector<poker::Card> board = parse_cards_from_js(env, info[1], &err);
         if (!err.empty()) {
             throw std::invalid_argument(err);
         }
@@ -1633,20 +1881,17 @@ Napi::Value ChubukovMaxSymmetricJamStackBinarySearch(const Napi::CallbackInfo& i
 Napi::Value ChubukovMaxSymmetricJamStackFromHandBinarySearch(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        if (info.Length() < 4 || !info[0].IsArray() || !info[1].IsArray() || !info[2].IsNumber() ||
-            !info[3].IsNumber()) {
+        if (info.Length() < 4 || !info[2].IsNumber() || !info[3].IsNumber()) {
             throw std::invalid_argument(
-                "chubukovMaxSymmetricJamStackFromHandBinarySearch(heroHoleCards[], boardCards[], "
-                "deadMoneyChips, maxStackChips)");
+                "chubukovMaxSymmetricJamStackFromHandBinarySearch(heroHoleCards: CardInput, boardCards: "
+                "CardInput, deadMoneyChips, maxStackChips)");
         }
         std::string err;
-        std::vector<poker::Card> hero =
-            parse_card_strings(env, info[0].As<Napi::Array>(), &err);
+        std::vector<poker::Card> hero = parse_cards_from_js(env, info[0], &err);
         if (!err.empty()) {
             throw std::invalid_argument(err);
         }
-        std::vector<poker::Card> board =
-            parse_card_strings(env, info[1].As<Napi::Array>(), &err);
+        std::vector<poker::Card> board = parse_cards_from_js(env, info[1], &err);
         if (!err.empty()) {
             throw std::invalid_argument(err);
         }
@@ -1973,11 +2218,24 @@ Napi::Value ValidateCardString(const Napi::CallbackInfo& info) {
 Napi::Value CardStringsHaveDuplicate(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        if (info.Length() < 1 || !info[0].IsArray()) {
-            throw std::invalid_argument("cardStringsHaveDuplicate(cards: string[])");
+        if (info.Length() < 1) {
+            throw std::invalid_argument("cardStringsHaveDuplicate(cards: CardInput)");
         }
-        const auto strs = strings_from_js_array(info[0].As<Napi::Array>(), "cardStringsHaveDuplicate");
-        return Napi::Boolean::New(env, poker::card_strings_have_duplicate(strs));
+        const std::uint8_t* data = nullptr;
+        std::size_t len = 0;
+        std::string perr;
+        if (packed_card_bytes(info[0], &data, &len, &perr)) {
+            std::vector<poker::Card> cards;
+            if (!poker::parse_packed_cards(data, len, cards, &perr)) {
+                throw std::invalid_argument(perr);
+            }
+            return Napi::Boolean::New(env, poker::cards_have_duplicate(cards));
+        }
+        if (info[0].IsArray()) {
+            const auto strs = strings_from_js_array(info[0].As<Napi::Array>(), "cardStringsHaveDuplicate");
+            return Napi::Boolean::New(env, poker::card_strings_have_duplicate(strs));
+        }
+        throw std::invalid_argument("cardStringsHaveDuplicate(cards: CardInput)");
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -2176,16 +2434,16 @@ Napi::Value HarringtonQ(const Napi::CallbackInfo& info) {
 Napi::Value CompareBestHands(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
-            throw std::invalid_argument("compareBestHands(cardsA: string[], cardsB: string[])");
+        if (info.Length() < 2) {
+            throw std::invalid_argument("compareBestHands(cardsA: CardInput, cardsB: CardInput)");
         }
         std::string err;
-        auto a = parse_card_strings(env, info[0].As<Napi::Array>(), &err);
+        auto a = parse_cards_from_js(env, info[0], &err);
         if (!err.empty()) {
             throw std::invalid_argument(err);
         }
         err.clear();
-        auto b = parse_card_strings(env, info[1].As<Napi::Array>(), &err);
+        auto b = parse_cards_from_js(env, info[1], &err);
         if (!err.empty()) {
             throw std::invalid_argument(err);
         }
@@ -2242,12 +2500,10 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
                 Napi::Function::New(env, EvaluateHandStrength));
     exports.Set(Napi::String::New(env, "evaluateHandStrengthFast"),
                 Napi::Function::New(env, EvaluateHandStrengthFast));
-    exports.Set(Napi::String::New(env, "evaluateHandStrengthScalar"),
-                Napi::Function::New(env, EvaluateHandStrengthScalar));
-    exports.Set(Napi::String::New(env, "evaluateHandStrengthFastScalar"),
-                Napi::Function::New(env, EvaluateHandStrengthFastScalar));
     exports.Set(Napi::String::New(env, "benchmarkEvaluatorThroughput"),
                 Napi::Function::New(env, BenchmarkEvaluatorThroughput));
+    exports.Set(Napi::String::New(env, "benchmarkEvaluatorThroughputAsync"),
+                Napi::Function::New(env, BenchmarkEvaluatorThroughputAsync));
     exports.Set(Napi::String::New(env, "evaluateHandCategory"),
                 Napi::Function::New(env, EvaluateHandCategory));
     exports.Set(Napi::String::New(env, "validateCardString"), Napi::Function::New(env, ValidateCardString));
@@ -2258,9 +2514,14 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "compareBestHands"), Napi::Function::New(env, CompareBestHands));
     exports.Set(Napi::String::New(env, "simulateHandOutcome"),
                 Napi::Function::New(env, SimulateHandOutcome));
+    exports.Set(Napi::String::New(env, "simulateHandOutcomeAsync"),
+                Napi::Function::New(env, SimulateHandOutcomeAsync));
     exports.Set(Napi::String::New(env, "parallelHandSimulation"),
                 Napi::Function::New(env, ParallelHandSimulation));
+    exports.Set(Napi::String::New(env, "parallelHandSimulationAsync"),
+                Napi::Function::New(env, ParallelHandSimulationAsync));
     exports.Set(Napi::String::New(env, "decideAction"), Napi::Function::New(env, DecideAction));
+    exports.Set(Napi::String::New(env, "decideActionAsync"), Napi::Function::New(env, DecideActionAsync));
     exports.Set(Napi::String::New(env, "potOddsRatio"), Napi::Function::New(env, PotOddsRatio));
     exports.Set(Napi::String::New(env, "expectedValueCall"), Napi::Function::New(env, ExpectedValueCall));
     exports.Set(Napi::String::New(env, "expectedValueCallWithRake"),
@@ -2401,8 +2662,12 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
                 Napi::Function::New(env, SidePotLayersTotalChips));
     exports.Set(Napi::String::New(env, "exactHuEquityVsRandomHand"),
                 Napi::Function::New(env, ExactHuEquityVsRandomHand));
+    exports.Set(Napi::String::New(env, "exactHuEquityVsRandomHandAsync"),
+                Napi::Function::New(env, ExactHuEquityVsRandomHandAsync));
     exports.Set(Napi::String::New(env, "straightMadeFlopToRiverExactProbability"),
                 Napi::Function::New(env, StraightMadeFlopToRiverExactProbability));
+    exports.Set(Napi::String::New(env, "straightMadeFlopToRiverExactProbabilityAsync"),
+                Napi::Function::New(env, StraightMadeFlopToRiverExactProbabilityAsync));
     exports.Set(Napi::String::New(env, "chubukovMaxSymmetricJamStackBinarySearch"),
                 Napi::Function::New(env, ChubukovMaxSymmetricJamStackBinarySearch));
     exports.Set(Napi::String::New(env, "chubukovMaxSymmetricJamStackFromHandBinarySearch"),
