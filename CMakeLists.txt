@@ -27,6 +27,7 @@ add_library(poker_lib STATIC
     src/strategy.cpp
     src/opponent_model.cpp
     src/monte_carlo.cpp
+    src/state_codec.cpp
     src/fast_evaluator.cpp
     src/bot_config.cpp
     src/poker_bot_interface.cpp
@@ -60,6 +61,7 @@ if(POKER_BUILD_TESTS)
         tests/test_strategy.cpp
         tests/test_opponent_model.cpp
         tests/test_monte_carlo.cpp
+        tests/test_state_codec.cpp
         tests/test_fast_evaluator.cpp
         tests/test_bot_config.cpp
     )
@@ -81,7 +83,17 @@ if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
     string(REPLACE "\n" "" NODE_ADDON_API_DIR "${NODE_ADDON_API_DIR}")
     string(REPLACE "\"" "" NODE_ADDON_API_DIR "${NODE_ADDON_API_DIR}")
 
-    add_library(poker_calculations SHARED native/binding.cpp native/async_workers.cpp ${CMAKE_JS_SRC})
+    add_library(poker_calculations SHARED
+        native/binding.cpp
+        native/binding_register.cpp
+        native/binding_common.cpp
+        native/binding_numeric.cpp
+        native/binding_cards.cpp
+        native/binding_state.cpp
+        native/binding_batch.cpp
+        native/async_workers.cpp
+        ${CMAKE_JS_SRC}
+    )
     set_target_properties(poker_calculations PROPERTIES PREFIX "" SUFFIX ".node")
     target_include_directories(poker_calculations PRIVATE ${CMAKE_JS_INC} ${NODE_ADDON_API_DIR})
     target_link_libraries(poker_calculations PRIVATE poker_lib ${CMAKE_JS_LIB})

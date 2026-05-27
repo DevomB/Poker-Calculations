@@ -20,7 +20,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status** | **Done (v2.1.0)** â€” `*Async` Promise exports via `Napi::AsyncWorker` in `native/async_workers.cpp`; sync APIs unchanged. |
+| **Status** | **Done (v2.0.0)** â€” `*Async` Promise exports via `Napi::AsyncWorker` in `native/async_workers.cpp`; sync APIs unchanged. |
 | **Location** | `simulateHandOutcomeAsync`, `parallelHandSimulationAsync`, `exactHuEquityVsRandomHandAsync`, `straightMadeFlopToRiverExactProbabilityAsync`, `decideActionAsync`, `benchmarkEvaluatorThroughputAsync` |
 | **Remaining** | Cancellation / `AbortSignal` (optional B1.1). |
 | **~Lines** | Done |
@@ -40,13 +40,13 @@
 |-------|--------|
 | **Status** | **Done (v2.0.0)** â€” `evaluateHandStrength` / `Fast` return `number`; `*Scalar` exports removed. |
 | **Location** | `EvalHandStrength` helper in `binding.cpp` |
-| **Migration** | See [`MIGRATION_v2.md`](MIGRATION_v2.md) |
 
 #### B4 â€” No batch export for repeated spots (JS pays full marshalling per call)
 
 | Field | Detail |
 |-------|--------|
-| **Location** | Missing; callers loop `simulateHandOutcome` / `evaluateHandStrengthFast` / `exactHuEquityVsRandomHand` |
+| **Status** | **Done** — batch exports in `binding_batch.cpp`; `simulate_hand_outcome_batch` in `monte_carlo.cpp`. |
+| **Location** | `native/binding_batch.cpp` |
 | **Current** | One N-API transition + full card parse + return boxing per iteration. |
 | **Proposal** | `simulateHandOutcomeBatch(specs: { hole, board, n, seed, villains }[])` writing into `Float64Array` out; `evaluateHandStrengthFastBatch(holes: Uint8Array, boards: Uint8Array, stride)`; optional shared `dead` mask. Single env crossing. |
 | **Impact** | Very high for range builders and sim dashboards. |
@@ -94,6 +94,7 @@
 
 | Field | Detail |
 |-------|--------|
+| **Status** | **Done (v2.0.0)** — `binding_numeric.cpp` Float64 in/out; ICM exports accept `returnFormat: 'float64'`. |
 | **Location** | `doubles_from_js_array`, `IcmHarvillePlacementProbabilities`, `IcmExpectedPayouts`, `NormalizedStackFractions`, `LayeredPotChipEvFromEquities`, etc. |
 | **Current** | In: loop `Array` â†’ `vector<double>`; Out: loop `Napi::Number::New` per element (nested arrays for matrices). |
 | **Proposal** | Accept `Float64Array` in (length check + pointer); write results with `Napi::Float64Array::New(env, n, data)` or external ArrayBuffer + single memcpy from `std::vector` filled in C++. |
@@ -105,6 +106,7 @@
 
 | Field | Detail |
 |-------|--------|
+| **Status** | **Done (v2.0.0)** — PKST v1 `encodePokerState` / `decodePokerState`; `parse_state_input` in `binding_state.cpp`. |
 | **Location** | `parse_game_state`, `parse_bot_config`, `parse_opponent_model` (`binding.cpp` L146â€“248+) |
 | **Current** | Every player: object property gets, `holeCards` string arrays parsed; `phase` string â†’ `std::string` â†’ `unordered_map` lookup; `actedThisStreet` bool array. |
 | **Proposal** | Binary state snapshot (`Uint8Array` layout: fixed header + per-player cards as bytes + ints as `Int32Array`); or cache parsed `PokerGameState` in JS as an opaque external (`Napi::External`) after first `encodeState`. |
@@ -131,6 +133,7 @@
 
 | Field | Detail |
 |-------|--------|
+| **Status** | **Partial (v2.0.0)** — `POKER_TRY` macro; batch/ICM migrated; scalars still legacy try/catch. |
 | **Location** | Pattern across `binding.cpp` (e.g. L289â€“307, L403â€“432) |
 | **Current** | Happy path still enters `try`; validation uses `throw std::invalid_argument` â†’ catch â†’ `Napi::Error::New` â†’ `ThrowAsJavaScriptException`. |
 | **Proposal** | Split: `CHECK_ARGS` macro returns `env.Null()` after `TypeError` without exceptions; reserve exceptions for rare C++ failures. Mark hot wrappers `noexcept` where possible. Use `[[unlikely]]` on error branches. |
@@ -153,6 +156,7 @@
 
 | Field | Detail |
 |-------|--------|
+| **Status** | **Done (v2.0.0)** — `binding_register.cpp` with `DefineProperties` (110 exports). |
 | **Location** | `RegisterExports` (`binding.cpp` L2204â€“2371) |
 | **Current** | Each `exports.Set(Napi::String::New(env, "name"), Napi::Function::New(...))` creates fresh name strings and function objects. |
 | **Proposal** | `Napi::ObjectReference` + `Napi::FunctionReference` statics initialized once; or `napi_define_properties` with `napi_property_descriptor` table (names as string literals, one shot). |
@@ -164,7 +168,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status** | **Done (v2.0.0 + v2.1.0)** â€” `CardInput`, `Card52` in `index.d.ts`; optional [`encode.js`](encode.js); `*Async` Promise types for heavy exports (B1). |
+| **Status** | **Done (v2.0.0 + v2.0.0)** â€” `CardInput`, `Card52` in `index.d.ts`; optional [`encode.js`](encode.js); `*Async` Promise types for heavy exports (B1). |
 
 #### B15 â€” `hand_rank_js` returns `std::string` by value
 
@@ -194,10 +198,10 @@
 
 1. ~~**B3** (quick win, string â†’ number strength)~~ â€” **done in v2.0**  
 2. ~~**B2 + B14** (packed cards, typed overloads)~~ â€” **done in v2.0**  
-3. ~~**B1** (async for MC / exact / `decideAction`)~~ â€” **done in v2.1.0**  
+3. ~~**B1** (async for MC / exact / `decideAction`)~~ â€” **done in v2.0.0**  
 4. **B4** (batch sim)  
 5. **B8, B9** (TypedArray ICM / state)  
-6. **B11â€“B13** (cleanup)
+6. **B11 + B13** (cleanup)
 
 ### Top 3 impact (this section)
 
