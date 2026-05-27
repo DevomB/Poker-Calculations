@@ -82,6 +82,14 @@ export interface PokerCalculations {
    */
   evaluateHandStrengthFast(holeCards: string[], board: string[]): string;
   /**
+   * Encoded strength as a number (same bit layout as the decimal string from
+   * `evaluateHandStrength`). Prefer for sort/compare loops; exact in JS `number`.
+   * `Number(evaluateHandStrength(hole, board))` equals this return for the same spot.
+   */
+  evaluateHandStrengthScalar(holeCards: string[], board: string[]): number;
+  /** Same as `evaluateHandStrengthScalar`, using the forge fast evaluator. */
+  evaluateHandStrengthFastScalar(holeCards: string[], board: string[]): number;
+  /**
    * Benchmark legacy vs forge evaluator throughput on random 7-card spots.
    */
   benchmarkEvaluatorThroughput(iterations?: number): {
