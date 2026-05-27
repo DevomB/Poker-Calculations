@@ -1,6 +1,13 @@
 'use strict';
 
+const path = require('path');
+
 /** @typedef {number} Card52 Deck id 0..51: rank*4+suit (rank 0=2..12=A, suit 0=c..3=s). */
+
+/** @returns {import('./index.js')} */
+function nativeAddon() {
+  return require('node-gyp-build')(path.join(__dirname));
+}
 
 const RANKS = '23456789TJQKA';
 const SUITS = 'cdhs';
@@ -75,9 +82,28 @@ function unpackCards(packed) {
   return out;
 }
 
+/**
+ * PKST v1 binary state (native `encodePokerState`).
+ * @param {import('./index').NativePokerState} state
+ * @returns {Uint8Array}
+ */
+function packPokerState(state) {
+  return nativeAddon().encodePokerState(state);
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @returns {import('./index').NativePokerState}
+ */
+function unpackPokerState(bytes) {
+  return nativeAddon().decodePokerState(bytes);
+}
+
 module.exports = {
   cardStringToDeckIndex,
   deckIndexToCardString,
   packCards,
   unpackCards,
+  packPokerState,
+  unpackPokerState,
 };

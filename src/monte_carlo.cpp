@@ -177,4 +177,14 @@ float parallel_hand_simulation(const std::vector<Card>& player_hand,
     return static_cast<float>(weighted / static_cast<double>(total));
 }
 
+void simulate_hand_outcome_batch(const std::vector<SimSpot>& spots, std::vector<float>& out_equities) {
+    out_equities.resize(spots.size());
+    for (std::size_t i = 0; i < spots.size(); ++i) {
+        const SimSpot& s = spots[static_cast<std::size_t>(i)];
+        std::mt19937 rng(s.seed);
+        out_equities[i] =
+            simulate_hand_outcome(s.hole, s.board, s.num_simulations, rng, s.villains);
+    }
+}
+
 }  // namespace poker

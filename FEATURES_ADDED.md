@@ -1,20 +1,22 @@
 # Shipped feature inventory — `poker-calculations`
 
-Complete inventory of what the **npm package** ships: **104** native JavaScript functions (v2.1.0 adds six `*Async` Promise exports; v2.0.0 was 98 after `*Scalar` removal), **8** TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
+Complete inventory of what the **npm package** ships: **110** native JavaScript functions, **8** TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
 
-**Authoritative sources:** [`index.d.ts`](index.d.ts) (types + JSDoc), [`README.md`](README.md) (overview tables), [`native/binding.cpp`](native/binding.cpp) (`exports.Set` × 104), [documentation site](https://poker-calculations.devomb.com/docs/reference/api) (examples + when-to-use), [`scripts/list-native-exports.mjs`](scripts/list-native-exports.mjs) (runtime export list).
+**Authoritative sources:** [`index.d.ts`](index.d.ts) (types + JSDoc), [`README.md`](README.md) (overview tables), [`native/binding_register.cpp`](native/binding_register.cpp) (export registration), [documentation site](https://poker-calculations.devomb.com/docs/reference/api) (examples + when-to-use), [`scripts/list-native-exports.mjs`](scripts/list-native-exports.mjs) (runtime export list).
 
 **Documentation:** [poker-calculations.devomb.com](https://poker-calculations.devomb.com) — API reference, examples, and guides (replaces repo `examples/*.mjs` scripts).
 
-**Package metadata (v2.1.0):** Node **18+**; entry `index.js` + `index.d.ts`; optional [`encode.js`](encode.js) for packed cards; [`MIGRATION_v2.md`](MIGRATION_v2.md) for upgrades from v1.x. Prebuilt N-API binaries under `prebuilds/` (glibc + musl on Linux). No separate `poker-math.js` layer — all math is C++ via N-API.
+**Package metadata:** Node **18+**; entry `index.js` + `index.d.ts`; optional [`encode.js`](encode.js) for packed cards and PKST state. Prebuilt N-API binaries under `prebuilds/` (glibc + musl on Linux). No separate `poker-math.js` layer — all math is C++ via N-API.
 
 **Async vs C++ parallelism:** `parallelHandSimulation` uses C++ `std::async` inside the native call. The `*Async` exports (`simulateHandOutcomeAsync`, etc.) use Node’s libuv thread pool (`Napi::AsyncWorker`) so the **JavaScript event loop** stays responsive.
 
 ---
 
-## JavaScript / N-API exports (104 functions)
+## JavaScript / N-API exports (110 functions)
 
-Implemented in C++ and registered in [`native/binding.cpp`](native/binding.cpp). C++-only engine APIs (`GameEngine`, deck lifecycle, `BotConfig` file I/O) are under [Engine and integration](#engine-and-integration).
+Includes batch Monte Carlo, `*Async` Promise exports, Float64 ICM paths, and PKST packed state (`encodePokerState` / `decodePokerState`). ICM/stack helpers accept `Float64Array` and optional `returnFormat: 'float64'`. PKST byte layout: magic `PKST`, layout version byte, players, phase, pot fields, per-player hole bytes, community cards, `actedThisStreet` — see `include/poker/state_codec.hpp`.
+
+Implemented in C++ and registered in [`native/binding_register.cpp`](native/binding_register.cpp). C++-only engine APIs (`GameEngine`, deck lifecycle, `BotConfig` file I/O) are under [Engine and integration](#engine-and-integration).
 
 | Group | Export | Role |
 | --- | --- | --- |

@@ -5,3 +5,10 @@ export function cardStringToDeckIndex(s: string): Card52;
 export function deckIndexToCardString(idx: Card52): string;
 export function packCards(strings: string[]): Uint8Array;
 export function unpackCards(packed: Uint8Array): string[];
+
+import type { NativePokerState } from './index';
+
+/** PKST v1 bytes via native `encodePokerState`. */
+export function packPokerState(state: NativePokerState): Uint8Array;
+/** Round-trip to `NativePokerState` via native `decodePokerState`. */
+export function unpackPokerState(bytes: Uint8Array): NativePokerState;
