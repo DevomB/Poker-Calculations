@@ -206,3 +206,72 @@ test('simulateHandOutcomeAsync throws on invalid packed cards before queueing', 
     /invalid (packed card|deck index)/,
   );
 });
+
+test('native export count', () => {
+  const count = Object.keys(poker).filter((k) => typeof poker[k] === 'function').length;
+  assert.equal(count, 110);
+});
+
+test('simulateHandOutcomeBatch matches sync loop', () => {
+  const specs = [
+    { holeCards: hole, board, numSimulations: 500, seed: 42, villains: 1 },
+    { holeCards: ['2c', '3d'], board: ['4h', '5s', '6c'], numSimulations: 500, seed: 99, villains: 1 },
+  ];
+  const batch = poker.simulateHandOutcomeBatch(specs);
+  assert.ok(batch instanceof Float64Array);
+  assert.equal(batch.length, 2);
+  assert.equal(batch[0], poker.simulateHandOutcome(hole, board, 500, 42, 1));
+  assert.equal(
+    batch[1],
+    poker.simulateHandOutcome(['2c', '3d'], ['4h', '5s', '6c'], 500, 99, 1),
+  );
+});
+
+test('simulateHandOutcomeBatchPacked matches object batch', () => {
+  const specs = [{ holeCards: hole, board, numSimulations: 400, seed: 7, villains: 1 }];
+  const fromObj = poker.simulateHandOutcomeBatch(specs);
+  const n = 1;
+  const holes = packCards(hole);
+  const boards = packCards(board);
+  const meta = new Uint32Array(n * 3);
+  meta[0] = 400;
+  meta[1] = 7;
+  meta[2] = 1;
+  const fromPacked = poker.simulateHandOutcomeBatchPacked(holes, boards, meta);
+  assert.equal(fromPacked[0], fromObj[0]);
+});
+
+test('simulateHandOutcomeBatch invalid spec index', () => {
+  assert.throws(
+    () => poker.simulateHandOutcomeBatch([{ board, numSimulations: 1, seed: 0 }]),
+    /specs\[0\]/,
+  );
+});
+
+test('icmWinProbabilitiesHarville Float64 parity', () => {
+  const stacks = [100, 200, 50];
+  const arr = poker.icmWinProbabilitiesHarville(stacks);
+  const f64 = poker.icmWinProbabilitiesHarville(new Float64Array(stacks), 'float64');
+  assert.ok(f64 instanceof Float64Array);
+  assert.equal(f64.length, arr.length);
+  for (let i = 0; i < arr.length; i++) {
+    assert.equal(f64[i], arr[i]);
+  }
+});
+
+test('encodePokerState round-trip', () => {
+  const state = decideStateFixture();
+  const bytes = poker.encodePokerState(state);
+  assert.ok(bytes instanceof Uint8Array);
+  assert.ok(bytes.length > 8);
+  const decoded = poker.decodePokerState(bytes);
+  assert.equal(decoded.phase, state.phase);
+  assert.equal(decoded.players.length, state.players.length);
+});
+
+test('decideAction accepts packed PKST state', () => {
+  const state = decideStateFixture();
+  const packed = poker.encodePokerState(state);
+  const decision = poker.decideAction(packed, { monteCarloSimulations: 0 });
+  assert.ok(['fold', 'call', 'raise', 'check'].includes(decision.action));
+});

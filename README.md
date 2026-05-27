@@ -35,7 +35,7 @@
 | **Strategy** | `decideAction` from serialized state using MC equity, pot odds, and call EV |
 | **Tournaments** | ICM (Harville), placement and payout expectations, pairwise bubble factor, side-pot ladders |
 | **Theory helpers** | MDF / alpha, fold-equity breakevens, Kelly and Chubukov symmetric-jam search, Wilson and Agresti–Coull intervals, risk-of-ruin approximations |
-| **Developer experience** | **[`index.d.ts`](index.d.ts)** typings, **104** native exports, docs with examples at [poker-calculations.devomb.com](https://poker-calculations.devomb.com) |
+| **Developer experience** | **[`index.d.ts`](index.d.ts)** typings, **110** native exports, docs at [poker-calculations.devomb.com](https://poker-calculations.devomb.com) |
 
 Published releases include **N-API prebuilds** for Linux (glibc and musl), macOS, and Windows via [`node-gyp-build`](https://github.com/prebuild/node-gyp-build). Linux glibc builds use static libstdc++/libgcc where needed so older server and serverless images avoid `GLIBCXX_*` mismatches.
 
@@ -49,9 +49,7 @@ npm install poker-calculations
 
 ## Quick start
 
-Cards use strings like `"Ah"` and `"Td"` (ten may be `"10h"`), or packed **`Uint8Array`** deck ids (`0..51`) for hot paths — see [`MIGRATION_v2.md`](MIGRATION_v2.md) and [`encode.js`](encode.js).
-
-**Upgrading from v1.x?** v2 returns hand strength as `number` (not decimal strings) and removes `*Scalar` exports. See [`MIGRATION_v2.md`](MIGRATION_v2.md).
+Cards use strings like `"Ah"` and `"Td"` (ten may be `"10h"`), or packed **`Uint8Array`** deck ids (`0..51`) for hot paths — see [`encode.js`](encode.js) and [Packed card input](https://poker-calculations.devomb.com/docs/concepts/packed-card-input) on the docs site.
 
 ### CommonJS
 

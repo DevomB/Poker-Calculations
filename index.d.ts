@@ -12,6 +12,23 @@ export type Card52 = number;
 /** Hole/board/dead card lists: canonical strings or packed bytes (`Card52` per byte). */
 export type CardInput = string[] | Uint8Array;
 
+/** Numeric vector input: `number[]` or `Float64Array`. */
+export type F64VectorInput = number[] | Float64Array;
+
+/** ICM / stack math output shape when `returnFormat` is set (default `'array'`). */
+export type F64ReturnFormat = 'array' | 'float64';
+
+/** PKST v1 packed game state (`encodePokerState` / `decodePokerState`). */
+export type PokerStateBytes = Uint8Array;
+
+export interface SimBatchSpec {
+  holeCards: CardInput;
+  board: CardInput;
+  numSimulations: number;
+  seed: number;
+  villains?: number;
+}
+
 /** Serialized game state (camelCase) passed to `decideAction`. */
 export interface NativePokerState {
   players: Array<{
@@ -84,7 +101,7 @@ export interface SidePotLayer {
   playerCapContribution: number[];
 }
 
-/** N-API addon (104 exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, and related helpers (all implemented in C++). */
+/** N-API addon (110 exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, and related helpers (all implemented in C++). */
 export interface PokerCalculations {
   evaluateBestHand(cards: CardInput): HandEvalResult;
   /**
@@ -154,15 +171,42 @@ export interface PokerCalculations {
     villains: number,
     numThreads: number
   ): Promise<number>;
+  /** Monte Carlo equity for many spots; returns `Float64Array` (optional preallocated `out`). */
+  simulateHandOutcomeBatch(specs: SimBatchSpec[], out?: Float64Array): Float64Array;
+  /**
+   * Packed batch: `holes` length `2*n`, `boards` length `5*n`, `meta` `Uint32Array` `[numSim, seed, villains]` per row.
+   */
+  simulateHandOutcomeBatchPacked(
+    holes: Uint8Array,
+    boards: Uint8Array,
+    meta: Uint32Array,
+    out?: Float64Array
+  ): Float64Array;
+  evaluateHandStrengthFastBatch(
+    holes: Uint8Array,
+    boards: Uint8Array,
+    boardCards?: number,
+    out?: Float64Array
+  ): Float64Array;
+  exactHuEquityVsRandomHandBatch(
+    holes: Uint8Array,
+    boards: Uint8Array,
+    boardCards: number,
+    out?: Float64Array
+  ): Float64Array;
+  /** PKST v1 binary encoding of `NativePokerState`. */
+  encodePokerState(state: NativePokerState): PokerStateBytes;
+  /** Decode PKST v1 bytes to `NativePokerState` (camelCase). */
+  decodePokerState(bytes: PokerStateBytes): NativePokerState;
   decideAction(
-    state: NativePokerState,
+    state: NativePokerState | PokerStateBytes,
     config: NativeBotConfig,
     opponentModel?: NativeOpponentModel | null,
     heroSeat?: number
   ): DecisionResult;
   /** Same as `decideAction`; runs on the libuv thread pool (non-blocking). */
   decideActionAsync(
-    state: NativePokerState,
+    state: NativePokerState | PokerStateBytes,
     config: NativeBotConfig,
     opponentModel?: NativeOpponentModel | null,
     heroSeat?: number
@@ -186,7 +230,10 @@ export interface PokerCalculations {
   spr(potChips: number, effectiveStackChips: number): number;
   effectiveStack(...stacks: number[]): number;
   /** Each stack divided by the sum of stacks (tournament chip share; not Harville ICM). */
-  normalizedStackFractions(stacks: number[]): number[];
+  normalizedStackFractions(
+    stacks: F64VectorInput,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
   minimumDefenseFrequency(potBeforeOpponentBet: number, opponentBetSize: number): number;
   stackInBigBlinds(stackChips: number, bigBlind: number): number;
   potOddsRatioDisplay(potBeforeCall: number, toCall: number): number;
@@ -332,7 +379,7 @@ export interface PokerCalculations {
     stackChips: number,
     smallBlind: number,
     bigBlind: number,
-    antesFromActiveSeats: number[]
+    antesFromActiveSeats: F64VectorInput
   ): number;
   /** Harrington Q: `heroStack / mean(stacks)` (vs average table stack); all stacks must be positive. */
   harringtonQ(heroStack: number, stacks: number[]): number;
@@ -461,18 +508,32 @@ export interface PokerCalculations {
     maxStackChips: number
   ): number;
   /** P17: Harville first-place probabilities. */
-  icmWinProbabilitiesHarville(stacks: number[]): number[];
-  /** P17: full Harville placement matrix `[player][finishRank]` (rank 0 = first). */
-  icmHarvillePlacementProbabilities(stacks: number[]): number[][];
+  icmWinProbabilitiesHarville(stacks: F64VectorInput, returnFormat?: F64ReturnFormat): number[] | Float64Array;
+  /** P17: full Harville placement matrix `[player][finishRank]` (rank 0 = first); flat `n*n` when `returnFormat: 'float64'`. */
+  icmHarvillePlacementProbabilities(
+    stacks: F64VectorInput,
+    returnFormat?: F64ReturnFormat
+  ): number[][] | Float64Array;
   /**
    * Per-player probability of finishing in one of the first `k` places (sum of first `k` columns of
    * Harville placement); `k` in `1..stacks.length`.
    */
-  icmTopKFinishProbabilities(stacks: number[], k: number): number[];
+  icmTopKFinishProbabilities(
+    stacks: F64VectorInput,
+    k: number,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
   /** Harville probability each player finishes last (placement matrix last column). */
-  icmLastPlaceProbabilitiesHarville(stacks: number[]): number[];
+  icmLastPlaceProbabilitiesHarville(
+    stacks: F64VectorInput,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
   /** P18: ICM expected payouts (prize vector length = players). */
-  icmExpectedPayouts(stacks: number[], payouts: number[]): number[];
+  icmExpectedPayouts(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
   /** P19: pairwise bubble factor (finite differences on P18). */
   icmPairwiseBubbleFactor(
     stacks: number[],
@@ -482,12 +543,14 @@ export interface PokerCalculations {
     potChips: number
   ): number;
   /** P20: side-pot ladder from per-player committed chips. */
-  sidePotLadderFromCommitments(committedChips: number[]): SidePotLayer[];
+  sidePotLadderFromCommitments(committedChips: F64VectorInput): SidePotLayer[];
   /** P21: chip EV from per-layer pot sizes and per-player per-layer equities (columns sum to 1). */
   layeredPotChipEvFromEquities(
-    layerPotChips: number[],
-    equityPlayerByLayer: number[][]
-  ): number[];
+    layerPotChips: F64VectorInput,
+    equityPlayerByLayer: number[][] | Float64Array,
+    colsOrReturnFormat?: number | F64ReturnFormat,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
   /** Sum of `potChips` over side-pot layers. */
   sidePotLayersTotalChips(layers: SidePotLayer[]): number;
   /** P22: exact HU vs random villain hand; board must have 3–5 cards. */

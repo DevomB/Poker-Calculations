@@ -23,4 +23,14 @@ namespace poker {
                                              int villains,
                                              std::size_t num_threads);
 
+struct SimSpot {
+    std::vector<Card> hole;
+    std::vector<Card> board;
+    int num_simulations{0};
+    std::uint32_t seed{0};
+    int villains{1};
+};
+
+void simulate_hand_outcome_batch(const std::vector<SimSpot>& spots, std::vector<float>& out_equities);
+
 }  // namespace poker
