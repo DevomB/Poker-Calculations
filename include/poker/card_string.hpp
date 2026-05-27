@@ -2,10 +2,28 @@
 
 #include "poker/card.hpp"
 
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
 namespace poker {
+
+/// Deck id 0..51: rank * 4 + suit (rank 0=2 .. 12=A, suit 0=c .. 3=s).
+[[nodiscard]] int deck_index_from_card(const Card& c);
+
+/// Inverse of deck_index_from_card; throws std::invalid_argument if idx not in 0..51.
+[[nodiscard]] Card card_from_deck_index(int idx);
+
+/**
+ * Parse packed card bytes (each 0..51). On failure sets *err and returns false.
+ * Does not check for duplicate cards.
+ */
+[[nodiscard]] bool parse_packed_cards(const std::uint8_t* data, std::size_t n, std::vector<Card>& out,
+                                      std::string* err);
+
+/// True if any two cards in the list are equal.
+[[nodiscard]] bool cards_have_duplicate(const std::vector<Card>& cards);
 
 /// Trim ASCII whitespace; parses ranks `23456789TJQKA` and `10`, suits `cdhs` (case-insensitive rank/suit).
 [[nodiscard]] bool parse_card_string(const std::string& raw, Card& out);

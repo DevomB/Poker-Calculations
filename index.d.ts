@@ -6,18 +6,24 @@
  * @see https://poker-calculations.devomb.com/docs/reference/api
  */
 
+/** Deck id 0..51: `rank * 4 + suit` (rank 0=2 .. 12=A, suit 0=c .. 3=s). */
+export type Card52 = number;
+
+/** Hole/board/dead card lists: canonical strings or packed bytes (`Card52` per byte). */
+export type CardInput = string[] | Uint8Array;
+
 /** Serialized game state (camelCase) passed to `decideAction`. */
 export interface NativePokerState {
   players: Array<{
     name?: string;
-    holeCards: string[];
+    holeCards: CardInput;
     stack?: number;
     committedThisStreet?: number;
     totalCommittedHand?: number;
     folded?: boolean;
     seat?: number;
   }>;
-  communityCards: string[];
+  communityCards: CardInput;
   phase: string;
   pot?: number;
   currentBet?: number;
@@ -56,6 +62,12 @@ export interface DecisionResult {
   raiseBy: number;
 }
 
+export interface EvaluatorBenchmarkResult {
+  legacyEvalsPerSecond: number;
+  fastEvalsPerSecond: number;
+  implementation: string;
+}
+
 export interface WilsonScoreInterval {
   lower: number;
   upper: number;
@@ -72,38 +84,33 @@ export interface SidePotLayer {
   playerCapContribution: number[];
 }
 
-/** N-API addon: NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, and related helpers (all implemented in C++). */
+/** N-API addon (104 exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, and related helpers (all implemented in C++). */
 export interface PokerCalculations {
-  evaluateBestHand(cards: string[]): HandEvalResult;
-  evaluateHandStrength(holeCards: string[], board: string[]): string;
+  evaluateBestHand(cards: CardInput): HandEvalResult;
+  /**
+   * Encoded strength as `number` (`uint64` bit layout: rank in high bits + five kicker nibbles).
+   * Exact integer in IEEE double for sort/compare loops.
+   */
+  evaluateHandStrength(holeCards: CardInput, board: CardInput): number;
   /**
    * Same encoding as `evaluateHandStrength`, using the in-house stack-only evaluator
    * (`poker-calculations-forge`) used by Monte Carlo and exact enumeration hot paths.
    */
-  evaluateHandStrengthFast(holeCards: string[], board: string[]): string;
-  /**
-   * Encoded strength as a number (same bit layout as the decimal string from
-   * `evaluateHandStrength`). Prefer for sort/compare loops; exact in JS `number`.
-   * `Number(evaluateHandStrength(hole, board))` equals this return for the same spot.
-   */
-  evaluateHandStrengthScalar(holeCards: string[], board: string[]): number;
-  /** Same as `evaluateHandStrengthScalar`, using the forge fast evaluator. */
-  evaluateHandStrengthFastScalar(holeCards: string[], board: string[]): number;
+  evaluateHandStrengthFast(holeCards: CardInput, board: CardInput): number;
   /**
    * Benchmark legacy vs forge evaluator throughput on random 7-card spots.
    */
-  benchmarkEvaluatorThroughput(iterations?: number): {
-    legacyEvalsPerSecond: number;
-    fastEvalsPerSecond: number;
-    implementation: string;
-  };
-  evaluateHandCategory(holeCards: string[], board: string[]): string;
+  benchmarkEvaluatorThroughput(iterations?: number): EvaluatorBenchmarkResult;
+  /** Same as `benchmarkEvaluatorThroughput`; runs on the libuv thread pool (non-blocking). */
+  benchmarkEvaluatorThroughputAsync(iterations?: number): Promise<EvaluatorBenchmarkResult>;
+  evaluateHandCategory(holeCards: CardInput, board: CardInput): string;
   /** `true` if `card` parses as a single card (`Ah`, `10c`, …). */
   validateCardString(card: string): boolean;
   /**
-   * `true` if any two strings map to the same card. Throws if any entry is not a valid card string.
+   * `true` if any two entries map to the same card. Throws if any entry is invalid.
+   * Accepts `string[]` or packed `Uint8Array` (deck ids 0..51).
    */
-  cardStringsHaveDuplicate(cards: string[]): boolean;
+  cardStringsHaveDuplicate(cards: CardInput): boolean;
   /** Canonical two-character form (`Th`, `Ac`, …); throws if invalid. */
   canonicalCardString(card: string): string;
   /**
@@ -114,28 +121,52 @@ export interface PokerCalculations {
   /**
    * Compare best 1–7 card lists; returns `-1` / `0` / `1`. Throws on overlap between lists or invalid cards.
    */
-  compareBestHands(cardsA: string[], cardsB: string[]): number;
+  compareBestHands(cardsA: CardInput, cardsB: CardInput): number;
   simulateHandOutcome(
-    holeCards: string[],
-    board: string[],
+    holeCards: CardInput,
+    board: CardInput,
     numSimulations: number,
     seed: number,
     villains?: number
   ): number;
+  /** Same as `simulateHandOutcome`; runs on the libuv thread pool (non-blocking). */
+  simulateHandOutcomeAsync(
+    holeCards: CardInput,
+    board: CardInput,
+    numSimulations: number,
+    seed: number,
+    villains?: number
+  ): Promise<number>;
   parallelHandSimulation(
-    holeCards: string[],
-    board: string[],
+    holeCards: CardInput,
+    board: CardInput,
     numSimulations: number,
     baseSeed: number,
     villains: number,
     numThreads: number
   ): number;
+  /** Same as `parallelHandSimulation`; runs on the libuv thread pool (non-blocking). */
+  parallelHandSimulationAsync(
+    holeCards: CardInput,
+    board: CardInput,
+    numSimulations: number,
+    baseSeed: number,
+    villains: number,
+    numThreads: number
+  ): Promise<number>;
   decideAction(
     state: NativePokerState,
     config: NativeBotConfig,
     opponentModel?: NativeOpponentModel | null,
     heroSeat?: number
   ): DecisionResult;
+  /** Same as `decideAction`; runs on the libuv thread pool (non-blocking). */
+  decideActionAsync(
+    state: NativePokerState,
+    config: NativeBotConfig,
+    opponentModel?: NativeOpponentModel | null,
+    heroSeat?: number
+  ): Promise<DecisionResult>;
   potOddsRatio(pot: number, toCall: number): number;
   /** Chip EV of calling once vs folding (0); same semantics as C++ `expected_value_call`. */
   expectedValueCall(equity: number, pot: number, toCall: number): number;
@@ -460,25 +491,33 @@ export interface PokerCalculations {
   /** Sum of `potChips` over side-pot layers. */
   sidePotLayersTotalChips(layers: SidePotLayer[]): number;
   /** P22: exact HU vs random villain hand; board must have 3–5 cards. */
-  exactHuEquityVsRandomHand(heroHoleCards: string[], boardCards: string[]): number;
+  exactHuEquityVsRandomHand(heroHoleCards: CardInput, boardCards: CardInput): number;
+  /** Same as `exactHuEquityVsRandomHand`; runs on the libuv thread pool (non-blocking). */
+  exactHuEquityVsRandomHandAsync(heroHoleCards: CardInput, boardCards: CardInput): Promise<number>;
   /**
    * P4 (exact): P(best 7-card hand is straight or straight flush) after two uniformly random **distinct**
    * cards from the remaining deck (unordered two-card subset; same distribution as turn+river multiset).
    * `flopThree` length 3; `knownDead` may be empty.
    */
   straightMadeFlopToRiverExactProbability(
-    heroHoleCards: string[],
-    flopThree: string[],
-    knownDead: string[]
+    heroHoleCards: CardInput,
+    flopThree: CardInput,
+    knownDead: CardInput
   ): number;
+  /** Same as `straightMadeFlopToRiverExactProbability`; runs on the libuv thread pool (non-blocking). */
+  straightMadeFlopToRiverExactProbabilityAsync(
+    heroHoleCards: CardInput,
+    flopThree: CardInput,
+    knownDead: CardInput
+  ): Promise<number>;
   /**
    * P23: largest integer jam stack in `[1, maxStackChips]` with nonnegative symmetric-jam EV using
    * exact HU equity vs a random hand (`exactHuEquityVsRandomHand`); board 3–5.
    * `maxStackChips` is a double (clamped to int range in native code).
    */
   chubukovMaxSymmetricJamStackBinarySearch(
-    heroHoleCards: string[],
-    boardCards: string[],
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
     deadMoneyChips: number,
     maxStackChips: number
   ): number;
@@ -487,8 +526,8 @@ export interface PokerCalculations {
    * `chubukovMaxSymmetricJamStackChipsBinarySearch`). `maxStackChips` is coerced with **int32** semantics in native code.
    */
   chubukovMaxSymmetricJamStackFromHandBinarySearch(
-    heroHoleCards: string[],
-    boardCards: string[],
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
     deadMoneyChips: number,
     maxStackChips: number
   ): number;

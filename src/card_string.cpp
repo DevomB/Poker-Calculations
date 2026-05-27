@@ -18,6 +18,48 @@ namespace {
 
 }  // namespace
 
+int deck_index_from_card(const Card& c) {
+    return static_cast<int>(c.rank()) * 4 + static_cast<int>(c.suit());
+}
+
+Card card_from_deck_index(int idx) {
+    if (idx < 0 || idx > 51) {
+        throw std::invalid_argument("deck index must be 0..51");
+    }
+    const int rank = idx / 4;
+    const int suit = idx % 4;
+    return Card(static_cast<std::uint8_t>(rank), static_cast<std::uint8_t>(suit));
+}
+
+bool parse_packed_cards(const std::uint8_t* data, const std::size_t n, std::vector<Card>& out,
+                        std::string* err) {
+    out.clear();
+    out.reserve(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        const int idx = static_cast<int>(data[i]);
+        if (idx < 0 || idx > 51) {
+            if (err) {
+                *err = "invalid deck index at byte " + std::to_string(i) + " (must be 0..51)";
+            }
+            out.clear();
+            return false;
+        }
+        out.push_back(card_from_deck_index(idx));
+    }
+    return true;
+}
+
+bool cards_have_duplicate(const std::vector<Card>& cards) {
+    for (std::size_t i = 0; i < cards.size(); ++i) {
+        for (std::size_t j = i + 1; j < cards.size(); ++j) {
+            if (cards[i] == cards[j]) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool parse_card_string(const std::string& raw, Card& out) {
     const std::string s = trim_copy(raw);
     if (s.empty()) {
@@ -72,14 +114,7 @@ bool card_strings_have_duplicate(const std::vector<std::string>& cards) {
         }
         parsed.push_back(c);
     }
-    for (std::size_t i = 0; i < parsed.size(); ++i) {
-        for (std::size_t j = i + 1; j < parsed.size(); ++j) {
-            if (parsed[i] == parsed[j]) {
-                return true;
-            }
-        }
-    }
-    return false;
+    return cards_have_duplicate(parsed);
 }
 
 std::string canonical_card_string(const std::string& raw) {

@@ -1,38 +1,44 @@
 # Shipped feature inventory — `poker-calculations`
 
-Complete inventory of what the **npm package** ships: **100** native JavaScript functions, **7** TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
+Complete inventory of what the **npm package** ships: **104** native JavaScript functions (v2.1.0 adds six `*Async` Promise exports; v2.0.0 was 98 after `*Scalar` removal), **8** TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
 
-**Authoritative sources:** [`index.d.ts`](index.d.ts) (types + JSDoc), [`README.md`](README.md) (overview tables), [`native/binding.cpp`](native/binding.cpp) (`exports.Set`), [documentation site](https://poker-calculations.devomb.com/docs/reference/api) (examples + when-to-use), [`scripts/list-native-exports.mjs`](scripts/list-native-exports.mjs) (runtime export list).
+**Authoritative sources:** [`index.d.ts`](index.d.ts) (types + JSDoc), [`README.md`](README.md) (overview tables), [`native/binding.cpp`](native/binding.cpp) (`exports.Set` × 104), [documentation site](https://poker-calculations.devomb.com/docs/reference/api) (examples + when-to-use), [`scripts/list-native-exports.mjs`](scripts/list-native-exports.mjs) (runtime export list).
 
 **Documentation:** [poker-calculations.devomb.com](https://poker-calculations.devomb.com) — API reference, examples, and guides (replaces repo `examples/*.mjs` scripts).
 
-**Package metadata (v1.3.2):** Node **18+**; entry `index.js` + `index.d.ts`; prebuilt N-API binaries under `prebuilds/` (glibc + musl on Linux). No separate `poker-math.js` layer — all math is C++ via N-API.
+**Package metadata (v2.1.0):** Node **18+**; entry `index.js` + `index.d.ts`; optional [`encode.js`](encode.js) for packed cards; [`MIGRATION_v2.md`](MIGRATION_v2.md) for upgrades from v1.x. Prebuilt N-API binaries under `prebuilds/` (glibc + musl on Linux). No separate `poker-math.js` layer — all math is C++ via N-API.
+
+**Async vs C++ parallelism:** `parallelHandSimulation` uses C++ `std::async` inside the native call. The `*Async` exports (`simulateHandOutcomeAsync`, etc.) use Node’s libuv thread pool (`Napi::AsyncWorker`) so the **JavaScript event loop** stays responsive.
 
 ---
 
-## JavaScript / N-API exports (100 functions)
+## JavaScript / N-API exports (104 functions)
 
 Implemented in C++ and registered in [`native/binding.cpp`](native/binding.cpp). C++-only engine APIs (`GameEngine`, deck lifecycle, `BotConfig` file I/O) are under [Engine and integration](#engine-and-integration).
 
 | Group | Export | Role |
 | --- | --- | --- |
 | **Hand resolution** | `evaluateBestHand(cards)` | Best five of **1–7** cards; returns `{ rank, kickers }` (`HandEvalResult`). |
-| | `evaluateHandStrength(holeCards, board)` | Encoded strength: decimal string of `uint64` (rank in high bits + five kicker nibbles); comparable across spots. |
-| | `evaluateHandStrengthFast(holeCards, board)` | Same encoding as `evaluateHandStrength`; uses in-house **forge** stack evaluator (`src/fast_evaluator.cpp`). |
-| | `evaluateHandStrengthScalar(holeCards, board)` | Same encoding as `evaluateHandStrength`, returned as `number` (no string alloc); exact integer in IEEE double. |
-| | `evaluateHandStrengthFastScalar(holeCards, board)` | Same as `evaluateHandStrengthScalar`, using the forge fast evaluator. |
+| | `evaluateHandStrength(holeCards, board)` | Encoded strength as `number` (`uint64` bit layout: rank in high bits + five kicker nibbles); `CardInput` for hole/board. |
+| | `evaluateHandStrengthFast(holeCards, board)` | Same encoding as `evaluateHandStrength`; forge stack evaluator (`src/fast_evaluator.cpp`). |
 | | `benchmarkEvaluatorThroughput(iterations?)` | `{ legacyEvalsPerSecond, fastEvalsPerSecond, implementation }` for legacy vs forge paths. |
 | | `evaluateHandCategory(holeCards, board)` | Category label only (`highCard` … `royalFlush`); see [Hand rank labels](#hand-rank-labels). |
 | | `validateCardString(card)` | `true` if `card` parses as one card (`Ah`, `10c`, …). |
-| | `cardStringsHaveDuplicate(cards[])` | `true` if two entries parse to the same card; throws if any string is invalid. |
-| | `compareBestHands(cardsA[], cardsB[])` | `-1` / `0` / `1` best-hand order; throws on overlap or invalid cards. |
+| | `cardStringsHaveDuplicate(cards)` | `true` if two entries map to the same card; `CardInput` (`string[]` or packed `Uint8Array`). |
+| | `compareBestHands(cardsA, cardsB)` | `-1` / `0` / `1` best-hand order; `CardInput`; throws on overlap or invalid cards. |
 | | `canonicalCardString(card)` | Canonical two-character card (`Th`, `Ac`, …); throws if invalid. |
 | | `parseCompactCardList(text)` | Parse concatenated or whitespace-separated cards (`AhKh`, `10h Kd`); throws on duplicate or invalid token. |
 | | `handRankCategoryOrder(category)` | Integer order `0..9` for `evaluateHandCategory` labels (`highCard` … `royalFlush`). |
 | **Monte Carlo equity** | `simulateHandOutcome(holeCards, board, numSimulations, seed, villains?)` | Estimated equity vs one or more random villain hands (default `villains = 1`). |
-| | `parallelHandSimulation(holeCards, board, numSimulations, baseSeed, villains, numThreads)` | Same with worker threads and distinct seeds per chunk. |
+| | `simulateHandOutcomeAsync(…)` | Same as sync; Promise on libuv thread pool (non-blocking). |
+| | `parallelHandSimulation(holeCards, board, numSimulations, baseSeed, villains, numThreads)` | Same with C++ worker threads and distinct seeds per chunk. |
+| | `parallelHandSimulationAsync(…)` | Same as sync; Promise on libuv thread pool. |
 | | `exactHuEquityVsRandomHand(heroHoleCards, boardCards)` | Exact HU equity vs uniform random villain hand; board must have **3–5** cards. |
+| | `exactHuEquityVsRandomHandAsync(…)` | Same as sync; Promise on libuv thread pool. |
+| | `straightMadeFlopToRiverExactProbabilityAsync(…)` | Async sibling of exact flop→river straight probability. |
+| | `benchmarkEvaluatorThroughputAsync(iterations?)` | Async sibling of evaluator benchmark. |
 | **Strategy** | `decideAction(state, config, opponentModel?, heroSeat?)` | Rule-based action using MC equity (or strength fallback when sim count is 0), pot odds, call EV; see [decideAction contract](#decideaction-contract). |
+| | `decideActionAsync(…)` | Same as sync; Promise on libuv thread pool. |
 | **Pot / chip EV** | `potOddsRatio(pot, toCall)` | `toCall / (pot + toCall)` when valid; else `0`. |
 | | `expectedValueCall(equity, pot, toCall)` | Chip EV of calling once vs folding (0); no future streets. |
 | | `expectedValueCallWithRake(equity, potBeforeCall, toCall, rakeFraction, rakeCap)` | Chip EV of call vs fold when the final HU pot pays rake (same rake model as breakeven-with-rake). |
@@ -117,9 +123,9 @@ Implemented in C++ and registered in [`native/binding.cpp`](native/binding.cpp).
 | | `layeredPotChipEvFromEquities(layerPotChips[], equityPlayerByLayer[][])` | Chip EV; each column sums to `1`. |
 | | `sidePotLayersTotalChips(layers[])` | Sum of `potChips` across layers from `sidePotLadderFromCommitments`. |
 
-### Alphabetical export index (100)
+### Alphabetical export index (98)
 
-`agrestiCoullInterval`, `alphaFrequency`, `bankrollForTargetRorDiffusion`, `benchmarkEvaluatorThroughput`, `betAsPotFraction`, `betaBinomialFoldPosterior`, `bluffToValueRatio`, `breakevenCallEquity`, `breakevenCallEquityFromPotOddsDisplayRatio`, `breakevenCallEquityWithRake`, `breakevenFoldEquityFirstStreetPureBluff`, `breakevenFoldEquityPureBluff`, `breakevenFoldEquityPureBluffWithRake`, `breakevenFoldEquitySecondStreetPureBluff`, `breakevenFoldEquitySemiBluff`, `breakevenFoldEquitySemiBluffWithRake`, `canonicalCardString`, `cardStringsHaveDuplicate`, `chubukovMaxSymmetricJamStackBinarySearch`, `chubukovMaxSymmetricJamStackChipsBinarySearch`, `chubukovMaxSymmetricJamStackFromHandBinarySearch`, `chubukovSymmetricJamBreakevenStack`, `chubukovSymmetricJamEv`, `commitmentRatio`, `compareBestHands`, `decideAction`, `duplicationAdjustedOuts`, `effectiveStack`, `equityToWinningOddsAgainst`, `estimatedOutsFromRuleOfFour`, `estimatedOutsFromRuleOfTwo`, `evaluateBestHand`, `evaluateHandCategory`, `evaluateHandStrength`, `evaluateHandStrengthFast`, `evaluateHandStrengthFastScalar`, `evaluateHandStrengthScalar`, `exactHuEquityVsRandomHand`, `expectedValueCall`, `expectedValueCallWithRake`, `flopToRiverAtLeastOneHitDisjointOutsSum`, `flopToRiverAtLeastOneHitProbability`, `flopToRiverAtLeastOneHitUnionFourCategories`, `flopToRiverAtLeastOneHitUnionThreeCategories`, `flopToRiverAtLeastOneHitUnionTwoCategories`, `formatPotOdds`, `formatPotOddsReducedFraction`, `geometricPotAfterMatchedPotFractions`, `handRankCategoryOrder`, `harringtonM`, `harringtonMEffective`, `harringtonMEffectiveActiveAntes`, `harringtonQ`, `hypergeometricOneCardHitProbability`, `icmExpectedPayouts`, `icmHarvillePlacementProbabilities`, `icmLastPlaceProbabilitiesHarville`, `icmPairwiseBubbleFactor`, `icmTopKFinishProbabilities`, `icmWinProbabilitiesHarville`, `impliedBreakevenFutureWin`, `kellyCriterionBinary`, `layeredPotChipEvFromEquities`, `minimumDefenseFrequency`, `monteCarloStandardError`, `monteCarloTrialsForHoeffdingBound`, `monteCarloTrialsForStandardErrorBound`, `multiwaySymmetricBreakevenCallEquity`, `multiwaySymmetricBreakevenCallEquityWithShare`, `nlMinimumRaiseToTotal`, `normalWaldBinomialInterval`, `normalizedStackFractions`, `orbitCostChips`, `parallelHandSimulation`, `parseCompactCardList`, `potOddsDisplayRatioFromBreakevenCallEquity`, `potOddsRatio`, `potOddsRatioDisplay`, `preflopCombosFromNotation`, `preflopCombosFromNotationsList`, `rakeFromPot`, `reverseImpliedOddsMaxFutureLoss`, `riskOfRuinDiffusionApprox`, `ruleOfFourEquity`, `ruleOfTwoEquity`, `runnerRunnerBackdoorFlushTwoCardProbability`, `runnerRunnerStraightDrawHitProbability`, `sidePotLadderFromCommitments`, `sidePotLayersTotalChips`, `simulateHandOutcome`, `spr`, `sprAfterCall`, `stackInBigBlinds`, `straightMadeFlopToRiverExactProbability`, `twoStreetPureBluffEv`, `twoStreetPureBluffSameFoldEquity`, `validateCardString`, `valueToBluffRatio`, `wilsonScoreInterval`, `winningOddsAgainstToEquity`.
+`agrestiCoullInterval`, `alphaFrequency`, `bankrollForTargetRorDiffusion`, `benchmarkEvaluatorThroughput`, `betAsPotFraction`, `betaBinomialFoldPosterior`, `bluffToValueRatio`, `breakevenCallEquity`, `breakevenCallEquityFromPotOddsDisplayRatio`, `breakevenCallEquityWithRake`, `breakevenFoldEquityFirstStreetPureBluff`, `breakevenFoldEquityPureBluff`, `breakevenFoldEquityPureBluffWithRake`, `breakevenFoldEquitySecondStreetPureBluff`, `breakevenFoldEquitySemiBluff`, `breakevenFoldEquitySemiBluffWithRake`, `canonicalCardString`, `cardStringsHaveDuplicate`, `chubukovMaxSymmetricJamStackBinarySearch`, `chubukovMaxSymmetricJamStackChipsBinarySearch`, `chubukovMaxSymmetricJamStackFromHandBinarySearch`, `chubukovSymmetricJamBreakevenStack`, `chubukovSymmetricJamEv`, `commitmentRatio`, `compareBestHands`, `decideAction`, `duplicationAdjustedOuts`, `effectiveStack`, `equityToWinningOddsAgainst`, `estimatedOutsFromRuleOfFour`, `estimatedOutsFromRuleOfTwo`, `evaluateBestHand`, `evaluateHandCategory`, `evaluateHandStrength`, `evaluateHandStrengthFast`, `exactHuEquityVsRandomHand`, `expectedValueCall`, `expectedValueCallWithRake`, `flopToRiverAtLeastOneHitDisjointOutsSum`, `flopToRiverAtLeastOneHitProbability`, `flopToRiverAtLeastOneHitUnionFourCategories`, `flopToRiverAtLeastOneHitUnionThreeCategories`, `flopToRiverAtLeastOneHitUnionTwoCategories`, `formatPotOdds`, `formatPotOddsReducedFraction`, `geometricPotAfterMatchedPotFractions`, `handRankCategoryOrder`, `harringtonM`, `harringtonMEffective`, `harringtonMEffectiveActiveAntes`, `harringtonQ`, `hypergeometricOneCardHitProbability`, `icmExpectedPayouts`, `icmHarvillePlacementProbabilities`, `icmLastPlaceProbabilitiesHarville`, `icmPairwiseBubbleFactor`, `icmTopKFinishProbabilities`, `icmWinProbabilitiesHarville`, `impliedBreakevenFutureWin`, `kellyCriterionBinary`, `layeredPotChipEvFromEquities`, `minimumDefenseFrequency`, `monteCarloStandardError`, `monteCarloTrialsForHoeffdingBound`, `monteCarloTrialsForStandardErrorBound`, `multiwaySymmetricBreakevenCallEquity`, `multiwaySymmetricBreakevenCallEquityWithShare`, `nlMinimumRaiseToTotal`, `normalWaldBinomialInterval`, `normalizedStackFractions`, `orbitCostChips`, `parallelHandSimulation`, `parseCompactCardList`, `potOddsDisplayRatioFromBreakevenCallEquity`, `potOddsRatio`, `potOddsRatioDisplay`, `preflopCombosFromNotation`, `preflopCombosFromNotationsList`, `rakeFromPot`, `reverseImpliedOddsMaxFutureLoss`, `riskOfRuinDiffusionApprox`, `ruleOfFourEquity`, `ruleOfTwoEquity`, `runnerRunnerBackdoorFlushTwoCardProbability`, `runnerRunnerStraightDrawHitProbability`, `sidePotLadderFromCommitments`, `sidePotLayersTotalChips`, `simulateHandOutcome`, `spr`, `sprAfterCall`, `stackInBigBlinds`, `straightMadeFlopToRiverExactProbability`, `twoStreetPureBluffEv`, `twoStreetPureBluffSameFoldEquity`, `validateCardString`, `valueToBluffRatio`, `wilsonScoreInterval`, `winningOddsAgainstToEquity`.
 
 ## Card strings
 
