@@ -49,6 +49,7 @@ if(POKER_BUILD_TESTS)
     enable_testing()
     add_executable(poker_tests
         tests/test_card_string.cpp
+        tests/test_packed_cards.cpp
         tests/test_deck.cpp
         tests/test_game_engine.cpp
         tests/test_hand_evaluator.cpp
@@ -80,10 +81,13 @@ if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
     string(REPLACE "\n" "" NODE_ADDON_API_DIR "${NODE_ADDON_API_DIR}")
     string(REPLACE "\"" "" NODE_ADDON_API_DIR "${NODE_ADDON_API_DIR}")
 
-    add_library(poker_calculations SHARED native/binding.cpp ${CMAKE_JS_SRC})
+    add_library(poker_calculations SHARED native/binding.cpp native/async_workers.cpp ${CMAKE_JS_SRC})
     set_target_properties(poker_calculations PROPERTIES PREFIX "" SUFFIX ".node")
     target_include_directories(poker_calculations PRIVATE ${CMAKE_JS_INC} ${NODE_ADDON_API_DIR})
     target_link_libraries(poker_calculations PRIVATE poker_lib ${CMAKE_JS_LIB})
+    if(MSVC)
+        target_link_libraries(poker_calculations PRIVATE delayimp)
+    endif()
     target_compile_definitions(poker_calculations PRIVATE NAPI_VERSION=8)
     target_compile_definitions(poker_calculations PRIVATE $<$<BOOL:${WIN32}>:NOMINMAX>)
     # Node-API on Windows: cmake-js skips full Node download; generate node.lib from node-api-headers .def (cmake-js README).

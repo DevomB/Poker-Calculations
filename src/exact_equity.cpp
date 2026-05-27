@@ -1,5 +1,6 @@
 #include "poker/exact_equity.hpp"
 
+#include "poker/card_string.hpp"
 #include "poker/fast_evaluator.hpp"
 #include "poker/hand_evaluator.hpp"
 #include "poker/poker_math.hpp"
@@ -15,13 +16,9 @@ namespace poker {
 
 namespace {
 
-[[nodiscard]] int card_to_index(const Card& c) {
-    return static_cast<int>(c.rank()) * 4 + static_cast<int>(c.suit());
-}
-
 void mark_used(const std::vector<Card>& cards, std::array<bool, 52>& used) {
     for (const Card& c : cards) {
-        const int idx = card_to_index(c);
+        const int idx = deck_index_from_card(c);
         if (idx < 0 || idx >= 52) {
             throw std::invalid_argument("invalid card index");
         }
@@ -36,9 +33,7 @@ void mark_used(const std::vector<Card>& cards, std::array<bool, 52>& used) {
     std::vector<Card> out;
     out.reserve(indices.size());
     for (int idx : indices) {
-        const int rank = idx / 4;
-        const int suit = idx % 4;
-        out.emplace_back(static_cast<std::uint8_t>(rank), static_cast<std::uint8_t>(suit));
+        out.push_back(card_from_deck_index(idx));
     }
     return out;
 }
@@ -52,12 +47,6 @@ void mark_used(const std::vector<Card>& cards, std::array<bool, 52>& used) {
         }
     }
     return d;
-}
-
-[[nodiscard]] Card card_from_index(int idx) {
-    const int rank = idx / 4;
-    const int suit = idx % 4;
-    return Card(static_cast<std::uint8_t>(rank), static_cast<std::uint8_t>(suit));
 }
 
 void enumerate_combos(const std::vector<int>& pool, int k, int start, std::vector<int>& cur,
@@ -180,8 +169,8 @@ double straight_made_flop_to_river_exact_probability(const std::vector<Card>& he
         seven.reserve(7);
         seven.insert(seven.end(), hero_hole_cards.begin(), hero_hole_cards.end());
         seven.insert(seven.end(), flop_three_cards.begin(), flop_three_cards.end());
-        seven.push_back(card_from_index(pr[0]));
-        seven.push_back(card_from_index(pr[1]));
+        seven.push_back(card_from_deck_index(pr[0]));
+        seven.push_back(card_from_deck_index(pr[1]));
         const HandEvaluation he = evaluate_best_hand(seven);
         const HandRank cat = hand_category(he);
         if (cat == HandRank::Straight || cat == HandRank::StraightFlush || cat == HandRank::RoyalFlush) {
