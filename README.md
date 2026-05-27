@@ -35,7 +35,7 @@
 | **Strategy** | `decideAction` from serialized state using MC equity, pot odds, and call EV |
 | **Tournaments** | ICM (Harville), placement and payout expectations, pairwise bubble factor, side-pot ladders |
 | **Theory helpers** | MDF / alpha, fold-equity breakevens, Kelly and Chubukov symmetric-jam search, Wilson and Agresti–Coull intervals, risk-of-ruin approximations |
-| **Developer experience** | **[`index.d.ts`](index.d.ts)** typings, **98** native exports, docs with examples at [poker-calculations.devomb.com](https://poker-calculations.devomb.com) |
+| **Developer experience** | **[`index.d.ts`](index.d.ts)** typings, **100** native exports, docs with examples at [poker-calculations.devomb.com](https://poker-calculations.devomb.com) |
 
 Published releases include **N-API prebuilds** for Linux (glibc and musl), macOS, and Windows via [`node-gyp-build`](https://github.com/prebuild/node-gyp-build). Linux glibc builds use static libstdc++/libgcc where needed so older server and serverless images avoid `GLIBCXX_*` mismatches.
 
@@ -87,7 +87,7 @@ All exports come from the native addon. Grouped overview—see the [reference](h
 
 | Area | Examples |
 | --- | --- |
-| **Hands & equity** | `evaluateBestHand`, `simulateHandOutcome`, `parallelHandSimulation`, `exactHuEquityVsRandomHand` |
+| **Hands & equity** | `evaluateBestHand`, `evaluateHandStrengthScalar`, `simulateHandOutcome`, `parallelHandSimulation`, `exactHuEquityVsRandomHand` |
 | **Strategy** | `decideAction` |
 | **Pot / EV** | `potOddsRatio`, `expectedValueCall`, `breakevenCallEquity`, `rakeFromPot` |
 | **Stacks & display** | `spr`, `harringtonM`, `harringtonQ`, `stackInBigBlinds`, `formatPotOdds` |

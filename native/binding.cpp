@@ -308,21 +308,34 @@ Napi::Value EvaluateBestHand(const Napi::CallbackInfo& info) {
     }
 }
 
+static void parse_hole_and_board_or_throw(const Napi::CallbackInfo& info, const Napi::Env& env,
+                                           std::vector<poker::Card>& hole,
+                                           std::vector<poker::Card>& board, const char* signature) {
+    if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
+        throw std::invalid_argument(signature);
+    }
+    std::string err;
+    hole = parse_card_strings(env, info[0].As<Napi::Array>(), &err);
+    if (!err.empty()) {
+        throw std::invalid_argument(err);
+    }
+    board = parse_card_strings(env, info[1].As<Napi::Array>(), &err);
+    if (!err.empty()) {
+        throw std::invalid_argument(err);
+    }
+}
+
+static Napi::Value HandStrengthAsNumber(const Napi::Env& env, std::uint64_t s) {
+    return Napi::Number::New(env, static_cast<double>(s));
+}
+
 Napi::Value EvaluateHandStrength(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
-            throw std::invalid_argument("evaluateHandStrength(holeCards: string[], board: string[])");
-        }
-        std::string err;
-        auto hole = parse_card_strings(env, info[0].As<Napi::Array>(), &err);
-        if (!err.empty()) {
-            throw std::invalid_argument(err);
-        }
-        auto board = parse_card_strings(env, info[1].As<Napi::Array>(), &err);
-        if (!err.empty()) {
-            throw std::invalid_argument(err);
-        }
+        std::vector<poker::Card> hole;
+        std::vector<poker::Card> board;
+        parse_hole_and_board_or_throw(
+            info, env, hole, board, "evaluateHandStrength(holeCards: string[], board: string[])");
         const std::uint64_t s = poker::evaluate_hand_strength(hole, board);
         return Napi::String::New(env, std::to_string(s));
     } catch (const std::exception& e) {
@@ -334,20 +347,42 @@ Napi::Value EvaluateHandStrength(const Napi::CallbackInfo& info) {
 Napi::Value EvaluateHandStrengthFast(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     try {
-        if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
-            throw std::invalid_argument("evaluateHandStrengthFast(holeCards: string[], board: string[])");
-        }
-        std::string err;
-        auto hole = parse_card_strings(env, info[0].As<Napi::Array>(), &err);
-        if (!err.empty()) {
-            throw std::invalid_argument(err);
-        }
-        auto board = parse_card_strings(env, info[1].As<Napi::Array>(), &err);
-        if (!err.empty()) {
-            throw std::invalid_argument(err);
-        }
+        std::vector<poker::Card> hole;
+        std::vector<poker::Card> board;
+        parse_hole_and_board_or_throw(
+            info, env, hole, board, "evaluateHandStrengthFast(holeCards: string[], board: string[])");
         const std::uint64_t s = poker::evaluate_hand_strength_fast(hole, board);
         return Napi::String::New(env, std::to_string(s));
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value EvaluateHandStrengthScalar(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        std::vector<poker::Card> hole;
+        std::vector<poker::Card> board;
+        parse_hole_and_board_or_throw(
+            info, env, hole, board, "evaluateHandStrengthScalar(holeCards: string[], board: string[])");
+        const std::uint64_t s = poker::evaluate_hand_strength(hole, board);
+        return HandStrengthAsNumber(env, s);
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+}
+
+Napi::Value EvaluateHandStrengthFastScalar(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    try {
+        std::vector<poker::Card> hole;
+        std::vector<poker::Card> board;
+        parse_hole_and_board_or_throw(
+            info, env, hole, board, "evaluateHandStrengthFastScalar(holeCards: string[], board: string[])");
+        const std::uint64_t s = poker::evaluate_hand_strength_fast(hole, board);
+        return HandStrengthAsNumber(env, s);
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -2207,6 +2242,10 @@ Napi::Object RegisterExports(Napi::Env env, Napi::Object exports) {
                 Napi::Function::New(env, EvaluateHandStrength));
     exports.Set(Napi::String::New(env, "evaluateHandStrengthFast"),
                 Napi::Function::New(env, EvaluateHandStrengthFast));
+    exports.Set(Napi::String::New(env, "evaluateHandStrengthScalar"),
+                Napi::Function::New(env, EvaluateHandStrengthScalar));
+    exports.Set(Napi::String::New(env, "evaluateHandStrengthFastScalar"),
+                Napi::Function::New(env, EvaluateHandStrengthFastScalar));
     exports.Set(Napi::String::New(env, "benchmarkEvaluatorThroughput"),
                 Napi::Function::New(env, BenchmarkEvaluatorThroughput));
     exports.Set(Napi::String::New(env, "evaluateHandCategory"),
