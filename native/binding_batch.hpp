@@ -2,6 +2,7 @@
 
 #include <napi.h>
 
+#include "poker/card.hpp"
 #include "poker/types.hpp"
 
 #include <cstddef>
