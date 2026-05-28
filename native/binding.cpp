@@ -43,6 +43,8 @@ using poker_bind::parse_cards_from_js;
 using poker_bind::parse_decide_action_inputs;
 using poker_bind::parse_return_format;
 using poker_bind::read_f64_vector;
+using poker_bind::read_f64_matrix;
+using poker_bind::read_f64_matrix_flat;
 using poker_bind::strings_from_js_array;
 using poker_bind::try_parse_cards_from_js;
 using poker_bind::try_parse_hole_and_board;
