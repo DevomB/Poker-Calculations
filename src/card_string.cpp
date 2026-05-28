@@ -1,7 +1,8 @@
 #include "poker/card_string.hpp"
 
-#include <algorithm>
+#include <array>
 #include <cctype>
+#include <functional>
 #include <stdexcept>
 #include <string>
 
@@ -9,11 +10,86 @@ namespace poker {
 
 namespace {
 
-[[nodiscard]] std::string trim_copy(std::string s) {
-    auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
-    s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
-    return s;
+constexpr std::uint8_t kLutInvalid = 255;
+
+constexpr std::array<std::uint8_t, 256> make_rank_lut() {
+    std::array<std::uint8_t, 256> lut{};
+    lut.fill(kLutInvalid);
+    const char* ranks = "23456789TJQKA";
+    for (int i = 0; i < 13; ++i) {
+        const unsigned char lo = static_cast<unsigned char>(ranks[i]);
+        const unsigned char up = static_cast<unsigned char>(std::toupper(lo));
+        lut[lo] = static_cast<std::uint8_t>(i);
+        lut[up] = static_cast<std::uint8_t>(i);
+    }
+    return lut;
+}
+
+constexpr std::array<std::uint8_t, 256> make_suit_lut() {
+    std::array<std::uint8_t, 256> lut{};
+    lut.fill(kLutInvalid);
+    const char* suits = "cdhs";
+    for (int i = 0; i < 4; ++i) {
+        const unsigned char lo = static_cast<unsigned char>(suits[i]);
+        const unsigned char up = static_cast<unsigned char>(std::toupper(lo));
+        lut[lo] = static_cast<std::uint8_t>(i);
+        lut[up] = static_cast<std::uint8_t>(i);
+    }
+    return lut;
+}
+
+constexpr std::array<std::uint8_t, 256> kRankLut = make_rank_lut();
+constexpr std::array<std::uint8_t, 256> kSuitLut = make_suit_lut();
+
+static_assert(kRankLut.size() == 256);
+static_assert(kSuitLut.size() == 256);
+
+void trim_ascii_range(const char*& p, std::size_t& n) {
+    while (n > 0 && std::isspace(static_cast<unsigned char>(*p))) {
+        ++p;
+        --n;
+    }
+    while (n > 0 && std::isspace(static_cast<unsigned char>(p[n - 1]))) {
+        --n;
+    }
+}
+
+struct CompactScanState {
+    bool seen[52]{};
+};
+
+void scan_compact_card_list_impl(const std::string& raw,
+                               const std::function<void(const Card&, std::size_t token_offset)>& on_card) {
+    CompactScanState st{};
+    std::size_t pos = 0;
+    const std::size_t n = raw.size();
+    while (pos < n) {
+        while (pos < n && std::isspace(static_cast<unsigned char>(raw[pos]))) {
+            ++pos;
+        }
+        if (pos >= n) {
+            break;
+        }
+        std::size_t len = 2;
+        if (pos + 2 < n && raw[pos] == '1' && raw[pos + 1] == '0') {
+            len = 3;
+        }
+        if (pos + len > n) {
+            throw std::invalid_argument("parseCompactCardList: truncated card token");
+        }
+        const char* piece = raw.data() + pos;
+        Card c{};
+        if (!parse_card_string_unchecked(piece, len, c)) {
+            throw std::invalid_argument("parseCompactCardList: invalid card at offset " + std::to_string(pos));
+        }
+        const int didx = deck_index_from_card(c);
+        if (st.seen[didx]) {
+            throw std::invalid_argument("parseCompactCardList: duplicate card");
+        }
+        st.seen[didx] = true;
+        on_card(c, pos);
+        pos += len;
+    }
 }
 
 }  // namespace
@@ -50,71 +126,89 @@ bool parse_packed_cards(const std::uint8_t* data, const std::size_t n, std::vect
 }
 
 bool cards_have_duplicate(const std::vector<Card>& cards) {
-    for (std::size_t i = 0; i < cards.size(); ++i) {
-        for (std::size_t j = i + 1; j < cards.size(); ++j) {
-            if (cards[i] == cards[j]) {
-                return true;
-            }
+    bool seen[52]{};
+    for (const Card& c : cards) {
+        const int idx = deck_index_from_card(c);
+        if (idx < 0 || idx > 51) {
+            continue;
         }
+        if (seen[idx]) {
+            return true;
+        }
+        seen[idx] = true;
     }
     return false;
 }
 
-bool parse_card_string(const std::string& raw, Card& out) {
-    const std::string s = trim_copy(raw);
-    if (s.empty()) {
+bool parse_card_string_unchecked(const char* p, std::size_t n, Card& out) {
+    trim_ascii_range(p, n);
+    if (n < 2 || n > 3) {
         return false;
     }
     int rank = -1;
-    std::size_t i = 0;
-    if (s.size() >= 3 && s[0] == '1' && s[1] == '0') {
-        rank = 8;  // Ten
-        i = 2;
-    } else if (s.size() >= 2) {
-        const char r = static_cast<char>(std::toupper(static_cast<unsigned char>(s[0])));
-        static constexpr const char* kRanks = "23456789TJQKA";
-        for (int k = 0; k < 13; ++k) {
-            if (kRanks[k] == r) {
-                rank = k;
-                break;
-            }
+    std::size_t suit_pos = 0;
+    if (n == 3) {
+        if (p[0] != '1' || p[1] != '0') {
+            return false;
         }
-        i = 1;
-    }
-    if (rank < 0 || i >= s.size()) {
-        return false;
-    }
-    const char su = static_cast<char>(std::tolower(static_cast<unsigned char>(s[i])));
-    static constexpr const char* kSuits = "cdhs";
-    int suit = -1;
-    for (int k = 0; k < 4; ++k) {
-        if (kSuits[k] == su) {
-            suit = k;
-            break;
+        rank = 8;
+        suit_pos = 2;
+    } else {
+        const std::uint8_t r = kRankLut[static_cast<unsigned char>(p[0])];
+        if (r == kLutInvalid) {
+            return false;
         }
+        rank = static_cast<int>(r);
+        suit_pos = 1;
     }
-    if (suit < 0) {
+    const std::uint8_t s = kSuitLut[static_cast<unsigned char>(p[suit_pos])];
+    if (s == kLutInvalid) {
         return false;
     }
-    try {
-        out = Card(static_cast<std::uint8_t>(rank), static_cast<std::uint8_t>(suit));
-    } catch (...) {
-        return false;
-    }
+    out = Card(static_cast<std::uint8_t>(rank), s);
     return true;
 }
 
+bool parse_card_string(const std::string& raw, Card& out) {
+    const char* p = raw.data();
+    std::size_t n = raw.size();
+    return parse_card_string_unchecked(p, n, out);
+}
+
+bool packed_cards_have_duplicate(const std::uint8_t* data, const std::size_t n, std::string* err) {
+    bool seen[52]{};
+    for (std::size_t i = 0; i < n; ++i) {
+        const int idx = static_cast<int>(data[i]);
+        if (idx < 0 || idx > 51) {
+            if (err) {
+                *err = "invalid deck index at byte " + std::to_string(i) + " (must be 0..51)";
+            }
+            return false;
+        }
+        if (seen[idx]) {
+            return true;
+        }
+        seen[idx] = true;
+    }
+    return false;
+}
+
 bool card_strings_have_duplicate(const std::vector<std::string>& cards) {
-    std::vector<Card> parsed;
-    parsed.reserve(cards.size());
+    bool seen[52]{};
     for (std::size_t idx = 0; idx < cards.size(); ++idx) {
         Card c{};
-        if (!parse_card_string(cards[idx], c)) {
+        const char* p = cards[idx].data();
+        std::size_t n = cards[idx].size();
+        if (!parse_card_string_unchecked(p, n, c)) {
             throw std::invalid_argument("invalid card string at index " + std::to_string(idx));
         }
-        parsed.push_back(c);
+        const int didx = deck_index_from_card(c);
+        if (seen[didx]) {
+            return true;
+        }
+        seen[didx] = true;
     }
-    return cards_have_duplicate(parsed);
+    return false;
 }
 
 std::string canonical_card_string(const std::string& raw) {
@@ -127,37 +221,15 @@ std::string canonical_card_string(const std::string& raw) {
 
 std::vector<std::string> parse_compact_card_list(const std::string& raw) {
     std::vector<std::string> out;
-    std::vector<Card> seen;
-    std::size_t pos = 0;
-    const std::size_t n = raw.size();
-    while (pos < n) {
-        while (pos < n && std::isspace(static_cast<unsigned char>(raw[pos]))) {
-            ++pos;
-        }
-        if (pos >= n) {
-            break;
-        }
-        std::size_t len = 2;
-        if (pos + 2 < n && raw[pos] == '1' && raw[pos + 1] == '0') {
-            len = 3;
-        }
-        if (pos + len > n) {
-            throw std::invalid_argument("parseCompactCardList: truncated card token");
-        }
-        const std::string piece = raw.substr(pos, len);
-        Card c{};
-        if (!parse_card_string(piece, c)) {
-            throw std::invalid_argument("parseCompactCardList: invalid card at offset " + std::to_string(pos));
-        }
-        for (const Card& o : seen) {
-            if (o == c) {
-                throw std::invalid_argument("parseCompactCardList: duplicate card");
-            }
-        }
-        seen.push_back(c);
-        out.push_back(c.to_string());
-        pos += len;
-    }
+    scan_compact_card_list_impl(raw, [&](const Card& c, std::size_t) { out.push_back(c.to_string()); });
+    return out;
+}
+
+std::vector<std::uint8_t> parse_compact_card_list_indices(const std::string& raw) {
+    std::vector<std::uint8_t> out;
+    scan_compact_card_list_impl(raw, [&](const Card& c, std::size_t) {
+        out.push_back(static_cast<std::uint8_t>(deck_index_from_card(c)));
+    });
     return out;
 }
 

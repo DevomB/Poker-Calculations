@@ -43,8 +43,17 @@ struct SimulateHandParsed {
     out.num_sim = info[2].As<Napi::Number>().Int32Value();
     out.seed = static_cast<std::uint32_t>(info[3].As<Napi::Number>().Uint32Value());
     out.villains = 1;
-    if (info.Length() >= 5 && info[4].IsNumber()) {
-        out.villains = info[4].As<Napi::Number>().Int32Value();
+    const int opts_idx = poker_bind::trailing_async_options_index(info);
+    int villains_idx = -1;
+    if (opts_idx >= 0) {
+        if (opts_idx > 4 && info[opts_idx - 1].IsNumber()) {
+            villains_idx = opts_idx - 1;
+        }
+    } else if (info.Length() > 4 && info[4].IsNumber()) {
+        villains_idx = 4;
+    }
+    if (villains_idx >= 0) {
+        out.villains = info[villains_idx].As<Napi::Number>().Int32Value();
     }
     return true;
 }
@@ -59,10 +68,12 @@ struct ParallelSimParsed {
 };
 
 [[nodiscard]] bool parse_parallel_sim_args(const Napi::CallbackInfo& info, ParallelSimParsed& out, std::string* err) {
-    if (info.Length() < 6) {
+    const int opts_idx = poker_bind::trailing_async_options_index(info);
+    const int min_len = opts_idx >= 0 ? 7 : 6;
+    if (info.Length() < min_len) {
         if (err) {
             *err = "parallelHandSimulation(hole: CardInput, board: CardInput, numSimulations, baseSeed, "
-                   "villains, numThreads)";
+                   "villains, numThreads, options?)";
         }
         return false;
     }
@@ -78,7 +89,20 @@ struct ParallelSimParsed {
     out.num_sim = info[2].As<Napi::Number>().Int32Value();
     out.base_seed = static_cast<std::uint32_t>(info[3].As<Napi::Number>().Uint32Value());
     out.villains = info[4].As<Napi::Number>().Int32Value();
-    out.num_threads = static_cast<std::size_t>(info[5].As<Napi::Number>().Uint32Value());
+    const int threads_idx = opts_idx >= 0 ? 5 : 5;
+    if (opts_idx >= 0 && opts_idx != 6) {
+        if (err) {
+            *err = "parallelHandSimulation(..., villains, numThreads, options?)";
+        }
+        return false;
+    }
+    if (!info[threads_idx].IsNumber()) {
+        if (err) {
+            *err = "parallelHandSimulation: numThreads must be a number";
+        }
+        return false;
+    }
+    out.num_threads = static_cast<std::size_t>(info[threads_idx].As<Napi::Number>().Uint32Value());
     return true;
 }
 
@@ -138,7 +162,7 @@ struct ParallelSimParsed {
 }  // namespace
 
 bool parse_exact_hu_args(const Napi::CallbackInfo& info, ExactHuParsed& out, std::string* err) {
-    if (info.Length() < 2) {
+    if (poker_bind::effective_arg_length(info) < 2) {
         if (err) {
             *err = "exactHuEquityVsRandomHand(heroHoleCards: CardInput, boardCards: CardInput)";
         }
@@ -154,8 +178,8 @@ bool parse_exact_hu_args(const Napi::CallbackInfo& info, ExactHuParsed& out, std
 }
 
 bool parse_straight_made_args(const Napi::CallbackInfo& info, StraightMadeParsed& out, std::string* err) {
-    if (info.Length() < 3 || !poker_bind::is_card_input(info[0]) || !poker_bind::is_card_input(info[1]) ||
-        !poker_bind::is_card_input(info[2])) {
+    if (poker_bind::effective_arg_length(info) < 3 || !poker_bind::is_card_input(info[0]) ||
+        !poker_bind::is_card_input(info[1]) || !poker_bind::is_card_input(info[2])) {
         if (err) {
             *err = "straightMadeFlopToRiverExactProbability(heroHoleCards: CardInput, flopThree: CardInput, "
                    "knownDead: CardInput)";
@@ -177,6 +201,7 @@ bool parse_straight_made_args(const Napi::CallbackInfo& info, StraightMadeParsed
 
 std::size_t parse_benchmark_iterations(const Napi::CallbackInfo& info, std::string* err) {
     std::size_t iterations = 200000;
+    const int opts_idx = poker_bind::trailing_async_options_index(info);
     if (info.Length() >= 1 && info[0].IsNumber()) {
         const double n = info[0].As<Napi::Number>().DoubleValue();
         if (n < 1.0) {
@@ -186,6 +211,8 @@ std::size_t parse_benchmark_iterations(const Napi::CallbackInfo& info, std::stri
             return 0;
         }
         iterations = static_cast<std::size_t>(n);
+    } else if (opts_idx == 0) {
+        iterations = 200000;
     }
     return iterations;
 }
@@ -217,10 +244,15 @@ Napi::Value SimulateHandOutcomeAsync(const Napi::CallbackInfo& info) {
         const int num_sim = args.num_sim;
         const std::uint32_t seed = args.seed;
         const int villains = args.villains;
-        return poker_async::enqueue_float_work(env, [hole, board, num_sim, seed, villains]() {
-            std::mt19937 rng(seed);
-            return static_cast<double>(poker::simulate_hand_outcome(hole, board, num_sim, rng, villains));
-        });
+        const Napi::Value signal = poker_bind::parse_async_signal(info);
+        return poker_async::enqueue_float_work(
+            env,
+            [hole, board, num_sim, seed, villains](const poker::CancelPredicate* cancel) {
+                std::mt19937 rng(seed);
+                return static_cast<double>(
+                    poker::simulate_hand_outcome(hole, board, num_sim, rng, villains, cancel));
+            },
+            signal);
     });
 }
 
@@ -252,10 +284,14 @@ Napi::Value ParallelHandSimulationAsync(const Napi::CallbackInfo& info) {
         const std::uint32_t base_seed = args.base_seed;
         const int villains = args.villains;
         const std::size_t num_threads = args.num_threads;
-        return poker_async::enqueue_float_work(env, [hole, board, num_sim, base_seed, villains, num_threads]() {
-            return static_cast<double>(
-                poker::parallel_hand_simulation(hole, board, num_sim, base_seed, villains, num_threads));
-        });
+        const Napi::Value signal = poker_bind::parse_async_signal(info);
+        return poker_async::enqueue_float_work(
+            env,
+            [hole, board, num_sim, base_seed, villains, num_threads](const poker::CancelPredicate* cancel) {
+                return static_cast<double>(poker::parallel_hand_simulation(
+                    hole, board, num_sim, base_seed, villains, num_threads, cancel));
+            },
+            signal);
     });
 }
 

@@ -75,6 +75,47 @@ test('cardStringsHaveDuplicate on packed bytes', () => {
   assert.equal(poker.cardStringsHaveDuplicate(packCards(['Ah', 'Ah'])), true);
 });
 
+test('parseCompactCardList packed outFormat', () => {
+  const packed = poker.parseCompactCardList('AhKh', { outFormat: 'packed' });
+  assert.ok(packed instanceof Uint8Array);
+  assert.equal(packed.length, 2);
+  assert.equal(packed[0], packCards(['Ah'])[0]);
+  assert.equal(packed[1], packCards(['Kh'])[0]);
+});
+
+test('parseCompactCardList default strings', () => {
+  const cards = poker.parseCompactCardList('AhKh');
+  assert.deepEqual(cards, ['Ah', 'Kh']);
+});
+
+test('evaluateBestHand full result shape', () => {
+  const cards = ['Ah', 'Ac', 'Kd', 'Ks', 'Qh', 'Jc', '2d'];
+  const hand = poker.evaluateBestHand(cards);
+  assert.equal(typeof hand.rank, 'string');
+  assert.equal(typeof hand.rankCategory, 'number');
+  assert.equal(typeof hand.strength, 'number');
+  assert.equal(hand.kickers.length, 5);
+  const hole = ['Ah', 'Kh'];
+  const board = ['Qh', 'Jh', 'Th', '2c', '3d'];
+  const strength = poker.evaluateHandStrength(hole, board);
+  const best = poker.evaluateBestHand([...hole, ...board]);
+  assert.equal(best.strength, strength);
+});
+
+test('evaluateBestHand slim format', () => {
+  const slim = poker.evaluateBestHand(['Ah', 'Ac', 'Kd', 'Ks', 'Qh'], { format: 'slim' });
+  assert.equal(typeof slim.rankCategory, 'number');
+  assert.equal(typeof slim.strength, 'number');
+  assert.equal(slim.rank, undefined);
+  assert.equal(slim.kickers, undefined);
+});
+
+test('evaluateBestHand interned rank strings', () => {
+  const a = poker.evaluateBestHand(['Ah', 'Ac', 'Kd', 'Ks', 'Qh']);
+  const b = poker.evaluateBestHand(['Ah', 'Ac', 'Kd', 'Ks', 'Qh']);
+  assert.equal(a.rank, b.rank);
+});
+
 test('decideAction accepts packed holeCards', () => {
   const state = {
     players: [
@@ -205,6 +246,33 @@ test('simulateHandOutcomeAsync throws on invalid packed cards before queueing', 
     () => poker.simulateHandOutcomeAsync(bad, packCards(board), 100, 42, 1),
     /invalid (packed card|deck index)/,
   );
+});
+
+test('simulateHandOutcomeAsync rejects when signal already aborted', async () => {
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(
+    () => poker.simulateHandOutcomeAsync(hole, board, 500, 42, 1, { signal: ac.signal }),
+    (err) => err.name === 'AbortError',
+  );
+});
+
+test('simulateHandOutcomeAsync aborts in-flight work', async () => {
+  const ac = new AbortController();
+  const pending = poker.simulateHandOutcomeAsync(hole, board, 5_000_000, 42, 1, {
+    signal: ac.signal,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  ac.abort();
+  await assert.rejects(pending, (err) => err.name === 'AbortError');
+});
+
+test('benchmarkEvaluatorThroughputAsync aborts in-flight work', async () => {
+  const ac = new AbortController();
+  const pending = poker.benchmarkEvaluatorThroughputAsync(500_000, { signal: ac.signal });
+  await new Promise((resolve) => setImmediate(resolve));
+  ac.abort();
+  await assert.rejects(pending, (err) => err.name === 'AbortError');
 });
 
 test('native export count', () => {

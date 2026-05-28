@@ -1,5 +1,6 @@
 #pragma once
 
+#include "poker/cancel.hpp"
 #include "poker/bot_config.hpp"
 #include "poker/card.hpp"
 #include "poker/game_state.hpp"
@@ -14,6 +15,7 @@ namespace poker {
                                      const std::vector<Card>& player_hand,
                                      const BotConfig& cfg,
                                      const OpponentModel* opponent_model = nullptr,
-                                     int hero_seat = -1);
+                                     int hero_seat = -1,
+                                     const CancelPredicate* should_cancel = nullptr);
 
 }  // namespace poker

@@ -64,8 +64,25 @@ Napi::Value EvaluateBestHand(const Napi::CallbackInfo& info) {
         if (cards.empty() || cards.size() > 7) {
             throw std::invalid_argument("need 1..7 cards");
         }
+        poker_bind::EvalObjectFormat fmt = poker_bind::EvalObjectFormat::Full;
+        if (info.Length() >= 2 && info[1].IsObject()) {
+            const Napi::Object opts = info[1].As<Napi::Object>();
+            if (opts.Has("format")) {
+                const Napi::Value fv = opts.Get("format");
+                if (fv.IsString()) {
+                    const std::string fs = fv.As<Napi::String>().Utf8Value();
+                    if (fs == "slim") {
+                        fmt = poker_bind::EvalObjectFormat::Slim;
+                    } else if (fs != "full") {
+                        throw std::invalid_argument("evaluateBestHand: format must be 'full' or 'slim'");
+                    }
+                } else {
+                    throw std::invalid_argument("evaluateBestHand: format must be a string");
+                }
+            }
+        }
         const poker::HandEvaluation e = poker::evaluate_best_hand(cards);
-        return eval_to_object(env, e);
+        return eval_to_object(env, e, fmt);
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -153,7 +170,8 @@ Napi::Value BenchmarkEvaluatorThroughputAsync(const Napi::CallbackInfo& info) {
         if (!err.empty()) {
             throw std::invalid_argument(err);
         }
-        return poker_async::enqueue_benchmark(env, iterations);
+        const Napi::Value signal = poker_bind::parse_async_signal(info);
+        return poker_async::enqueue_benchmark(env, iterations, signal);
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -213,8 +231,9 @@ Napi::Value DecideActionAsync(const Napi::CallbackInfo& info) {
         if (!parse_decide_action_inputs(info, args, &err)) {
             throw std::invalid_argument(err.empty() ? "invalid state" : err);
         }
+        const Napi::Value signal = poker_bind::parse_async_signal(info);
         return poker_async::enqueue_decide_action(env, std::move(args.state), std::move(args.hero_hole),
-                                                  args.cfg, args.opponent, args.hero_seat);
+                                                  args.cfg, args.opponent, args.hero_seat, signal);
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -1234,9 +1253,13 @@ Napi::Value ExactHuEquityVsRandomHandAsync(const Napi::CallbackInfo& info) {
         }
         const auto hero = std::move(args.hero);
         const auto board = std::move(args.board);
-        return poker_async::enqueue_float_work(env, [hero, board]() {
-            return poker::exact_hu_equity_vs_random_hand(hero, board);
-        });
+        const Napi::Value signal = poker_bind::parse_async_signal(info);
+        return poker_async::enqueue_float_work(
+            env,
+            [hero, board](const poker::CancelPredicate* cancel) {
+                return poker::exact_hu_equity_vs_random_hand(hero, board, cancel);
+            },
+            signal);
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -1270,9 +1293,13 @@ Napi::Value StraightMadeFlopToRiverExactProbabilityAsync(const Napi::CallbackInf
         const auto hero = std::move(args.hero);
         const auto flop = std::move(args.flop);
         const auto dead = std::move(args.dead);
-        return poker_async::enqueue_float_work(env, [hero, flop, dead]() {
-            return poker::straight_made_flop_to_river_exact_probability(hero, flop, dead);
-        });
+        const Napi::Value signal = poker_bind::parse_async_signal(info);
+        return poker_async::enqueue_float_work(
+            env,
+            [hero, flop, dead](const poker::CancelPredicate* cancel) {
+                return poker::straight_made_flop_to_river_exact_probability(hero, flop, dead, cancel);
+            },
+            signal);
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
         return env.Null();
@@ -1622,7 +1649,8 @@ Napi::Value ValidateCardString(const Napi::CallbackInfo& info) {
             throw std::invalid_argument("validateCardString(card: string)");
         }
         poker::Card c{};
-        const bool ok = poker::parse_card_string(info[0].As<Napi::String>().Utf8Value(), c);
+        std::string perr;
+        const bool ok = poker_bind::parse_card_string_from_js(env, info[0].As<Napi::String>(), c, &perr);
         return Napi::Boolean::New(env, ok);
     } catch (const std::exception& e) {
         Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
@@ -1640,15 +1668,22 @@ Napi::Value CardStringsHaveDuplicate(const Napi::CallbackInfo& info) {
         std::size_t len = 0;
         std::string perr;
         if (packed_card_bytes(info[0], &data, &len, &perr)) {
-            std::vector<poker::Card> cards;
-            if (!poker::parse_packed_cards(data, len, cards, &perr)) {
-                throw std::invalid_argument(perr);
+            std::string derr;
+            if (!poker::packed_cards_have_duplicate(data, len, &derr)) {
+                if (!derr.empty()) {
+                    throw std::invalid_argument(derr);
+                }
+                return Napi::Boolean::New(env, false);
             }
-            return Napi::Boolean::New(env, poker::cards_have_duplicate(cards));
+            return Napi::Boolean::New(env, true);
         }
         if (info[0].IsArray()) {
-            const auto strs = strings_from_js_array(info[0].As<Napi::Array>(), "cardStringsHaveDuplicate");
-            return Napi::Boolean::New(env, poker::card_strings_have_duplicate(strs));
+            std::string derr;
+            const bool dup = poker_bind::js_card_array_has_duplicate(env, info[0].As<Napi::Array>(), &derr);
+            if (!derr.empty()) {
+                throw std::invalid_argument(derr);
+            }
+            return Napi::Boolean::New(env, dup);
         }
         throw std::invalid_argument("cardStringsHaveDuplicate(cards: CardInput)");
     } catch (const std::exception& e) {
@@ -1677,7 +1712,32 @@ Napi::Value ParseCompactCardList(const Napi::CallbackInfo& info) {
         if (info.Length() < 1 || !info[0].IsString()) {
             throw std::invalid_argument("parseCompactCardList(cards: string)");
         }
-        const auto cards = poker::parse_compact_card_list(info[0].As<Napi::String>().Utf8Value());
+        bool packed_out = false;
+        if (info.Length() >= 2 && info[1].IsObject()) {
+            const Napi::Object opts = info[1].As<Napi::Object>();
+            if (opts.Has("outFormat")) {
+                const Napi::Value of = opts.Get("outFormat");
+                if (!of.IsString()) {
+                    throw std::invalid_argument("parseCompactCardList: outFormat must be a string");
+                }
+                const std::string fmt = of.As<Napi::String>().Utf8Value();
+                if (fmt == "packed") {
+                    packed_out = true;
+                } else if (fmt != "strings") {
+                    throw std::invalid_argument("parseCompactCardList: outFormat must be 'strings' or 'packed'");
+                }
+            }
+        }
+        const std::string text = info[0].As<Napi::String>().Utf8Value();
+        if (packed_out) {
+            const auto indices = poker::parse_compact_card_list_indices(text);
+            Napi::Uint8Array ta = Napi::Uint8Array::New(env, indices.size());
+            for (std::size_t i = 0; i < indices.size(); ++i) {
+                ta[i] = indices[i];
+            }
+            return ta;
+        }
+        const auto cards = poker::parse_compact_card_list(text);
         Napi::Array a = Napi::Array::New(env, static_cast<uint32_t>(cards.size()));
         for (uint32_t i = 0; i < cards.size(); ++i) {
             a[i] = Napi::String::New(env, cards[static_cast<std::size_t>(i)]);

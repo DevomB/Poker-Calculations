@@ -282,13 +282,19 @@ bool parse_decide_action_inputs(const Napi::CallbackInfo& info, DecideActionPars
         return false;
     }
     out.cfg = parse_bot_config(info[1].As<Napi::Object>());
+    const int opts_idx = poker_bind::trailing_async_options_index(info);
+    const int last_idx = opts_idx >= 0 ? opts_idx - 1 : static_cast<int>(info.Length()) - 1;
     out.opponent.reset();
-    if (info.Length() >= 3 && info[2].IsObject()) {
-        out.opponent = parse_opponent_model(info[2].As<Napi::Object>());
-    }
     out.hero_seat = -1;
-    if (info.Length() >= 4 && info[3].IsNumber()) {
-        out.hero_seat = info[3].As<Napi::Number>().Int32Value();
+    if (last_idx >= 3 && info[last_idx].IsNumber()) {
+        out.hero_seat = info[last_idx].As<Napi::Number>().Int32Value();
+        if (info[2].IsObject() && !poker_bind::is_async_options(info[2])) {
+            out.opponent = parse_opponent_model(info[2].As<Napi::Object>());
+        }
+    } else if (last_idx >= 2 && info[last_idx].IsNumber()) {
+        out.hero_seat = info[last_idx].As<Napi::Number>().Int32Value();
+    } else if (last_idx >= 2 && info[last_idx].IsObject() && !poker_bind::is_async_options(info[last_idx])) {
+        out.opponent = parse_opponent_model(info[last_idx].As<Napi::Object>());
     }
     resolve_hero_hole(out.state, out.hero_seat, out.hero_hole);
     return true;

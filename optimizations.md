@@ -22,7 +22,7 @@
 |-------|--------|
 | **Status** | **Done (v2.0.0)** â€” `*Async` Promise exports via `Napi::AsyncWorker` in `native/async_workers.cpp`; sync APIs unchanged. |
 | **Location** | `simulateHandOutcomeAsync`, `parallelHandSimulationAsync`, `exactHuEquityVsRandomHandAsync`, `straightMadeFlopToRiverExactProbabilityAsync`, `decideActionAsync`, `benchmarkEvaluatorThroughputAsync` |
-| **Remaining** | Cancellation / `AbortSignal` (optional B1.1). |
+| **Remaining** | ~~Cancellation / `AbortSignal` (optional B1.1).~~ **Done** — trailing `{ signal?: AbortSignal }` on all six `*Async` exports; cooperative cancel in MC/exact/benchmark/`decideAction` paths. |
 | **~Lines** | Done |
 
 #### B2 â€” Every card crosses the boundary as `string[]` with full UTF-8 copies
@@ -31,7 +31,7 @@
 |-------|--------|
 | **Status** | **Done (v2.0)** â€” `parse_cards_from_js()` accepts `string[]`, `Uint8Array`, and `Buffer`; `parse_packed_cards` in `card_string.cpp`. |
 | **Location** | `parse_cards_from_js`, all card-consuming exports in `binding.cpp` |
-| **Remaining** | B5 fast string path (optional); B7 packed `parseCompactCardList` output. |
+| **Remaining** | — |
 | **~Lines** | Done |
 
 #### B3 â€” `evaluateHandStrength` / `Fast` return decimal strings, not numeric strength
@@ -61,34 +61,37 @@
 
 | Field | Detail |
 |-------|--------|
+| **Status** | **Done** — `parse_card_string_unchecked`, ASCII LUTs, `parse_card_string_from_js` (`card_string.cpp`, `binding_cards.cpp`). |
 | **Location** | `poker::parse_card_string` (`src/card_string.cpp` L21â€“62) |
 | **Current** | Always `trim_copy` â†’ new `std::string`; rank via loop over `"23456789TJQKA"`; suit loop over `"cdhs"`. |
 | **Proposal** | `parse_card_string_unchecked(const char* p, size_t n, Card& out)` for 2-char (`Ah`) / 3-char (`10h`) tokens; `constexpr` rank/suit LUT indexed by ASCII; trim only if `isspace` at ends. Binding fast path calls this on UTF-8 slice from `napi_get_value_string_utf8` with known length. |
 | **Impact** | High when staying on string API; pairs with B2. |
 | **Risk** | Low if old path kept for sloppy input. |
-| **~Lines** | 80â€“150 |
+| **~Lines** | Done |
 
 #### B6 â€” `cardStringsHaveDuplicate` double materializes strings
 
 | Field | Detail |
 |-------|--------|
+| **Status** | **Done** — `js_card_array_has_duplicate`, `packed_cards_have_duplicate` (`bool seen[52]`). |
 | **Location** | `strings_from_js_array` + `card_strings_have_duplicate` (`binding.cpp` L1909â€“1945; `card_string.cpp` L65â€“82) |
 | **Current** | All JS strings â†’ `vector<string>` â†’ parse again â†’ `vector<Card>` â†’ O(nÂ²) pairwise compare. |
 | **Proposal** | Single-pass: parse to `Card` or 6-bit id, `bool seen[52]` on stack; throw on invalid index without building string vector. |
 | **Impact** | Medium for preflight validation in UIs. |
 | **Risk** | Low. |
-| **~Lines** | 40â€“70 |
+| **~Lines** | Done |
 
 #### B7 â€” `parseCompactCardList` allocates canonical strings twice
 
 | Field | Detail |
 |-------|--------|
+| **Status** | **Done** — `parse_compact_card_list_indices`; `outFormat: 'strings' \| 'packed'`. |
 | **Location** | `parse_compact_card_list` â†’ binding loop `Napi::String::New` per card (`binding.cpp` L1966â€“1977) |
 | **Current** | C++ builds `vector<string>` via `Card::to_string()`; binding re-boxes each as a new JS string. |
 | **Proposal** | Return `Uint8Array` of deck ids or one concatenated ASCII buffer + length; optional `outFormat: 'strings' \| 'packed'`. |
 | **Impact** | Medium for import parsers feeding sims. |
 | **Risk** | Low if additive. |
-| **~Lines** | 60â€“120 |
+| **~Lines** | Done |
 
 #### B8 â€” Numeric matrix / ICM exports box every double
 
@@ -118,12 +121,13 @@
 
 | Field | Detail |
 |-------|--------|
+| **Status** | **Done** — `rankCategory`, `strength`, interned `rank`; `{ format: 'slim' }` (`binding_init.cpp`, `binding_cards.cpp`). |
 | **Location** | `eval_to_object`, `EvaluateBestHand` (`binding.cpp` L92â€“100, L289â€“308) |
 | **Current** | `rank` string via `hand_rank_js` â†’ `std::string` â†’ JS string; kickers as `Array` of `Number`. |
 | **Proposal** | Slim return: `{ rank: number, strength: number }` using enum ordinal; or return strength scalar only with `handRankCategoryOrder` in JS. Intern rank strings once at init (`Napi::String::New` stored in static array). |
 | **Impact** | Medium for hand-history analyzers calling `evaluateBestHand` heavily. |
 | **Risk** | Low if additive shape. |
-| **~Lines** | 50â€“120 |
+| **~Lines** | Done |
 
 ---
 
