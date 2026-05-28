@@ -51,13 +51,13 @@ enum class BindStatus { Ok, TypeError, RangeError };
 
 #define POKER_FAIL_TYPE(env, msg)                     \
     do {                                              \
-        poker_bind::fail_type((env), (msg));            \
+        (void)poker_bind::fail_type((env), (msg));      \
         return (env).Null();                          \
     } while (0)
 
 #define POKER_FAIL_RANGE(env, msg)                    \
     do {                                              \
-        poker_bind::fail_range((env), (msg));           \
+        (void)poker_bind::fail_range((env), (msg));     \
         return (env).Null();                          \
     } while (0)
 
