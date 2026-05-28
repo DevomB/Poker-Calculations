@@ -12,13 +12,20 @@ namespace {
 
 constexpr std::uint8_t kLutInvalid = 255;
 
+constexpr unsigned char ascii_toupper(unsigned char c) noexcept {
+    if (c >= 'a' && c <= 'z') {
+        return static_cast<unsigned char>(c - 'a' + 'A');
+    }
+    return c;
+}
+
 constexpr std::array<std::uint8_t, 256> make_rank_lut() {
     std::array<std::uint8_t, 256> lut{};
     lut.fill(kLutInvalid);
     const char* ranks = "23456789TJQKA";
     for (int i = 0; i < 13; ++i) {
         const unsigned char lo = static_cast<unsigned char>(ranks[i]);
-        const unsigned char up = static_cast<unsigned char>(std::toupper(lo));
+        const unsigned char up = ascii_toupper(lo);
         lut[lo] = static_cast<std::uint8_t>(i);
         lut[up] = static_cast<std::uint8_t>(i);
     }
@@ -31,7 +38,7 @@ constexpr std::array<std::uint8_t, 256> make_suit_lut() {
     const char* suits = "cdhs";
     for (int i = 0; i < 4; ++i) {
         const unsigned char lo = static_cast<unsigned char>(suits[i]);
-        const unsigned char up = static_cast<unsigned char>(std::toupper(lo));
+        const unsigned char up = ascii_toupper(lo);
         lut[lo] = static_cast<std::uint8_t>(i);
         lut[up] = static_cast<std::uint8_t>(i);
     }
