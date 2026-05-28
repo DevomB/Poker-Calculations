@@ -39,6 +39,7 @@ enum class BindStatus { Ok, TypeError, RangeError };
 
 [[nodiscard]] Napi::Promise reject_aborted_promise(Napi::Env env);
 
+/** C++ exceptional paths only — validation should use POKER_FAIL_TYPE / POKER_REQUIRE. */
 #define POKER_TRY(env, body)                          \
     try {                                             \
         body                                          \
@@ -47,5 +48,24 @@ enum class BindStatus { Ok, TypeError, RangeError };
             .ThrowAsJavaScriptException();            \
         return env.Null();                            \
     }
+
+#define POKER_FAIL_TYPE(env, msg)                     \
+    do {                                              \
+        fail_type((env), (msg));                      \
+        return (env).Null();                          \
+    } while (0)
+
+#define POKER_FAIL_RANGE(env, msg)                    \
+    do {                                              \
+        fail_range((env), (msg));                     \
+        return (env).Null();                          \
+    } while (0)
+
+#define POKER_REQUIRE(env, cond, sig)               \
+    do {                                              \
+        if (!(cond)) {                                \
+            POKER_FAIL_TYPE((env), (sig));            \
+        }                                             \
+    } while (0)
 
 }  // namespace poker_bind

@@ -1,5 +1,6 @@
 #include "binding_cards.hpp"
 
+#include "binding_common.hpp"
 #include "binding_init.hpp"
 #include "poker/card_string.hpp"
 #include "poker/fast_evaluator.hpp"
@@ -161,15 +162,30 @@ bool js_card_array_has_duplicate(const Napi::Env& env, const Napi::Array& arr, s
     return false;
 }
 
-std::string hand_rank_js(poker::HandRank r) {
-    const int idx = static_cast<int>(r);
-    if (idx >= 0 && idx < 10) {
-        static constexpr const char* kHandRankNames[] = {
-            "highCard",      "onePair",       "twoPair",    "threeOfAKind", "straight",
-            "flush",         "fullHouse",     "fourOfAKind", "straightFlush", "royalFlush"};
-        return kHandRankNames[idx];
+bool try_parse_cards_from_js(Napi::Env env, const Napi::Value& v, std::vector<poker::Card>& out, std::string* err) {
+    std::string local_err;
+    out = parse_cards_from_js(env, v, err ? err : &local_err);
+    const std::string& emsg = err ? *err : local_err;
+    if (!emsg.empty()) {
+        fail_type(env, emsg);
+        return false;
     }
-    return "unknown";
+    return true;
+}
+
+bool try_parse_hole_and_board(Napi::Env env, const Napi::CallbackInfo& info, std::vector<poker::Card>& hole,
+                              std::vector<poker::Card>& board, const char* signature) {
+    if (info.Length() < 2) {
+        fail_type(env, signature);
+        return false;
+    }
+    if (!try_parse_cards_from_js(env, info[0], hole)) {
+        return false;
+    }
+    if (!try_parse_cards_from_js(env, info[1], board)) {
+        return false;
+    }
+    return true;
 }
 
 Napi::Object eval_to_object(Napi::Env env, const poker::HandEvaluation& e, EvalObjectFormat format) {
@@ -191,18 +207,21 @@ Napi::Object eval_to_object(Napi::Env env, const poker::HandEvaluation& e, EvalO
     return o;
 }
 
-std::vector<std::string> strings_from_js_array(const Napi::Array& a, const char* ctx) {
-    std::vector<std::string> v;
+bool strings_from_js_array(const Napi::Array& a, const char* ctx, std::vector<std::string>& out, std::string* err) {
+    out.clear();
     const uint32_t n = a.Length();
-    v.reserve(n);
+    out.reserve(n);
     for (uint32_t i = 0; i < n; ++i) {
         const Napi::Value x = a[i];
         if (!x.IsString()) {
-            throw std::invalid_argument(std::string(ctx) + ": array must contain only strings");
+            if (err) {
+                *err = std::string(ctx) + ": array must contain only strings";
+            }
+            return false;
         }
-        v.push_back(x.As<Napi::String>().Utf8Value());
+        out.push_back(x.As<Napi::String>().Utf8Value());
     }
-    return v;
+    return true;
 }
 
 }  // namespace poker_bind

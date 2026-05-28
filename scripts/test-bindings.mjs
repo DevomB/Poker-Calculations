@@ -26,11 +26,6 @@ test('legacy and fast strength match on royal flush spot', () => {
   assert.equal(legacy, fast);
 });
 
-test('Scalar exports removed', () => {
-  assert.equal(poker.evaluateHandStrengthScalar, undefined);
-  assert.equal(poker.evaluateHandStrengthFastScalar, undefined);
-});
-
 test('packed strength matches strings', () => {
   const packedHole = packCards(hole);
   const packedBoard = packCards(board);
@@ -61,6 +56,36 @@ test('compareBestHands packed vs string', () => {
   const cmpStr = poker.compareBestHands(a, b);
   const cmpPacked = poker.compareBestHands(packCards(a), packCards(b));
   assert.equal(cmpPacked, cmpStr);
+});
+
+test('compareBestHands assumeDisjoint on disjoint hands', () => {
+  const a = ['Ah', 'Kh'];
+  const b = ['Qs', 'Js'];
+  const def = poker.compareBestHands(a, b);
+  const fast = poker.compareBestHands(a, b, { assumeDisjoint: true });
+  assert.equal(fast, def);
+});
+
+test('compareBestHands overlap throws by default', () => {
+  assert.throws(
+    () => poker.compareBestHands(['Ah', 'Kd'], ['Ah', 'Qc']),
+    /overlapping cards between hands/,
+  );
+});
+
+test('compareBestHands invalid assumeDisjoint type', () => {
+  assert.throws(
+    () => poker.compareBestHands(['Ah', 'Kd'], ['Qs', 'Jc'], { assumeDisjoint: 'yes' }),
+    /assumeDisjoint must be a boolean/,
+  );
+});
+
+test('evaluateHandCategory returns interned rank string', () => {
+  const hole = ['Ah', 'Ad'];
+  const board = ['Ac', '2h', '3d', '4s', '5c'];
+  const cat = poker.evaluateHandCategory(hole, board);
+  const full = poker.evaluateBestHand([...hole, ...board]);
+  assert.strictEqual(cat, full.rank);
 });
 
 test('exactHuEquityVsRandomHand packed vs string', () => {

@@ -103,6 +103,12 @@ export interface ParseCompactCardListOptions {
   outFormat?: ParseCompactCardListFormat;
 }
 
+/** Optional flags for `compareBestHands`. */
+export interface CompareBestHandsOptions {
+  /** Skip overlap check between A and B when you guarantee disjoint deck ids. Default false. */
+  assumeDisjoint?: boolean;
+}
+
 export interface DecisionResult {
   action: 'fold' | 'call' | 'raise' | 'check';
   raiseBy: number;
@@ -176,9 +182,10 @@ export interface PokerCalculations {
     options: { outFormat: 'packed' }
   ): Uint8Array;
   /**
-   * Compare best 1–7 card lists; returns `-1` / `0` / `1`. Throws on overlap between lists or invalid cards.
+   * Compare best 1–7 card lists; returns `-1` / `0` / `1`. Throws on overlap between lists or invalid cards
+   * unless `assumeDisjoint: true` (caller guarantees no shared cards between A and B).
    */
-  compareBestHands(cardsA: CardInput, cardsB: CardInput): number;
+  compareBestHands(cardsA: CardInput, cardsB: CardInput, options?: CompareBestHandsOptions): number;
   simulateHandOutcome(
     holeCards: CardInput,
     board: CardInput,
