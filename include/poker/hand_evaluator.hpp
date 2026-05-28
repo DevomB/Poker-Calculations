@@ -18,7 +18,7 @@ struct HandEvaluation {
     [[nodiscard]] bool operator==(const HandEvaluation& o) const;
 };
 
-[[nodiscard]] HandEvaluation evaluate_five_cards(const std::vector<Card>& five);
+[[nodiscard]] HandEvaluation evaluate_five_cards(std::vector<Card> five);
 
 /// Best 5-card hand from 1–7 distinct cards (undefined if size not in [1,7]).
 [[nodiscard]] HandEvaluation evaluate_best_hand(const std::vector<Card>& cards);
@@ -35,8 +35,26 @@ struct HandEvaluation {
 
 /**
  * Compare best 1–7 card hands (no board mixing). Returns `-1` if `a` loses to `b`, `0` tie, `1` if `a`
- * wins. Throws if lengths invalid, duplicate cards within `a` or `b`, or any card appears in both.
+ * wins. Throws if lengths invalid, duplicate cards within `a` or `b`, or any card appears in both
+ * (unless `opts.assume_disjoint`).
  */
-[[nodiscard]] int compare_best_hands(const std::vector<Card>& a, const std::vector<Card>& b);
+struct CompareBestHandsOptions {
+    bool assume_disjoint = false;
+};
+
+enum class CompareBestHandsStatus {
+    Ok,
+    InvalidLength,
+    DuplicateInA,
+    DuplicateInB,
+    Overlap,
+};
+
+[[nodiscard]] CompareBestHandsStatus compare_best_hands_checked(const std::vector<Card>& a,
+                                                                const std::vector<Card>& b, int* out_cmp,
+                                                                CompareBestHandsOptions opts = {});
+
+[[nodiscard]] int compare_best_hands(const std::vector<Card>& a, const std::vector<Card>& b,
+                                     CompareBestHandsOptions opts = {});
 
 }  // namespace poker

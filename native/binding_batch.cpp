@@ -219,25 +219,23 @@ std::size_t parse_benchmark_iterations(const Napi::CallbackInfo& info, std::stri
 
 Napi::Value SimulateHandOutcome(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
-    POKER_TRY(env, {
-        SimulateHandParsed args{};
+            SimulateHandParsed args{};
         std::string err;
         if (!parse_simulate_hand_args(info, args, &err)) {
-            throw std::invalid_argument(err);
+            POKER_FAIL_TYPE(env, err);
         }
         std::mt19937 rng(args.seed);
         const float eq = poker::simulate_hand_outcome(args.hole, args.board, args.num_sim, rng, args.villains);
         return Napi::Number::New(env, static_cast<double>(eq));
-    });
+
 }
 
 Napi::Value SimulateHandOutcomeAsync(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
-    POKER_TRY(env, {
-        SimulateHandParsed args{};
+            SimulateHandParsed args{};
         std::string err;
         if (!parse_simulate_hand_args(info, args, &err)) {
-            throw std::invalid_argument(err);
+            POKER_FAIL_TYPE(env, err);
         }
         const auto hole = std::move(args.hole);
         const auto board = std::move(args.board);
@@ -253,30 +251,28 @@ Napi::Value SimulateHandOutcomeAsync(const Napi::CallbackInfo& info) {
                     poker::simulate_hand_outcome(hole, board, num_sim, rng, villains, cancel));
             },
             signal);
-    });
+
 }
 
 Napi::Value ParallelHandSimulation(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
-    POKER_TRY(env, {
-        ParallelSimParsed args{};
+            ParallelSimParsed args{};
         std::string err;
         if (!parse_parallel_sim_args(info, args, &err)) {
-            throw std::invalid_argument(err);
+            POKER_FAIL_TYPE(env, err);
         }
         const float eq = poker::parallel_hand_simulation(args.hole, args.board, args.num_sim, args.base_seed,
                                                          args.villains, args.num_threads);
         return Napi::Number::New(env, static_cast<double>(eq));
-    });
+
 }
 
 Napi::Value ParallelHandSimulationAsync(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
-    POKER_TRY(env, {
-        ParallelSimParsed args{};
+            ParallelSimParsed args{};
         std::string err;
         if (!parse_parallel_sim_args(info, args, &err)) {
-            throw std::invalid_argument(err);
+            POKER_FAIL_TYPE(env, err);
         }
         const auto hole = std::move(args.hole);
         const auto board = std::move(args.board);
@@ -292,19 +288,18 @@ Napi::Value ParallelHandSimulationAsync(const Napi::CallbackInfo& info) {
                     hole, board, num_sim, base_seed, villains, num_threads, cancel));
             },
             signal);
-    });
+
 }
 
 Napi::Value SimulateHandOutcomeBatch(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
-    POKER_TRY(env, {
-        if (info.Length() < 1 || !info[0].IsArray()) {
-            throw std::invalid_argument("simulateHandOutcomeBatch(specs[], out?)");
+            if (info.Length() < 1 || !info[0].IsArray()) {
+            POKER_FAIL_TYPE(env, "simulateHandOutcomeBatch(specs[], out?)");
         }
         std::vector<poker::SimSpot> spots;
         std::string err;
         if (!parse_sim_batch_specs(env, info[0].As<Napi::Array>(), spots, &err)) {
-            throw std::invalid_argument(err);
+            POKER_FAIL_TYPE(env, err);
         }
         std::vector<float> equities;
         poker::simulate_hand_outcome_batch(spots, equities);
@@ -316,18 +311,17 @@ Napi::Value SimulateHandOutcomeBatch(const Napi::CallbackInfo& info) {
         Napi::Value out_arg = info.Length() >= 2 ? info[1] : env.Undefined();
         if (!out_arg.IsUndefined()) {
             if (!poker_bind::write_f64_into_out(env, out_arg, out_d.data(), n, &err)) {
-                throw std::invalid_argument(err);
+                POKER_FAIL_TYPE(env, err);
             }
         }
         return poker_bind::write_f64_vector(env, out_d, poker_bind::F64ReturnFormat::Float64);
-    });
+
 }
 
 Napi::Value SimulateHandOutcomeBatchPacked(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
-    POKER_TRY(env, {
-        if (info.Length() < 3) {
-            throw std::invalid_argument(
+            if (info.Length() < 3) {
+            POKER_FAIL_TYPE(env, 
                 "simulateHandOutcomeBatchPacked(holes: Uint8Array, boards: Uint8Array, meta: Uint32Array, out?)");
         }
         const std::uint8_t* holes = nullptr;
@@ -336,21 +330,21 @@ Napi::Value SimulateHandOutcomeBatchPacked(const Napi::CallbackInfo& info) {
         std::size_t boards_len = 0;
         std::string perr;
         if (!poker_bind::packed_card_bytes(info[0], &holes, &holes_len, &perr)) {
-            throw std::invalid_argument(perr.empty() ? "holes: Uint8Array" : perr);
+            POKER_FAIL_TYPE(env, perr.empty() ? "holes: Uint8Array" : perr);
         }
         if (!poker_bind::packed_card_bytes(info[1], &boards, &boards_len, &perr)) {
-            throw std::invalid_argument(perr.empty() ? "boards: Uint8Array" : perr);
+            POKER_FAIL_TYPE(env, perr.empty() ? "boards: Uint8Array" : perr);
         }
         if (!info[2].IsTypedArray() || info[2].As<Napi::TypedArray>().TypedArrayType() != napi_uint32_array) {
-            throw std::invalid_argument("meta: Uint32Array (numSim, seed, villains per spot)");
+            POKER_FAIL_TYPE(env, "meta: Uint32Array (numSim, seed, villains per spot)");
         }
         const Napi::TypedArray meta_ta = info[2].As<Napi::TypedArray>();
         if (holes_len % 2 != 0 || boards_len % 5 != 0) {
-            throw std::invalid_argument("holes length must be 2*n, boards length 5*n");
+            POKER_FAIL_TYPE(env, "holes length must be 2*n, boards length 5*n");
         }
         const std::size_t n = holes_len / 2;
         if (boards_len / 5 != n || meta_ta.ElementLength() != n * 3) {
-            throw std::invalid_argument("holes, boards (5 each), and meta (3 uint32 per spot) length mismatch");
+            POKER_FAIL_TYPE(env, "holes, boards (5 each), and meta (3 uint32 per spot) length mismatch");
         }
         Napi::ArrayBuffer meta_ab = meta_ta.ArrayBuffer();
         const auto* m = reinterpret_cast<const std::uint32_t*>(
@@ -361,10 +355,10 @@ Napi::Value SimulateHandOutcomeBatchPacked(const Napi::CallbackInfo& info) {
             poker::SimSpot s{};
             std::string cerr;
             if (!poker::parse_packed_cards(holes + i * 2, 2, s.hole, &cerr)) {
-                throw std::invalid_argument("spot " + std::to_string(i) + " holes: " + cerr);
+                POKER_FAIL_TYPE(env, "spot " + std::to_string(i) + " holes: " + cerr);
             }
             if (!poker::parse_packed_cards(boards + i * 5, 5, s.board, &cerr)) {
-                throw std::invalid_argument("spot " + std::to_string(i) + " board: " + cerr);
+                POKER_FAIL_TYPE(env, "spot " + std::to_string(i) + " board: " + cerr);
             }
             s.num_simulations = static_cast<int>(m[i * 3 + 0]);
             s.seed = m[i * 3 + 1];
@@ -380,18 +374,17 @@ Napi::Value SimulateHandOutcomeBatchPacked(const Napi::CallbackInfo& info) {
         std::string werr;
         if (info.Length() >= 4 && !info[3].IsUndefined()) {
             if (!poker_bind::write_f64_into_out(env, info[3], out_d.data(), n, &werr)) {
-                throw std::invalid_argument(werr);
+                POKER_FAIL_TYPE(env, werr);
             }
         }
         return poker_bind::write_f64_vector(env, out_d, poker_bind::F64ReturnFormat::Float64);
-    });
+
 }
 
 Napi::Value EvaluateHandStrengthFastBatch(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
-    POKER_TRY(env, {
-        if (info.Length() < 2) {
-            throw std::invalid_argument(
+            if (info.Length() < 2) {
+            POKER_FAIL_TYPE(env, 
                 "evaluateHandStrengthFastBatch(holes: Uint8Array, boards: Uint8Array, boardCards?, out?)");
         }
         int board_cards = 5;
@@ -401,7 +394,7 @@ Napi::Value EvaluateHandStrengthFastBatch(const Napi::CallbackInfo& info) {
             out_idx = 3;
         }
         if (board_cards < 0 || board_cards > 5) {
-            throw std::invalid_argument("boardCards must be 0..5");
+            POKER_FAIL_TYPE(env, "boardCards must be 0..5");
         }
         const std::uint8_t* holes = nullptr;
         const std::uint8_t* boards = nullptr;
@@ -409,17 +402,17 @@ Napi::Value EvaluateHandStrengthFastBatch(const Napi::CallbackInfo& info) {
         std::size_t boards_len = 0;
         std::string perr;
         if (!poker_bind::packed_card_bytes(info[0], &holes, &holes_len, &perr)) {
-            throw std::invalid_argument(perr.empty() ? "holes: Uint8Array" : perr);
+            POKER_FAIL_TYPE(env, perr.empty() ? "holes: Uint8Array" : perr);
         }
         if (!poker_bind::packed_card_bytes(info[1], &boards, &boards_len, &perr)) {
-            throw std::invalid_argument(perr.empty() ? "boards: Uint8Array" : perr);
+            POKER_FAIL_TYPE(env, perr.empty() ? "boards: Uint8Array" : perr);
         }
         if (holes_len % 2 != 0) {
-            throw std::invalid_argument("holes length must be 2*n");
+            POKER_FAIL_TYPE(env, "holes length must be 2*n");
         }
         const std::size_t n = holes_len / 2;
         if (boards_len != n * static_cast<std::size_t>(board_cards)) {
-            throw std::invalid_argument("boards length must be n * boardCards");
+            POKER_FAIL_TYPE(env, "boards length must be n * boardCards");
         }
         std::vector<double> out_d(n);
         for (std::size_t i = 0; i < n; ++i) {
@@ -427,34 +420,33 @@ Napi::Value EvaluateHandStrengthFastBatch(const Napi::CallbackInfo& info) {
             std::vector<poker::Card> board;
             std::string cerr;
             if (!poker::parse_packed_cards(holes + i * 2, 2, hole, &cerr)) {
-                throw std::invalid_argument("spot " + std::to_string(i) + ": " + cerr);
+                POKER_FAIL_TYPE(env, "spot " + std::to_string(i) + ": " + cerr);
             }
             if (!poker::parse_packed_cards(boards + i * static_cast<std::size_t>(board_cards),
                                            static_cast<std::size_t>(board_cards), board, &cerr)) {
-                throw std::invalid_argument("spot " + std::to_string(i) + " board: " + cerr);
+                POKER_FAIL_TYPE(env, "spot " + std::to_string(i) + " board: " + cerr);
             }
             out_d[i] = static_cast<double>(poker::evaluate_hand_strength_fast(hole, board));
         }
         std::string werr;
         if (info.Length() > static_cast<int>(out_idx) && !info[out_idx].IsUndefined()) {
             if (!poker_bind::write_f64_into_out(env, info[out_idx], out_d.data(), n, &werr)) {
-                throw std::invalid_argument(werr);
+                POKER_FAIL_TYPE(env, werr);
             }
         }
         return poker_bind::write_f64_vector(env, out_d, poker_bind::F64ReturnFormat::Float64);
-    });
+
 }
 
 Napi::Value ExactHuEquityVsRandomHandBatch(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
-    POKER_TRY(env, {
-        if (info.Length() < 3) {
-            throw std::invalid_argument(
+            if (info.Length() < 3) {
+            POKER_FAIL_TYPE(env, 
                 "exactHuEquityVsRandomHandBatch(holes: Uint8Array, boards: Uint8Array, boardCards, out?)");
         }
         const int board_cards = info[2].As<Napi::Number>().Int32Value();
         if (board_cards < 3 || board_cards > 5) {
-            throw std::invalid_argument("boardCards must be 3..5");
+            POKER_FAIL_TYPE(env, "boardCards must be 3..5");
         }
         const std::uint8_t* holes = nullptr;
         const std::uint8_t* boards = nullptr;
@@ -462,14 +454,14 @@ Napi::Value ExactHuEquityVsRandomHandBatch(const Napi::CallbackInfo& info) {
         std::size_t boards_len = 0;
         std::string perr;
         if (!poker_bind::packed_card_bytes(info[0], &holes, &holes_len, &perr)) {
-            throw std::invalid_argument(perr.empty() ? "holes: Uint8Array" : perr);
+            POKER_FAIL_TYPE(env, perr.empty() ? "holes: Uint8Array" : perr);
         }
         if (!poker_bind::packed_card_bytes(info[1], &boards, &boards_len, &perr)) {
-            throw std::invalid_argument(perr.empty() ? "boards: Uint8Array" : perr);
+            POKER_FAIL_TYPE(env, perr.empty() ? "boards: Uint8Array" : perr);
         }
         const std::size_t n = holes_len / 2;
         if (holes_len % 2 != 0 || boards_len != n * static_cast<std::size_t>(board_cards)) {
-            throw std::invalid_argument("holes and boards length mismatch");
+            POKER_FAIL_TYPE(env, "holes and boards length mismatch");
         }
         std::vector<double> out_d(n);
         for (std::size_t i = 0; i < n; ++i) {
@@ -477,20 +469,20 @@ Napi::Value ExactHuEquityVsRandomHandBatch(const Napi::CallbackInfo& info) {
             std::vector<poker::Card> board;
             std::string cerr;
             if (!poker::parse_packed_cards(holes + i * 2, 2, hole, &cerr)) {
-                throw std::invalid_argument("spot " + std::to_string(i) + ": " + cerr);
+                POKER_FAIL_TYPE(env, "spot " + std::to_string(i) + ": " + cerr);
             }
             if (!poker::parse_packed_cards(boards + i * static_cast<std::size_t>(board_cards),
                                            static_cast<std::size_t>(board_cards), board, &cerr)) {
-                throw std::invalid_argument("spot " + std::to_string(i) + " board: " + cerr);
+                POKER_FAIL_TYPE(env, "spot " + std::to_string(i) + " board: " + cerr);
             }
             out_d[i] = poker::exact_hu_equity_vs_random_hand(hole, board);
         }
         std::string werr;
         if (info.Length() >= 4 && !info[3].IsUndefined()) {
             if (!poker_bind::write_f64_into_out(env, info[3], out_d.data(), n, &werr)) {
-                throw std::invalid_argument(werr);
+                POKER_FAIL_TYPE(env, werr);
             }
         }
         return poker_bind::write_f64_vector(env, out_d, poker_bind::F64ReturnFormat::Float64);
-    });
+
 }

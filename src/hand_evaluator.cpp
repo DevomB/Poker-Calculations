@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <array>
+#include "poker/card_string.hpp"
+
 #include <stdexcept>
 
 namespace poker {
@@ -191,6 +193,16 @@ HandEvaluation partial_high_card(const std::vector<Card>& cards) {
     return e;
 }
 
+HandEvaluation evaluate_five_cards_array(std::array<Card, 5> five) {
+    std::sort(five.begin(), five.end(), [](const Card& a, const Card& b) {
+        if (a.rank() != b.rank()) {
+            return a.rank() > b.rank();
+        }
+        return a.suit() < b.suit();
+    });
+    return evaluate_sorted_five(std::vector<Card>(five.begin(), five.end()));
+}
+
 }  // namespace
 
 bool HandEvaluation::operator<(const HandEvaluation& o) const {
@@ -204,11 +216,17 @@ bool HandEvaluation::operator==(const HandEvaluation& o) const {
     return rank == o.rank && kickers == o.kickers;
 }
 
-HandEvaluation evaluate_five_cards(const std::vector<Card>& five) {
+HandEvaluation evaluate_five_cards(std::vector<Card> five) {
     if (five.size() != 5) {
         return HandEvaluation{};
     }
-    return evaluate_sorted_five(sort_cards_desc(five));
+    std::sort(five.begin(), five.end(), [](const Card& a, const Card& b) {
+        if (a.rank() != b.rank()) {
+            return a.rank() > b.rank();
+        }
+        return a.suit() < b.suit();
+    });
+    return evaluate_sorted_five(std::move(five));
 }
 
 HandEvaluation evaluate_best_hand(const std::vector<Card>& cards) {
@@ -237,11 +255,11 @@ HandEvaluation evaluate_best_hand(const std::vector<Card>& cards) {
         return true;
     };
     do {
-        std::vector<Card> five;
-        for (int k : idx) {
-            five.push_back(cards[static_cast<std::size_t>(k)]);
+        std::array<Card, 5> five{};
+        for (int j = 0; j < 5; ++j) {
+            five[static_cast<std::size_t>(j)] = cards[static_cast<std::size_t>(idx[static_cast<std::size_t>(j)])];
         }
-        HandEvaluation ev = evaluate_five_cards(five);
+        HandEvaluation ev = evaluate_five_cards_array(five);
         if (!init || best < ev) {
             best = ev;
             init = true;
@@ -271,40 +289,76 @@ HandRank evaluate_hand(const std::vector<Card>& hand, const std::vector<Card>& c
     return evaluate_best_hand(all).rank;
 }
 
-int compare_best_hands(const std::vector<Card>& a, const std::vector<Card>& b) {
+namespace {
+
+[[nodiscard]] const char* compare_best_hands_status_message(CompareBestHandsStatus st) {
+    switch (st) {
+        case CompareBestHandsStatus::InvalidLength:
+            return "compareBestHands: each side needs 1..7 cards";
+        case CompareBestHandsStatus::DuplicateInA:
+            return "compareBestHands: duplicate card in cardsA";
+        case CompareBestHandsStatus::DuplicateInB:
+            return "compareBestHands: duplicate card in cardsB";
+        case CompareBestHandsStatus::Overlap:
+            return "compareBestHands: overlapping cards between hands";
+        default:
+            return "compareBestHands: invalid input";
+    }
+}
+
+}  // namespace
+
+CompareBestHandsStatus compare_best_hands_checked(const std::vector<Card>& a, const std::vector<Card>& b,
+                                                  int* out_cmp, CompareBestHandsOptions opts) {
     if (a.empty() || a.size() > 7 || b.empty() || b.size() > 7) {
-        throw std::invalid_argument("compareBestHands: each side needs 1..7 cards");
+        return CompareBestHandsStatus::InvalidLength;
     }
-    for (std::size_t i = 0; i < a.size(); ++i) {
-        for (std::size_t j = i + 1; j < a.size(); ++j) {
-            if (a[i] == a[j]) {
-                throw std::invalid_argument("compareBestHands: duplicate card in cardsA");
-            }
+    bool seen_a[52]{};
+    for (const Card& c : a) {
+        const int idx = deck_index_from_card(c);
+        if (idx < 0 || idx > 51) {
+            continue;
         }
+        if (seen_a[idx]) {
+            return CompareBestHandsStatus::DuplicateInA;
+        }
+        seen_a[idx] = true;
     }
-    for (std::size_t i = 0; i < b.size(); ++i) {
-        for (std::size_t j = i + 1; j < b.size(); ++j) {
-            if (b[i] == b[j]) {
-                throw std::invalid_argument("compareBestHands: duplicate card in cardsB");
-            }
+    bool seen_b[52]{};
+    for (const Card& c : b) {
+        const int idx = deck_index_from_card(c);
+        if (idx < 0 || idx > 51) {
+            continue;
         }
-    }
-    for (const auto& ca : a) {
-        for (const auto& cb : b) {
-            if (ca == cb) {
-                throw std::invalid_argument("compareBestHands: overlapping cards between hands");
-            }
+        if (seen_b[idx]) {
+            return CompareBestHandsStatus::DuplicateInB;
         }
+        if (!opts.assume_disjoint && seen_a[idx]) {
+            return CompareBestHandsStatus::Overlap;
+        }
+        seen_b[idx] = true;
     }
     const HandEvaluation ea = evaluate_best_hand(a);
     const HandEvaluation eb = evaluate_best_hand(b);
-    if (ea < eb) {
-        return -1;
+    if (out_cmp) {
+        if (ea < eb) {
+            *out_cmp = -1;
+        } else if (eb < ea) {
+            *out_cmp = 1;
+        } else {
+            *out_cmp = 0;
+        }
     }
-    if (eb < ea) {
-        return 1;
+    return CompareBestHandsStatus::Ok;
+}
+
+int compare_best_hands(const std::vector<Card>& a, const std::vector<Card>& b, CompareBestHandsOptions opts) {
+    int cmp = 0;
+    const CompareBestHandsStatus st = compare_best_hands_checked(a, b, &cmp, opts);
+    if (st != CompareBestHandsStatus::Ok) {
+        throw std::invalid_argument(compare_best_hands_status_message(st));
     }
-    return 0;
+    return cmp;
 }
 
 }  // namespace poker
