@@ -7,7 +7,7 @@
 
 #include <cmath>
 #include <cstring>
-#include <unordered_map>
+#include <utility>
 
 namespace poker_bind {
 
@@ -29,18 +29,24 @@ const char* action_name(poker::Action a) {
 namespace {
 
 [[nodiscard]] std::optional<poker::GamePhase> parse_phase_string(const std::string& s) {
-    static const std::unordered_map<std::string, poker::GamePhase> m = {
-        {"PreFlop", poker::GamePhase::PreFlop},       {"preflop", poker::GamePhase::PreFlop},
-        {"Flop", poker::GamePhase::Flop},             {"flop", poker::GamePhase::Flop},
-        {"Turn", poker::GamePhase::Turn},             {"turn", poker::GamePhase::Turn},
-        {"River", poker::GamePhase::River},           {"river", poker::GamePhase::River},
-        {"Showdown", poker::GamePhase::Showdown},     {"showdown", poker::GamePhase::Showdown},
+    static constexpr std::pair<const char*, poker::GamePhase> kPhases[] = {
+        {"PreFlop", poker::GamePhase::PreFlop},
+        {"preflop", poker::GamePhase::PreFlop},
+        {"Flop", poker::GamePhase::Flop},
+        {"flop", poker::GamePhase::Flop},
+        {"Turn", poker::GamePhase::Turn},
+        {"turn", poker::GamePhase::Turn},
+        {"River", poker::GamePhase::River},
+        {"river", poker::GamePhase::River},
+        {"Showdown", poker::GamePhase::Showdown},
+        {"showdown", poker::GamePhase::Showdown},
         {"HandComplete", poker::GamePhase::HandComplete},
         {"handcomplete", poker::GamePhase::HandComplete},
     };
-    const auto it = m.find(s);
-    if (it != m.end()) {
-        return it->second;
+    for (const auto& [label, phase] : kPhases) {
+        if (s == label) {
+            return phase;
+        }
     }
     return std::nullopt;
 }
@@ -344,44 +350,42 @@ Napi::Object poker_state_to_js(Napi::Env env, const poker::PokerGameState& state
 
 Napi::Value EncodePokerState(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
-    POKER_TRY(env, {
-        if (info.Length() < 1 || !info[0].IsObject()) {
-            throw std::invalid_argument("encodePokerState(state)");
+            if (info.Length() < 1 || !info[0].IsObject()) {
+            POKER_FAIL_TYPE(env, "encodePokerState(state)");
         }
         poker::PokerGameState state{};
         std::string err;
         if (!parse_game_state(info[0].As<Napi::Object>(), state, &err)) {
-            throw std::invalid_argument(err.empty() ? "invalid state" : err);
+            POKER_FAIL_TYPE(env, err.empty() ? "invalid state" : err);
         }
         const std::vector<std::uint8_t> bytes = poker::encode_poker_state(state, &err);
         if (bytes.empty()) {
-            throw std::invalid_argument(err.empty() ? "encode failed" : err);
+            POKER_FAIL_TYPE(env, err.empty() ? "encode failed" : err);
         }
         Napi::ArrayBuffer ab = Napi::ArrayBuffer::New(env, bytes.size());
         std::memcpy(ab.Data(), bytes.data(), bytes.size());
         return Napi::Uint8Array::New(env, bytes.size(), ab, 0);
-    });
+
 }
 
 Napi::Value DecodePokerState(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
-    POKER_TRY(env, {
-        if (info.Length() < 1) {
-            throw std::invalid_argument("decodePokerState(bytes)");
+            if (info.Length() < 1) {
+            POKER_FAIL_TYPE(env, "decodePokerState(bytes)");
         }
         const std::uint8_t* data = nullptr;
         std::size_t len = 0;
         std::string perr;
         if (!packed_card_bytes(info[0], &data, &len, &perr)) {
-            throw std::invalid_argument(perr.empty() ? "decodePokerState(bytes: Uint8Array)" : perr);
+            POKER_FAIL_TYPE(env, perr.empty() ? "decodePokerState(bytes: Uint8Array)" : perr);
         }
         poker::PokerGameState state{};
         std::string err;
         if (!poker::decode_poker_state(data, len, state, &err)) {
-            throw std::invalid_argument(err.empty() ? "decode failed" : err);
+            POKER_FAIL_TYPE(env, err.empty() ? "decode failed" : err);
         }
         return poker_state_to_js(env, state);
-    });
+
 }
 
 }  // namespace poker_bind

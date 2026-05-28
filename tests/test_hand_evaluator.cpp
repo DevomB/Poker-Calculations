@@ -50,3 +50,23 @@ TEST(HandEvaluator, CompareBestHandsOverlapThrows) {
     std::vector<poker::Card> b = {C(11, 0), C(12, 0)};
     EXPECT_THROW(poker::compare_best_hands(a, b), std::invalid_argument);
 }
+
+TEST(HandEvaluator, CompareBestHandsAssumeDisjointSkipsOverlap) {
+    std::vector<poker::Card> a = {C(12, 0), C(12, 1)};
+    std::vector<poker::Card> b = {C(11, 0), C(12, 0)};
+    poker::CompareBestHandsOptions opts{};
+    opts.assume_disjoint = true;
+    int cmp = 0;
+    const auto st = poker::compare_best_hands_checked(a, b, &cmp, opts);
+    EXPECT_EQ(st, poker::CompareBestHandsStatus::Ok);
+    EXPECT_EQ(cmp, poker::compare_best_hands(a, {C(11, 0), C(11, 1)}, opts));
+}
+
+TEST(HandEvaluator, CompareBestHandsAssumeDisjointStillRejectsDupInA) {
+    std::vector<poker::Card> a = {C(12, 0), C(12, 0)};
+    std::vector<poker::Card> b = {C(11, 0), C(10, 1)};
+    poker::CompareBestHandsOptions opts{};
+    opts.assume_disjoint = true;
+    int cmp = 0;
+    EXPECT_EQ(poker::compare_best_hands_checked(a, b, &cmp, opts), poker::CompareBestHandsStatus::DuplicateInA);
+}

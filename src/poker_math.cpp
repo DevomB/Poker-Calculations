@@ -10,7 +10,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
+#include <utility>
 
 namespace poker {
 
@@ -694,16 +694,17 @@ std::string format_pot_odds_reduced_fraction(double pot_before_call, double to_c
 }
 
 int hand_rank_category_order(const std::string& category_camel_case) {
-    static const std::unordered_map<std::string, int> kOrder = {
-        {"highCard", 0},      {"onePair", 1},       {"twoPair", 2},    {"threeOfAKind", 3},
-        {"straight", 4},    {"flush", 5},         {"fullHouse", 6},  {"fourOfAKind", 7},
+    static constexpr std::pair<const char*, int> kOrder[] = {
+        {"highCard", 0},      {"onePair", 1},       {"twoPair", 2},       {"threeOfAKind", 3},
+        {"straight", 4},      {"flush", 5},         {"fullHouse", 6},     {"fourOfAKind", 7},
         {"straightFlush", 8}, {"royalFlush", 9},
     };
-    const auto it = kOrder.find(category_camel_case);
-    if (it == kOrder.end()) {
-        throw std::invalid_argument("handRankCategoryOrder: unknown category label");
+    for (const auto& [label, ord] : kOrder) {
+        if (category_camel_case == label) {
+            return ord;
+        }
     }
-    return it->second;
+    throw std::invalid_argument("handRankCategoryOrder: unknown category label");
 }
 
 double equity_to_winning_odds_against(double equity) {

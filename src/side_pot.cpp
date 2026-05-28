@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <set>
 #include <stdexcept>
 
 namespace poker {
@@ -17,15 +16,18 @@ std::vector<Side_pot_layer> side_pot_ladder_from_commitments(
             throw std::invalid_argument("committed chips must be finite and non-negative");
         }
     }
-    std::set<double> levels;
+    std::vector<double> levels;
+    levels.reserve(committed_chips.size());
     for (double c : committed_chips) {
         if (c > 0.0) {
-            levels.insert(c);
+            levels.push_back(c);
         }
     }
     if (levels.empty()) {
         return {};
     }
+    std::sort(levels.begin(), levels.end());
+    levels.erase(std::unique(levels.begin(), levels.end()), levels.end());
     std::vector<Side_pot_layer> layers;
     double prev = 0.0;
     for (double u : levels) {
