@@ -1,5 +1,6 @@
 #include "poker/strategy.hpp"
 
+#include "poker/cancel.hpp"
 #include "poker/fast_evaluator.hpp"
 #include "poker/hand_evaluator.hpp"
 #include "poker/monte_carlo.hpp"
@@ -28,28 +29,31 @@ int resolve_hero_seat(const PokerGameState& state, int hero_seat) {
 }
 
 double equity_estimate(const PokerGameState& state, const std::vector<Card>& hole,
-                       const BotConfig& cfg, std::mt19937& rng) {
+                       const BotConfig& cfg, std::mt19937& rng,
+                       const CancelPredicate* should_cancel) {
+    throw_if_cancelled(should_cancel);
     if (cfg.monte_carlo_simulations <= 0) {
         const std::uint64_t s =
             evaluate_hand_strength_fast(hole, state.community_cards);
         return std::min(1.0, static_cast<double>(s) / static_cast<double>(1ULL << 40));
     }
-    return static_cast<double>(
-        simulate_hand_outcome(hole, state.community_cards, cfg.monte_carlo_simulations, rng,
-                              cfg.monte_carlo_villains));
+    return static_cast<double>(simulate_hand_outcome(hole, state.community_cards,
+                                                       cfg.monte_carlo_simulations, rng,
+                                                       cfg.monte_carlo_villains, should_cancel));
 }
 
 }  // namespace
 
 Decision decide_action(const PokerGameState& game_state, const std::vector<Card>& player_hand,
-                       const BotConfig& cfg, const OpponentModel* opponent_model,
-                       int hero_seat) {
+                       const BotConfig& cfg, const OpponentModel* opponent_model, int hero_seat,
+                       const CancelPredicate* should_cancel) {
+    throw_if_cancelled(should_cancel);
     Decision out{};
     const int seat = resolve_hero_seat(game_state, hero_seat);
     BotView view = make_bot_view(game_state, seat);
 
     std::mt19937 rng(cfg.rng_seed ^ static_cast<std::uint32_t>(game_state.pot * 1315423911));
-    double equity = equity_estimate(game_state, player_hand, cfg, rng);
+    double equity = equity_estimate(game_state, player_hand, cfg, rng, should_cancel);
 
     if (opponent_model) {
         const double agg_adj =

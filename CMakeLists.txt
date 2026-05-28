@@ -89,6 +89,7 @@ if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
         native/binding_common.cpp
         native/binding_numeric.cpp
         native/binding_cards.cpp
+        native/binding_init.cpp
         native/binding_state.cpp
         native/binding_batch.cpp
         native/async_workers.cpp

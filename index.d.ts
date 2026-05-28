@@ -21,6 +21,11 @@ export type F64ReturnFormat = 'array' | 'float64';
 /** PKST v1 packed game state (`encodePokerState` / `decodePokerState`). */
 export type PokerStateBytes = Uint8Array;
 
+/** Optional last argument on `*Async` exports for cooperative cancellation. */
+export interface AsyncOptions {
+  signal?: AbortSignal;
+}
+
 export interface SimBatchSpec {
   holeCards: CardInput;
   board: CardInput;
@@ -69,9 +74,33 @@ export interface NativeOpponentModel {
   foldFrequency?: number;
 }
 
+/** `format: 'slim'` on `evaluateBestHand` — category ordinal + encoded strength only. */
+export interface HandEvalResultSlim {
+  rankCategory: number;
+  strength: number;
+}
+
 export interface HandEvalResult {
+  /** Category label (interned at module load). */
   rank: string;
+  /** 0..9 — same order as `handRankCategoryOrder` / `highCard` … `royalFlush`. */
+  rankCategory: number;
+  /** Same bit layout as `evaluateHandStrength` (`pack_hand_strength`). */
+  strength: number;
+  /** Five encoded kicker values (tie-break order); omitted when `format: 'slim'`. */
   kickers: number[];
+}
+
+export type EvaluateBestHandFormat = 'full' | 'slim';
+
+export interface EvaluateBestHandOptions {
+  format?: EvaluateBestHandFormat;
+}
+
+export type ParseCompactCardListFormat = 'strings' | 'packed';
+
+export interface ParseCompactCardListOptions {
+  outFormat?: ParseCompactCardListFormat;
 }
 
 export interface DecisionResult {
@@ -103,7 +132,11 @@ export interface SidePotLayer {
 
 /** N-API addon (110 exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, and related helpers (all implemented in C++). */
 export interface PokerCalculations {
-  evaluateBestHand(cards: CardInput): HandEvalResult;
+  evaluateBestHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult;
+  evaluateBestHand(
+    cards: CardInput,
+    options: { format: 'slim' }
+  ): HandEvalResultSlim;
   /**
    * Encoded strength as `number` (`uint64` bit layout: rank in high bits + five kicker nibbles).
    * Exact integer in IEEE double for sort/compare loops.
@@ -119,7 +152,10 @@ export interface PokerCalculations {
    */
   benchmarkEvaluatorThroughput(iterations?: number): EvaluatorBenchmarkResult;
   /** Same as `benchmarkEvaluatorThroughput`; runs on the libuv thread pool (non-blocking). */
-  benchmarkEvaluatorThroughputAsync(iterations?: number): Promise<EvaluatorBenchmarkResult>;
+  benchmarkEvaluatorThroughputAsync(
+    iterations?: number,
+    options?: AsyncOptions
+  ): Promise<EvaluatorBenchmarkResult>;
   evaluateHandCategory(holeCards: CardInput, board: CardInput): string;
   /** `true` if `card` parses as a single card (`Ah`, `10c`, …). */
   validateCardString(card: string): boolean;
@@ -132,9 +168,13 @@ export interface PokerCalculations {
   canonicalCardString(card: string): string;
   /**
    * Parse concatenated or whitespace-separated cards (`AhKh`, `Ah Kh`, `10hKd`); throws on invalid
-   * token or duplicate cards.
+   * token or duplicate cards. Default `outFormat: 'strings'`; use `'packed'` for `Uint8Array` deck ids.
    */
-  parseCompactCardList(text: string): string[];
+  parseCompactCardList(text: string, options?: ParseCompactCardListOptions): string[];
+  parseCompactCardList(
+    text: string,
+    options: { outFormat: 'packed' }
+  ): Uint8Array;
   /**
    * Compare best 1–7 card lists; returns `-1` / `0` / `1`. Throws on overlap between lists or invalid cards.
    */
@@ -152,7 +192,8 @@ export interface PokerCalculations {
     board: CardInput,
     numSimulations: number,
     seed: number,
-    villains?: number
+    villains?: number,
+    options?: AsyncOptions
   ): Promise<number>;
   parallelHandSimulation(
     holeCards: CardInput,
@@ -169,7 +210,8 @@ export interface PokerCalculations {
     numSimulations: number,
     baseSeed: number,
     villains: number,
-    numThreads: number
+    numThreads: number,
+    options?: AsyncOptions
   ): Promise<number>;
   /** Monte Carlo equity for many spots; returns `Float64Array` (optional preallocated `out`). */
   simulateHandOutcomeBatch(specs: SimBatchSpec[], out?: Float64Array): Float64Array;
@@ -209,7 +251,8 @@ export interface PokerCalculations {
     state: NativePokerState | PokerStateBytes,
     config: NativeBotConfig,
     opponentModel?: NativeOpponentModel | null,
-    heroSeat?: number
+    heroSeat?: number,
+    options?: AsyncOptions
   ): Promise<DecisionResult>;
   potOddsRatio(pot: number, toCall: number): number;
   /** Chip EV of calling once vs folding (0); same semantics as C++ `expected_value_call`. */
@@ -556,7 +599,11 @@ export interface PokerCalculations {
   /** P22: exact HU vs random villain hand; board must have 3–5 cards. */
   exactHuEquityVsRandomHand(heroHoleCards: CardInput, boardCards: CardInput): number;
   /** Same as `exactHuEquityVsRandomHand`; runs on the libuv thread pool (non-blocking). */
-  exactHuEquityVsRandomHandAsync(heroHoleCards: CardInput, boardCards: CardInput): Promise<number>;
+  exactHuEquityVsRandomHandAsync(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    options?: AsyncOptions
+  ): Promise<number>;
   /**
    * P4 (exact): P(best 7-card hand is straight or straight flush) after two uniformly random **distinct**
    * cards from the remaining deck (unordered two-card subset; same distribution as turn+river multiset).
@@ -571,7 +618,8 @@ export interface PokerCalculations {
   straightMadeFlopToRiverExactProbabilityAsync(
     heroHoleCards: CardInput,
     flopThree: CardInput,
-    knownDead: CardInput
+    knownDead: CardInput,
+    options?: AsyncOptions
   ): Promise<number>;
   /**
    * P23: largest integer jam stack in `[1, maxStackChips]` with nonnegative symmetric-jam EV using

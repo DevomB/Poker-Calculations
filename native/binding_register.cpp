@@ -2,6 +2,7 @@
 #include <napi.h>
 
 #include "binding_batch.hpp"
+#include "binding_init.hpp"
 #include "binding_state.hpp"
 
 Napi::Value EvaluateBestHand(const Napi::CallbackInfo& info);
@@ -114,6 +115,7 @@ Napi::Value EvaluateHandStrengthFastBatch(const Napi::CallbackInfo& info);
 Napi::Value ExactHuEquityVsRandomHandBatch(const Napi::CallbackInfo& info);
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
+    poker_bind::init_binding(env);
     exports.DefineProperties({
         Napi::PropertyDescriptor::Function("evaluateBestHand", EvaluateBestHand),
         Napi::PropertyDescriptor::Function("evaluateHandStrength", EvaluateHandStrength),
