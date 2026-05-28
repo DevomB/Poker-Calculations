@@ -167,8 +167,7 @@ bool try_parse_cards_from_js(Napi::Env env, const Napi::Value& v, std::vector<po
     out = parse_cards_from_js(env, v, err ? err : &local_err);
     const std::string& emsg = err ? *err : local_err;
     if (!emsg.empty()) {
-        fail_type(env, emsg);
-        return false;
+        return fail_type(env, emsg);
     }
     return true;
 }
@@ -176,8 +175,7 @@ bool try_parse_cards_from_js(Napi::Env env, const Napi::Value& v, std::vector<po
 bool try_parse_hole_and_board(Napi::Env env, const Napi::CallbackInfo& info, std::vector<poker::Card>& hole,
                               std::vector<poker::Card>& board, const char* signature) {
     if (info.Length() < 2) {
-        fail_type(env, signature);
-        return false;
+        return fail_type(env, signature);
     }
     if (!try_parse_cards_from_js(env, info[0], hole)) {
         return false;
