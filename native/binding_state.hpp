@@ -21,8 +21,8 @@ namespace poker_bind {
 
 [[nodiscard]] poker::OpponentModel parse_opponent_model(const Napi::Object& o);
 
-[[nodiscard]] void resolve_hero_hole(const poker::PokerGameState& state, int hero_seat,
-                                     std::vector<poker::Card>& hero_hole);
+void resolve_hero_hole(const poker::PokerGameState& state, int hero_seat,
+                       std::vector<poker::Card>& hero_hole);
 
 struct DecideActionParsed {
     poker::PokerGameState state{};

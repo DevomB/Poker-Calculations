@@ -184,11 +184,17 @@ void fill_seven_from_cards(const std::vector<Card>& hole, const std::vector<Card
                            std::uint8_t ranks[7], std::uint8_t suits[7]) {
     int n = 0;
     for (const Card& c : hole) {
+        if (n >= 7) {
+            return;
+        }
         ranks[n] = c.rank();
         suits[n] = c.suit();
         ++n;
     }
     for (const Card& c : board) {
+        if (n >= 7) {
+            return;
+        }
         ranks[n] = c.rank();
         suits[n] = c.suit();
         ++n;
