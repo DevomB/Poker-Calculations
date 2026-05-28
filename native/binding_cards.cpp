@@ -76,7 +76,7 @@ std::vector<poker::Card> parse_card_strings(const Napi::Env& env, const Napi::Ar
             return {};
         }
         poker::Card c;
-        if (!parse_card_string_from_js(env, v.As<Napi::String>(), c)) {
+        if (!parse_card_string_from_js(env, v.As<Napi::String>(), c, err)) {
             if (err) {
                 *err = "invalid card at index " + std::to_string(i);
             }
