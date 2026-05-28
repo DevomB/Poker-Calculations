@@ -3,7 +3,9 @@
 #include "async_workers.hpp"
 #include "binding_cards.hpp"
 #include "binding_common.hpp"
+#include "binding_numeric.hpp"
 
+#include "poker/card_string.hpp"
 #include "poker/exact_equity.hpp"
 #include "poker/fast_evaluator.hpp"
 #include "poker/monte_carlo.hpp"

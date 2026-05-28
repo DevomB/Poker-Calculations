@@ -12,14 +12,14 @@ constexpr const char* kHandRankNames[] = {"highCard",      "onePair",       "two
                                           "straight",      "flush",         "fullHouse",  "fourOfAKind",
                                           "straightFlush", "royalFlush"};
 
-std::array<Napi::StringReference, 10> g_hand_rank_strings{};
+std::array<Napi::Reference<Napi::String>, 10> g_hand_rank_strings{};
 
 }  // namespace
 
 void init_binding(Napi::Env env) {
     for (int i = 0; i < 10; ++i) {
         g_hand_rank_strings[static_cast<std::size_t>(i)] =
-            Napi::StringReference::New(env, Napi::String::New(env, kHandRankNames[i]));
+            Napi::Persistent(Napi::String::New(env, kHandRankNames[i]));
     }
 }
 

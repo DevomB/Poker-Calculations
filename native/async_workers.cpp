@@ -39,10 +39,10 @@ class CancellableWorker : public Napi::AsyncWorker {
             deferred_.Reject(MakeAbortError(env));
             return false;
         }
-        signal_ref_ = Napi::ObjectReference::New(sig, 1);
+        signal_ref_ = Napi::Persistent(sig);
         Napi::Function listener =
             Napi::Function::New(env, OnAbortCallback, "onAbort", static_cast<void*>(this));
-        listener_ref_ = Napi::FunctionReference::New(listener, 1);
+        listener_ref_ = Napi::Persistent(listener);
         sig.Get("addEventListener")
             .As<Napi::Function>()
             .Call(sig, {Napi::String::New(env, "abort"), listener});
@@ -51,17 +51,12 @@ class CancellableWorker : public Napi::AsyncWorker {
 
  protected:
     [[nodiscard]] poker::CancelPredicate MakeCancelCheck() {
-        return [this]() {
-            if (IsCancelled()) {
-                cancelled_flag_.store(true, std::memory_order_relaxed);
-            }
-            return cancelled_flag_.load(std::memory_order_relaxed);
-        };
+        return [this]() { return cancelled_flag_.load(std::memory_order_relaxed); };
     }
 
     template <typename Fn>
     bool RunWithCancel(Fn&& fn) {
-        if (IsCancelled()) {
+        if (cancelled_flag_.load(std::memory_order_relaxed)) {
             SetError("Aborted");
             return true;
         }
@@ -72,7 +67,7 @@ class CancellableWorker : public Napi::AsyncWorker {
             SetError("Aborted");
             return true;
         }
-        if (check() || IsCancelled()) {
+        if (check()) {
             SetError("Aborted");
             return true;
         }
@@ -108,7 +103,7 @@ class CancellableWorker : public Napi::AsyncWorker {
             return;
         }
         Napi::Env env = Env();
-        if (env != nullptr && listener_ref_) {
+        if (env != nullptr && !listener_ref_.IsEmpty()) {
             Napi::Object signal = signal_ref_.Value();
             if (signal.Has("removeEventListener")) {
                 signal.Get("removeEventListener")

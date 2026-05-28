@@ -4,6 +4,7 @@
 #include "poker/fast_evaluator.hpp"
 
 #include <algorithm>
+#include <array>
 #include <future>
 #include <random>
 #include <vector>
@@ -81,10 +82,7 @@ float accumulate_showdown_equity(Rng& rng, const std::vector<Card>& player_hand,
     collect_known(player_hand, community_cards, known);
 
     std::vector<Card> pool = remaining_deck(known);
-    std::vector<std::vector<Card>> villain_holes(static_cast<std::size_t>(villains));
-    for (auto& vh : villain_holes) {
-        vh.reserve(2);
-    }
+    std::vector<std::array<Card, 2>> villain_holes(static_cast<std::size_t>(villains));
 
     double equity_sum = 0.0;
     std::vector<std::uint64_t> strengths;
@@ -102,9 +100,8 @@ float accumulate_showdown_equity(Rng& rng, const std::vector<Card>& player_hand,
 
         std::size_t idx = 0;
         for (auto& vh : villain_holes) {
-            vh.clear();
-            vh.push_back(pool[idx++]);
-            vh.push_back(pool[idx++]);
+            vh[0] = pool[idx++];
+            vh[1] = pool[idx++];
         }
 
         runout.assign(community_cards.begin(), community_cards.end());
