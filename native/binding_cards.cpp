@@ -1,18 +1,66 @@
 #include "binding_cards.hpp"
 
+#include "binding_init.hpp"
 #include "poker/card_string.hpp"
+#include "poker/fast_evaluator.hpp"
 
+#include <array>
 #include <stdexcept>
+#include <vector>
 
 namespace poker_bind {
 
 namespace {
 
-constexpr const char* kHandRankNames[] = {"highCard",      "onePair",       "twoPair",    "threeOfAKind",
-                                          "straight",      "flush",         "fullHouse",  "fourOfAKind",
-                                          "straightFlush", "royalFlush"};
+constexpr std::size_t kMaxCardUtf8Len = 15;
+
+bool parse_card_string_from_napi_value(const Napi::Env& env, const Napi::Value& v, poker::Card& out,
+                                       std::string* err) {
+    if (!v.IsString()) {
+        if (err) {
+            *err = "expected string card";
+        }
+        return false;
+    }
+    return parse_card_string_from_js(env, v.As<Napi::String>(), out, err);
+}
 
 }  // namespace
+
+bool parse_card_string_from_js(const Napi::Env& env, const Napi::String& str, poker::Card& out, std::string* err) {
+    napi_env nenv = env;
+    napi_value val = str;
+    size_t len = 0;
+    napi_status st = napi_get_value_string_utf8(nenv, val, nullptr, 0, &len);
+    if (st != napi_ok) {
+        if (err) {
+            *err = "invalid card string";
+        }
+        return false;
+    }
+    if (len > kMaxCardUtf8Len) {
+        if (err) {
+            *err = "invalid card string";
+        }
+        return false;
+    }
+    std::vector<char> buf(len + 1);
+    size_t written = 0;
+    st = napi_get_value_string_utf8(nenv, val, buf.data(), buf.size(), &written);
+    if (st != napi_ok) {
+        if (err) {
+            *err = "invalid card string";
+        }
+        return false;
+    }
+    if (!poker::parse_card_string_unchecked(buf.data(), written, out)) {
+        if (err) {
+            *err = "invalid card string";
+        }
+        return false;
+    }
+    return true;
+}
 
 std::vector<poker::Card> parse_card_strings(const Napi::Env& env, const Napi::Array& arr, std::string* err) {
     std::vector<poker::Card> out;
@@ -27,7 +75,7 @@ std::vector<poker::Card> parse_card_strings(const Napi::Env& env, const Napi::Ar
             return {};
         }
         poker::Card c;
-        if (!poker::parse_card_string(v.As<Napi::String>().Utf8Value(), c)) {
+        if (!parse_card_string_from_js(env, v.As<Napi::String>(), c)) {
             if (err) {
                 *err = "invalid card at index " + std::to_string(i);
             }
@@ -93,17 +141,48 @@ std::vector<poker::Card> parse_cards_from_js(const Napi::Env& env, const Napi::V
     return {};
 }
 
+bool js_card_array_has_duplicate(const Napi::Env& env, const Napi::Array& arr, std::string* err) {
+    bool seen[52]{};
+    const uint32_t n = arr.Length();
+    for (uint32_t i = 0; i < n; ++i) {
+        poker::Card c{};
+        if (!parse_card_string_from_napi_value(env, arr[i], c, err)) {
+            if (err) {
+                *err = "invalid card at index " + std::to_string(i);
+            }
+            return false;
+        }
+        const int didx = poker::deck_index_from_card(c);
+        if (seen[didx]) {
+            return true;
+        }
+        seen[didx] = true;
+    }
+    return false;
+}
+
 std::string hand_rank_js(poker::HandRank r) {
     const int idx = static_cast<int>(r);
     if (idx >= 0 && idx < 10) {
+        static constexpr const char* kHandRankNames[] = {
+            "highCard",      "onePair",       "twoPair",    "threeOfAKind", "straight",
+            "flush",         "fullHouse",     "fourOfAKind", "straightFlush", "royalFlush"};
         return kHandRankNames[idx];
     }
     return "unknown";
 }
 
-Napi::Object eval_to_object(Napi::Env env, const poker::HandEvaluation& e) {
+Napi::Object eval_to_object(Napi::Env env, const poker::HandEvaluation& e, EvalObjectFormat format) {
     Napi::Object o = Napi::Object::New(env);
-    o.Set("rank", hand_rank_js(poker::hand_category(e)));
+    const poker::HandRank cat = poker::hand_category(e);
+    const int rank_category = static_cast<int>(cat);
+    const double strength = static_cast<double>(poker::pack_hand_strength(e));
+    o.Set("rankCategory", Napi::Number::New(env, rank_category));
+    o.Set("strength", Napi::Number::New(env, strength));
+    if (format == EvalObjectFormat::Slim) {
+        return o;
+    }
+    o.Set("rank", hand_rank_string_interned(env, cat));
     Napi::Array kickers = Napi::Array::New(env, 5);
     for (size_t i = 0; i < e.kickers.size(); ++i) {
         kickers[i] = Napi::Number::New(env, e.kickers[i]);

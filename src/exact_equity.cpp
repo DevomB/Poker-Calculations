@@ -1,5 +1,6 @@
 #include "poker/exact_equity.hpp"
 
+#include "poker/cancel.hpp"
 #include "poker/card_string.hpp"
 #include "poker/fast_evaluator.hpp"
 #include "poker/hand_evaluator.hpp"
@@ -66,7 +67,8 @@ void enumerate_combos(const std::vector<int>& pool, int k, int start, std::vecto
 }  // namespace
 
 double exact_hu_equity_vs_random_hand(const std::vector<Card>& hero_hole_cards,
-                                     const std::vector<Card>& board_cards) {
+                                     const std::vector<Card>& board_cards,
+                                     const CancelPredicate* should_cancel) {
     if (hero_hole_cards.size() != 2) {
         throw std::invalid_argument("exactHuEquityVsRandomHand: hero must have exactly two cards");
     }
@@ -91,7 +93,9 @@ double exact_hu_equity_vs_random_hand(const std::vector<Card>& hero_hole_cards,
     double total = 0.0;
     std::vector<Card> full_board;
     full_board.reserve(5);
+    throw_if_cancelled(should_cancel);
     for (const std::vector<int>& vc : villain_combos) {
+        throw_if_cancelled(should_cancel);
         std::array<bool, 52> u2 = used;
         for (int idx : vc) {
             u2[static_cast<std::size_t>(idx)] = true;
@@ -102,6 +106,7 @@ double exact_hu_equity_vs_random_hand(const std::vector<Card>& hero_hole_cards,
         enumerate_combos(after_villain, need_board, 0, cur, runouts);
         const std::vector<Card> villain_cards = index_vector_to_cards(vc);
         for (const std::vector<int>& run : runouts) {
+            throw_if_cancelled(should_cancel);
             full_board = board_cards;
             for (int idx : run) {
                 const int rank = idx / 4;
@@ -144,7 +149,8 @@ double exact_hu_equity_vs_random_hand(const std::vector<Card>& hero_hole_cards,
 
 double straight_made_flop_to_river_exact_probability(const std::vector<Card>& hero_hole_cards,
                                                      const std::vector<Card>& flop_three_cards,
-                                                     const std::vector<Card>& known_dead_cards) {
+                                                     const std::vector<Card>& known_dead_cards,
+                                                     const CancelPredicate* should_cancel) {
     if (hero_hole_cards.size() != 2) {
         throw std::invalid_argument("straightMadeFlopToRiverExactProbability: hero must have exactly two cards");
     }
@@ -164,7 +170,9 @@ double straight_made_flop_to_river_exact_probability(const std::vector<Card>& he
     std::vector<int> cur;
     enumerate_combos(deck, 2, 0, cur, pairs);
     std::size_t hits = 0;
+    throw_if_cancelled(should_cancel);
     for (const std::vector<int>& pr : pairs) {
+        throw_if_cancelled(should_cancel);
         std::vector<Card> seven;
         seven.reserve(7);
         seven.insert(seven.end(), hero_hole_cards.begin(), hero_hole_cards.end());

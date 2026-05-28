@@ -1,5 +1,7 @@
 #include "poker/fast_evaluator.hpp"
 
+#include "poker/cancel.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <random>
@@ -293,7 +295,8 @@ int compare_seven_strength_fast(const std::uint8_t ranks_a[7], const std::uint8_
     return 0;
 }
 
-EvaluatorBenchmarkResult benchmark_evaluator_throughput(std::size_t iterations) {
+EvaluatorBenchmarkResult benchmark_evaluator_throughput(std::size_t iterations,
+                                                        const CancelPredicate* should_cancel) {
     if (iterations == 0) {
         iterations = 200000;
     }
@@ -307,6 +310,9 @@ EvaluatorBenchmarkResult benchmark_evaluator_throughput(std::size_t iterations) 
     const auto bench_legacy = [&]() {
         const auto t0 = std::chrono::steady_clock::now();
         for (std::size_t i = 0; i < iterations; ++i) {
+            if (i > 0 && (i % 4096) == 0) {
+                throw_if_cancelled(should_cancel);
+            }
             hole[0] = Card(static_cast<std::uint8_t>(rank_dist(rng)),
                            static_cast<std::uint8_t>(suit_dist(rng)));
             hole[1] = Card(static_cast<std::uint8_t>(rank_dist(rng)),
@@ -327,6 +333,9 @@ EvaluatorBenchmarkResult benchmark_evaluator_throughput(std::size_t iterations) 
         std::uint8_t suits[7];
         const auto t0 = std::chrono::steady_clock::now();
         for (std::size_t i = 0; i < iterations; ++i) {
+            if (i > 0 && (i % 4096) == 0) {
+                throw_if_cancelled(should_cancel);
+            }
             for (int c = 0; c < 7; ++c) {
                 ranks[c] = static_cast<std::uint8_t>(rank_dist(rng));
                 suits[c] = static_cast<std::uint8_t>(suit_dist(rng));
@@ -338,6 +347,7 @@ EvaluatorBenchmarkResult benchmark_evaluator_throughput(std::size_t iterations) 
     };
 
     const double legacy_sec = bench_legacy();
+    throw_if_cancelled(should_cancel);
     const double fast_sec = bench_fast();
     EvaluatorBenchmarkResult out{};
     out.legacy_evals_per_second =

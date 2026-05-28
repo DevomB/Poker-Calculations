@@ -1,5 +1,6 @@
 #pragma once
 
+#include "poker/cancel.hpp"
 #include "poker/card.hpp"
 #include "poker/hand_evaluator.hpp"
 
@@ -40,6 +41,6 @@ struct EvaluatorBenchmarkResult {
                                             const std::uint8_t suits_b[7]);
 
 [[nodiscard]] EvaluatorBenchmarkResult benchmark_evaluator_throughput(
-    std::size_t iterations = 200000);
+    std::size_t iterations = 200000, const CancelPredicate* should_cancel = nullptr);
 
 }  // namespace poker

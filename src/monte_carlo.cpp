@@ -1,5 +1,6 @@
 #include "poker/monte_carlo.hpp"
 
+#include "poker/cancel.hpp"
 #include "poker/fast_evaluator.hpp"
 
 #include <algorithm>
@@ -10,6 +11,8 @@
 namespace poker {
 
 namespace {
+
+constexpr int kCancelCheckInterval = 4096;
 
 double hero_showdown_equity_strengths(const std::vector<std::uint64_t>& strengths) {
     if (strengths.empty()) {
@@ -66,13 +69,14 @@ std::vector<Card> remaining_deck(const std::vector<bool>& used) {
 template <typename Rng>
 float accumulate_showdown_equity(Rng& rng, const std::vector<Card>& player_hand,
                                    const std::vector<Card>& community_cards, int iterations,
-                                   int villains) {
+                                   int villains, const CancelPredicate* cancel) {
     if (iterations <= 0) {
         return 0.0F;
     }
     if (villains < 1) {
         villains = 1;
     }
+    throw_if_cancelled(cancel);
     std::vector<bool> known(52, false);
     collect_known(player_hand, community_cards, known);
 
@@ -91,6 +95,9 @@ float accumulate_showdown_equity(Rng& rng, const std::vector<Card>& player_hand,
     std::uint8_t suits[7]{};
 
     for (int i = 0; i < iterations; ++i) {
+        if (i > 0 && (i % kCancelCheckInterval) == 0) {
+            throw_if_cancelled(cancel);
+        }
         std::shuffle(pool.begin(), pool.end(), rng);
 
         std::size_t idx = 0;
@@ -128,26 +135,28 @@ float accumulate_showdown_equity(Rng& rng, const std::vector<Card>& player_hand,
 }
 
 float run_chunk(const std::vector<Card>& player_hand, const std::vector<Card>& community_cards,
-                int count, std::uint32_t seed, int villains) {
+                int count, std::uint32_t seed, int villains, const CancelPredicate* cancel) {
     std::mt19937 rng(seed);
-    return accumulate_showdown_equity(rng, player_hand, community_cards, count, villains);
+    return accumulate_showdown_equity(rng, player_hand, community_cards, count, villains, cancel);
 }
 
 }  // namespace
 
 float simulate_hand_outcome(const std::vector<Card>& player_hand,
                             const std::vector<Card>& community_cards, int num_simulations,
-                            std::mt19937& rng, int villains) {
-    return accumulate_showdown_equity(rng, player_hand, community_cards, num_simulations,
-                                      villains);
+                            std::mt19937& rng, int villains, const CancelPredicate* cancel) {
+    return accumulate_showdown_equity(rng, player_hand, community_cards, num_simulations, villains,
+                                      cancel);
 }
 
 float parallel_hand_simulation(const std::vector<Card>& player_hand,
                                const std::vector<Card>& community_cards, int num_simulations,
-                               std::uint32_t base_seed, int villains, std::size_t num_threads) {
+                               std::uint32_t base_seed, int villains, std::size_t num_threads,
+                               const CancelPredicate* cancel) {
     if (num_simulations <= 0) {
         return 0.0F;
     }
+    throw_if_cancelled(cancel);
     if (num_threads == 0) {
         num_threads = 1;
     }
@@ -161,12 +170,13 @@ float parallel_hand_simulation(const std::vector<Card>& player_hand,
         const int chunk = base + (static_cast<int>(t) < rem ? 1 : 0);
         const std::uint32_t seed = base_seed + static_cast<std::uint32_t>(t) * 9743U;
         futures.push_back(std::async(std::launch::async, [&, chunk, seed]() {
-            return run_chunk(player_hand, community_cards, chunk, seed, villains);
+            return run_chunk(player_hand, community_cards, chunk, seed, villains, cancel);
         }));
     }
     double weighted = 0.0;
     int total = 0;
     for (std::size_t t = 0; t < num_threads; ++t) {
+        throw_if_cancelled(cancel);
         const int chunk = base + (static_cast<int>(t) < rem ? 1 : 0);
         weighted += static_cast<double>(futures[t].get()) * static_cast<double>(chunk);
         total += chunk;

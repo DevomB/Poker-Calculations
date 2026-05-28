@@ -57,7 +57,11 @@ Cards use strings like `"Ah"` and `"Td"` (ten may be `"10h"`), or packed **`Uint
 const poker = require('poker-calculations');
 
 poker.evaluateBestHand(['Ah', 'Ac', 'Kd', 'Ks', 'Qh', 'Jh', 'Th']);
-// → best five of seven
+// → { rank, rankCategory, strength, kickers }
+
+poker.parseCompactCardList('AhKhQh', { outFormat: 'packed' }); // Uint8Array for hot paths
+poker.evaluateBestHand(['Ah', 'Ac', 'Kd', 'Ks', 'Qh'], { format: 'slim' });
+// → { rankCategory, strength } only
 
 const equity = poker.simulateHandOutcome(
   ['Ah', 'Kh'],
@@ -74,6 +78,17 @@ const equityAsync = await poker.simulateHandOutcomeAsync(
   10_000,
   42,
   1
+);
+
+// Optional AbortSignal (cooperative cancel; rejects with AbortError)
+const ac = new AbortController();
+const equityCancellable = await poker.simulateHandOutcomeAsync(
+  ['Ah', 'Kh'],
+  ['Qh', 'Jh', 'Th'],
+  10_000,
+  42,
+  1,
+  { signal: ac.signal }
 );
 
 const spr = poker.spr(90, 270);

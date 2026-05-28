@@ -1,5 +1,6 @@
 #pragma once
 
+#include "poker/cancel.hpp"
 #include "poker/card.hpp"
 
 #include <cstddef>
@@ -13,7 +14,8 @@ namespace poker {
                                           const std::vector<Card>& community_cards,
                                           int num_simulations,
                                           std::mt19937& rng,
-                                          int villains = 1);
+                                          int villains = 1,
+                                          const CancelPredicate* cancel = nullptr);
 
 /// Same as repeated `simulate_hand_outcome`, split across `num_threads` workers.
 [[nodiscard]] float parallel_hand_simulation(const std::vector<Card>& player_hand,
@@ -21,7 +23,8 @@ namespace poker {
                                              int num_simulations,
                                              std::uint32_t base_seed,
                                              int villains,
-                                             std::size_t num_threads);
+                                             std::size_t num_threads,
+                                             const CancelPredicate* cancel = nullptr);
 
 struct SimSpot {
     std::vector<Card> hole;

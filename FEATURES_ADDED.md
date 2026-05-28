@@ -8,7 +8,7 @@ Complete inventory of what the **npm package** ships: **110** native JavaScript 
 
 **Package metadata:** Node **18+**; entry `index.js` + `index.d.ts`; optional [`encode.js`](encode.js) for packed cards and PKST state. Prebuilt N-API binaries under `prebuilds/` (glibc + musl on Linux). No separate `poker-math.js` layer — all math is C++ via N-API.
 
-**Async vs C++ parallelism:** `parallelHandSimulation` uses C++ `std::async` inside the native call. The `*Async` exports (`simulateHandOutcomeAsync`, etc.) use Node’s libuv thread pool (`Napi::AsyncWorker`) so the **JavaScript event loop** stays responsive.
+**Async vs C++ parallelism:** `parallelHandSimulation` uses C++ `std::async` inside the native call. The `*Async` exports (`simulateHandOutcomeAsync`, etc.) use Node’s libuv thread pool (`Napi::AsyncWorker`) so the **JavaScript event loop** stays responsive. Each `*Async` export accepts an optional trailing `{ signal?: AbortSignal }`; abort rejects with `AbortError` and stops CPU in cooperative hot loops (Monte Carlo, exact enumeration, benchmark, `decideAction` MC).
 
 ---
 
@@ -20,7 +20,7 @@ Implemented in C++ and registered in [`native/binding_register.cpp`](native/bind
 
 | Group | Export | Role |
 | --- | --- | --- |
-| **Hand resolution** | `evaluateBestHand(cards)` | Best five of **1–7** cards; returns `{ rank, kickers }` (`HandEvalResult`). |
+| **Hand resolution** | `evaluateBestHand(cards, options?)` | Best five of **1–7** cards; `HandEvalResult` (`rank`, `rankCategory`, `strength`, `kickers`) or `{ format: 'slim' }` → `rankCategory` + `strength` only. |
 | | `evaluateHandStrength(holeCards, board)` | Encoded strength as `number` (`uint64` bit layout: rank in high bits + five kicker nibbles); `CardInput` for hole/board. |
 | | `evaluateHandStrengthFast(holeCards, board)` | Same encoding as `evaluateHandStrength`; forge stack evaluator (`src/fast_evaluator.cpp`). |
 | | `benchmarkEvaluatorThroughput(iterations?)` | `{ legacyEvalsPerSecond, fastEvalsPerSecond, implementation }` for legacy vs forge paths. |
@@ -29,18 +29,18 @@ Implemented in C++ and registered in [`native/binding_register.cpp`](native/bind
 | | `cardStringsHaveDuplicate(cards)` | `true` if two entries map to the same card; `CardInput` (`string[]` or packed `Uint8Array`). |
 | | `compareBestHands(cardsA, cardsB)` | `-1` / `0` / `1` best-hand order; `CardInput`; throws on overlap or invalid cards. |
 | | `canonicalCardString(card)` | Canonical two-character card (`Th`, `Ac`, …); throws if invalid. |
-| | `parseCompactCardList(text)` | Parse concatenated or whitespace-separated cards (`AhKh`, `10h Kd`); throws on duplicate or invalid token. |
+| | `parseCompactCardList(text, options?)` | Parse compact card text; default `string[]`, `{ outFormat: 'packed' }` → `Uint8Array` deck ids. |
 | | `handRankCategoryOrder(category)` | Integer order `0..9` for `evaluateHandCategory` labels (`highCard` … `royalFlush`). |
 | **Monte Carlo equity** | `simulateHandOutcome(holeCards, board, numSimulations, seed, villains?)` | Estimated equity vs one or more random villain hands (default `villains = 1`). |
-| | `simulateHandOutcomeAsync(…)` | Same as sync; Promise on libuv thread pool (non-blocking). |
+| | `simulateHandOutcomeAsync(…, options?)` | Same as sync; Promise on libuv thread pool; optional `AbortSignal`. |
 | | `parallelHandSimulation(holeCards, board, numSimulations, baseSeed, villains, numThreads)` | Same with C++ worker threads and distinct seeds per chunk. |
-| | `parallelHandSimulationAsync(…)` | Same as sync; Promise on libuv thread pool. |
+| | `parallelHandSimulationAsync(…, options?)` | Same as sync; Promise on libuv thread pool; optional `AbortSignal`. |
 | | `exactHuEquityVsRandomHand(heroHoleCards, boardCards)` | Exact HU equity vs uniform random villain hand; board must have **3–5** cards. |
-| | `exactHuEquityVsRandomHandAsync(…)` | Same as sync; Promise on libuv thread pool. |
-| | `straightMadeFlopToRiverExactProbabilityAsync(…)` | Async sibling of exact flop→river straight probability. |
-| | `benchmarkEvaluatorThroughputAsync(iterations?)` | Async sibling of evaluator benchmark. |
+| | `exactHuEquityVsRandomHandAsync(…, options?)` | Same as sync; Promise on libuv thread pool; optional `AbortSignal`. |
+| | `straightMadeFlopToRiverExactProbabilityAsync(…, options?)` | Async sibling of exact flop→river straight probability; optional `AbortSignal`. |
+| | `benchmarkEvaluatorThroughputAsync(iterations?, options?)` | Async sibling of evaluator benchmark; optional `AbortSignal`. |
 | **Strategy** | `decideAction(state, config, opponentModel?, heroSeat?)` | Rule-based action using MC equity (or strength fallback when sim count is 0), pot odds, call EV; see [decideAction contract](#decideaction-contract). |
-| | `decideActionAsync(…)` | Same as sync; Promise on libuv thread pool. |
+| | `decideActionAsync(…, options?)` | Same as sync; Promise on libuv thread pool; optional `AbortSignal`. |
 | **Pot / chip EV** | `potOddsRatio(pot, toCall)` | `toCall / (pot + toCall)` when valid; else `0`. |
 | | `expectedValueCall(equity, pot, toCall)` | Chip EV of calling once vs folding (0); no future streets. |
 | | `expectedValueCallWithRake(equity, potBeforeCall, toCall, rakeFraction, rakeCap)` | Chip EV of call vs fold when the final HU pot pays rake (same rake model as breakeven-with-rake). |
@@ -166,7 +166,8 @@ Returned by `evaluateBestHand` → `rank` and `evaluateHandCategory`. `handRankC
 
 | Type | Fields / values |
 | --- | --- |
-| **`HandEvalResult`** | `rank: string`, `kickers: number[]` (length 5) |
+| **`HandEvalResult`** | `rank: string`, `rankCategory: number`, `strength: number`, `kickers: number[]` (length 5) |
+| **`HandEvalResultSlim`** | `rankCategory: number`, `strength: number` (`evaluateBestHand` with `{ format: 'slim' }`) |
 | **`DecisionResult`** | `action: 'fold' \| 'call' \| 'raise' \| 'check'`, `raiseBy: number` (chips above call for raises) |
 | **`WilsonScoreInterval`** | `lower`, `upper` (same shape for Agresti–Coull and Wald intervals) |
 | **`BetaBinomialFoldPosterior`** | `alpha`, `beta`, `posteriorMean` |
