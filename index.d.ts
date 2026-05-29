@@ -120,6 +120,26 @@ export interface EvaluatorBenchmarkResult {
   implementation: string;
 }
 
+/** Sparse villain range: parallel `indices` (two deck ids per combo) and `weights`. */
+export interface SparseRangeSpec {
+  indices: number[] | Int32Array | Uint32Array;
+  weights: F64VectorInput;
+}
+
+export interface McEquityDetailedResult {
+  estimate: number;
+  se: number;
+  ciLow: number;
+  ciHigh: number;
+  n: number;
+}
+
+export interface PreflopMatrixOptions {
+  iterations?: number;
+  seed?: number;
+  threads?: number;
+}
+
 export interface WilsonScoreInterval {
   lower: number;
   upper: number;
@@ -603,7 +623,51 @@ export interface PokerCalculations {
   ): number[] | Float64Array;
   /** Sum of `potChips` over side-pot layers. */
   sidePotLayersTotalChips(layers: SidePotLayer[]): number;
-  /** P22: exact HU vs random villain hand; board must have 3–5 cards. */
+  /** Exact HU vs known villain hole cards; board empty (preflop) or 3–5 cards. */
+  exactHuEquityVsKnownHand(
+    heroHoleCards: CardInput,
+    villainHoleCards: CardInput,
+    boardCards: CardInput
+  ): number;
+  /** Exact HU vs weighted villain range (dense `Float64Array(1326)` or sparse spec). */
+  exactHuEquityVsRange(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec
+  ): number;
+  /** Monte Carlo equity vs weighted villain range. */
+  simulateEquityVsRange(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec,
+    numSimulations: number,
+    seed: number
+  ): number;
+  /** Monte Carlo equity with standard error and Wilson CI. */
+  simulateHandOutcomeDetailed(
+    holeCards: CardInput,
+    board: CardInput,
+    numSimulations: number,
+    seed: number,
+    villains?: number
+  ): McEquityDetailedResult;
+  /** Preflop 169×169 equity matrix (row-major `Float64Array`, length `169*169`). */
+  buildPreflopEquityMatrix(options?: PreflopMatrixOptions): Float64Array;
+  /** Change in exact range equity when `removedDeckIndex` is treated as dead. */
+  equityDeltaIfCardRemoved(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec,
+    removedDeckIndex: number
+  ): number;
+  /** Independent Weitzman chip-utility ICM (`alpha` defaults to 2). */
+  icmExpectedPayoutsWeitzman(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    alpha?: number,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+  /** P22: exact HU vs random villain hand; board empty or 3–5 cards. */
   exactHuEquityVsRandomHand(heroHoleCards: CardInput, boardCards: CardInput): number;
   /** Same as `exactHuEquityVsRandomHand`; runs on the libuv thread pool (non-blocking). */
   exactHuEquityVsRandomHandAsync(

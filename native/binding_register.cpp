@@ -3,6 +3,7 @@
 
 #include "binding_batch.hpp"
 #include "binding_init.hpp"
+#include "binding_range.hpp"
 #include "binding_state.hpp"
 
 Napi::Value EvaluateBestHand(const Napi::CallbackInfo& info);
@@ -113,6 +114,13 @@ Napi::Value SimulateHandOutcomeBatch(const Napi::CallbackInfo& info);
 Napi::Value SimulateHandOutcomeBatchPacked(const Napi::CallbackInfo& info);
 Napi::Value EvaluateHandStrengthFastBatch(const Napi::CallbackInfo& info);
 Napi::Value ExactHuEquityVsRandomHandBatch(const Napi::CallbackInfo& info);
+Napi::Value ExactHuEquityVsKnownHand(const Napi::CallbackInfo& info);
+Napi::Value ExactHuEquityVsRange(const Napi::CallbackInfo& info);
+Napi::Value SimulateEquityVsRange(const Napi::CallbackInfo& info);
+Napi::Value SimulateHandOutcomeDetailed(const Napi::CallbackInfo& info);
+Napi::Value BuildPreflopEquityMatrix(const Napi::CallbackInfo& info);
+Napi::Value EquityDeltaIfCardRemoved(const Napi::CallbackInfo& info);
+Napi::Value IcmExpectedPayoutsWeitzman(const Napi::CallbackInfo& info);
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     poker_bind::init_binding(env);
@@ -225,6 +233,13 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("simulateHandOutcomeBatchPacked", SimulateHandOutcomeBatchPacked),
         Napi::PropertyDescriptor::Function("evaluateHandStrengthFastBatch", EvaluateHandStrengthFastBatch),
         Napi::PropertyDescriptor::Function("exactHuEquityVsRandomHandBatch", ExactHuEquityVsRandomHandBatch),
+        Napi::PropertyDescriptor::Function("exactHuEquityVsKnownHand", ExactHuEquityVsKnownHand),
+        Napi::PropertyDescriptor::Function("exactHuEquityVsRange", ExactHuEquityVsRange),
+        Napi::PropertyDescriptor::Function("simulateEquityVsRange", SimulateEquityVsRange),
+        Napi::PropertyDescriptor::Function("simulateHandOutcomeDetailed", SimulateHandOutcomeDetailed),
+        Napi::PropertyDescriptor::Function("buildPreflopEquityMatrix", BuildPreflopEquityMatrix),
+        Napi::PropertyDescriptor::Function("equityDeltaIfCardRemoved", EquityDeltaIfCardRemoved),
+        Napi::PropertyDescriptor::Function("icmExpectedPayoutsWeitzman", IcmExpectedPayoutsWeitzman),
         Napi::PropertyDescriptor::Function("encodePokerState", poker_bind::EncodePokerState),
         Napi::PropertyDescriptor::Function("decodePokerState", poker_bind::DecodePokerState),
     });

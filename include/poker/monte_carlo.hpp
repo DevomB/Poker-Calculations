@@ -36,4 +36,10 @@ struct SimSpot {
 
 void simulate_hand_outcome_batch(const std::vector<SimSpot>& spots, std::vector<float>& out_equities);
 
+/// MC equity vs fixed villain hole cards (deck indices 0..51).
+[[nodiscard]] float simulate_hand_outcome_vs_villain_holes(
+    const std::vector<Card>& player_hand, const std::vector<Card>& community_cards,
+    int villain_deck_a, int villain_deck_b, int num_simulations, std::mt19937& rng,
+    const CancelPredicate* cancel = nullptr);
+
 }  // namespace poker

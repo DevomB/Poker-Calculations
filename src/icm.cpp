@@ -179,4 +179,46 @@ double icm_pairwise_bubble_factor(const std::vector<double>& stacks,
     return loss / gain;
 }
 
+std::vector<double> icm_expected_payouts_weitzman(const std::vector<double>& stacks,
+                                                 const std::vector<double>& payouts, double alpha) {
+    const std::size_t n = stacks.size();
+    if (n == 0) {
+        throw std::invalid_argument("ICM Weitzman: need at least one player");
+    }
+    if (payouts.size() != n) {
+        throw std::invalid_argument("ICM Weitzman: payouts vector must match number of players");
+    }
+    if (!std::isfinite(alpha) || alpha <= 0.0) {
+        throw std::invalid_argument("ICM Weitzman: alpha must be finite and positive");
+    }
+    std::vector<double> util(n, 0.0);
+    double sum_util = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const double s = stacks[i];
+        if (!std::isfinite(s) || s < 0.0) {
+            throw std::invalid_argument("ICM Weitzman: stacks must be finite and non-negative");
+        }
+        if (s <= 0.0) {
+            util[i] = 0.0;
+            continue;
+        }
+        util[i] = std::pow(s, alpha);
+        sum_util += util[i];
+    }
+    if (sum_util <= 0.0) {
+        throw std::invalid_argument("ICM Weitzman: positive total utility required");
+    }
+    std::vector<double> ev(n, 0.0);
+    for (std::size_t k = 0; k < n; ++k) {
+        const double prize = payouts[k];
+        if (!std::isfinite(prize) || prize < 0.0) {
+            throw std::invalid_argument("ICM Weitzman: payouts must be finite and non-negative");
+        }
+        for (std::size_t i = 0; i < n; ++i) {
+            ev[i] += prize * (util[i] / sum_util);
+        }
+    }
+    return ev;
+}
+
 }  // namespace poker

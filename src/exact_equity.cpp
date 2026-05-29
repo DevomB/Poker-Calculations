@@ -2,70 +2,24 @@
 
 #include "poker/cancel.hpp"
 #include "poker/card_string.hpp"
+#include "poker/combo_enumerator.hpp"
+#include "poker/deck_bitset.hpp"
 #include "poker/fast_evaluator.hpp"
 #include "poker/hand_evaluator.hpp"
 #include "poker/poker_math.hpp"
 #include "poker/types.hpp"
 
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>
-#include <utility>
 #include <vector>
 
 namespace poker {
 
 namespace {
 
-void mark_used(const std::vector<Card>& cards, std::array<bool, 52>& used) {
-    for (const Card& c : cards) {
-        const int idx = deck_index_from_card(c);
-        if (idx < 0 || idx >= 52) {
-            throw std::invalid_argument("invalid card index");
-        }
-        if (used[static_cast<std::size_t>(idx)]) {
-            throw std::invalid_argument("duplicate card in hero or board");
-        }
-        used[static_cast<std::size_t>(idx)] = true;
-    }
-}
-
-[[nodiscard]] std::vector<int> unused_indices(const std::array<bool, 52>& used) {
-    std::vector<int> d;
-    d.reserve(52);
-    for (int i = 0; i < 52; ++i) {
-        if (!used[static_cast<std::size_t>(i)]) {
-            d.push_back(i);
-        }
-    }
-    return d;
-}
-
-template <typename Fn>
-void for_each_combo(const std::vector<int>& pool, int k, Fn&& fn) {
-    if (k <= 0 || static_cast<int>(pool.size()) < k) {
-        return;
-    }
-    std::vector<int> cur;
-    cur.reserve(static_cast<std::size_t>(k));
-    const auto go = [&](const auto& self, int start) -> void {
-        if (static_cast<int>(cur.size()) == k) {
-            fn(cur);
-            return;
-        }
-        const int need = k - static_cast<int>(cur.size());
-        for (int i = start; i <= static_cast<int>(pool.size()) - need; ++i) {
-            cur.push_back(pool[static_cast<std::size_t>(i)]);
-            self(self, i + 1);
-            cur.pop_back();
-        }
-    };
-    go(go, 0);
-}
-
 void fill_seven_from_hole_board_run(const std::vector<Card>& hole, const std::vector<Card>& board,
-                                    const std::vector<int>& run, std::uint8_t* ranks, std::uint8_t* suits) {
+                                    const int* run, int run_k, std::uint8_t* ranks, std::uint8_t* suits) {
     ranks[0] = hole[0].rank();
     suits[0] = hole[0].suit();
     ranks[1] = hole[1].rank();
@@ -75,10 +29,10 @@ void fill_seven_from_hole_board_run(const std::vector<Card>& hole, const std::ve
         suits[2 + bi] = board[bi].suit();
     }
     const std::size_t base = 2 + board.size();
-    for (std::size_t ri = 0; ri < run.size(); ++ri) {
+    for (int ri = 0; ri < run_k; ++ri) {
         const int idx = run[ri];
-        ranks[base + ri] = static_cast<std::uint8_t>(idx / 4);
-        suits[base + ri] = static_cast<std::uint8_t>(idx % 4);
+        ranks[base + static_cast<std::size_t>(ri)] = static_cast<std::uint8_t>(idx / 4);
+        suits[base + static_cast<std::size_t>(ri)] = static_cast<std::uint8_t>(idx % 4);
     }
 }
 
@@ -90,15 +44,17 @@ double exact_hu_equity_vs_random_hand(const std::vector<Card>& hero_hole_cards,
     if (hero_hole_cards.size() != 2) {
         throw std::invalid_argument("exactHuEquityVsRandomHand: hero must have exactly two cards");
     }
-    if (board_cards.size() < 3 || board_cards.size() > 5) {
-        throw std::invalid_argument(
-            "exactHuEquityVsRandomHand: board must have 3..5 cards (enumerate runouts)");
+    if (board_cards.size() > 5) {
+        throw std::invalid_argument("exactHuEquityVsRandomHand: board must have at most 5 cards");
     }
-    std::array<bool, 52> used{};
-    used.fill(false);
-    mark_used(hero_hole_cards, used);
-    mark_used(board_cards, used);
-    const std::vector<int> deck = unused_indices(used);
+    if (board_cards.size() < 3 && board_cards.size() != 0) {
+        throw std::invalid_argument(
+            "exactHuEquityVsRandomHand: board must be empty (preflop) or have 3..5 cards");
+    }
+    DeckBitset used;
+    used.mark_cards(hero_hole_cards);
+    used.mark_cards(board_cards);
+    const std::vector<int> deck = used.unused_indices();
     const int need_board = 5 - static_cast<int>(board_cards.size());
     const int need_villain = 2;
     if (static_cast<int>(deck.size()) < need_villain + need_board) {
@@ -107,20 +63,23 @@ double exact_hu_equity_vs_random_hand(const std::vector<Card>& hero_hole_cards,
     double win_weight = 0.0;
     double total = 0.0;
     throw_if_cancelled(should_cancel);
-    for_each_combo(deck, need_villain, [&](const std::vector<int>& vc) {
+    const int h0 = deck_index_from_card(hero_hole_cards[0]);
+    const int h1 = deck_index_from_card(hero_hole_cards[1]);
+    std::uint8_t hero_r[7]{};
+    std::uint8_t hero_s[7]{};
+    std::uint8_t vil_r[7]{};
+    std::uint8_t vil_s[7]{};
+
+    for_each_combo_indices(deck, need_villain, [&](const int* vc, int vc_k) {
         throw_if_cancelled(should_cancel);
-        std::array<bool, 52> u2 = used;
-        for (int idx : vc) {
-            u2[static_cast<std::size_t>(idx)] = true;
+        DeckBitset u2 = used;
+        for (int i = 0; i < vc_k; ++i) {
+            u2.set(vc[i]);
         }
-        const std::vector<int> after_villain = unused_indices(u2);
-        for_each_combo(after_villain, need_board, [&](const std::vector<int>& run) {
+        const std::vector<int> after_villain = u2.unused_indices();
+        for_each_combo_indices(after_villain, need_board, [&](const int* run, int run_k) {
             throw_if_cancelled(should_cancel);
-            std::uint8_t hero_r[7]{};
-            std::uint8_t hero_s[7]{};
-            std::uint8_t vil_r[7]{};
-            std::uint8_t vil_s[7]{};
-            fill_seven_from_hole_board_run(hero_hole_cards, board_cards, run, hero_r, hero_s);
+            fill_seven_from_hole_board_run(hero_hole_cards, board_cards, run, run_k, hero_r, hero_s);
             vil_r[0] = static_cast<std::uint8_t>(vc[0] / 4);
             vil_s[0] = static_cast<std::uint8_t>(vc[0] % 4);
             vil_r[1] = static_cast<std::uint8_t>(vc[1] / 4);
@@ -130,10 +89,10 @@ double exact_hu_equity_vs_random_hand(const std::vector<Card>& hero_hole_cards,
                 vil_s[2 + bi] = board_cards[bi].suit();
             }
             const std::size_t base = 2 + board_cards.size();
-            for (std::size_t ri = 0; ri < run.size(); ++ri) {
+            for (int ri = 0; ri < run_k; ++ri) {
                 const int idx = run[ri];
-                vil_r[base + ri] = static_cast<std::uint8_t>(idx / 4);
-                vil_s[base + ri] = static_cast<std::uint8_t>(idx % 4);
+                vil_r[base + static_cast<std::size_t>(ri)] = static_cast<std::uint8_t>(idx / 4);
+                vil_s[base + static_cast<std::size_t>(ri)] = static_cast<std::uint8_t>(idx % 4);
             }
             const int cmp = compare_seven_strength_fast(hero_r, hero_s, vil_r, vil_s);
             total += 1.0;
@@ -160,19 +119,18 @@ double straight_made_flop_to_river_exact_probability(const std::vector<Card>& he
     if (flop_three_cards.size() != 3) {
         throw std::invalid_argument("straightMadeFlopToRiverExactProbability: flop must have exactly three cards");
     }
-    std::array<bool, 52> used{};
-    used.fill(false);
-    mark_used(hero_hole_cards, used);
-    mark_used(flop_three_cards, used);
-    mark_used(known_dead_cards, used);
-    const std::vector<int> deck = unused_indices(used);
+    DeckBitset used;
+    used.mark_cards(hero_hole_cards);
+    used.mark_cards(flop_three_cards);
+    used.mark_cards(known_dead_cards);
+    const std::vector<int> deck = used.unused_indices();
     if (static_cast<int>(deck.size()) < 2) {
         throw std::invalid_argument("straightMadeFlopToRiverExactProbability: need at least two unseen cards");
     }
     std::size_t hits = 0;
     std::size_t total = 0;
     throw_if_cancelled(should_cancel);
-    for_each_combo(deck, 2, [&](const std::vector<int>& pr) {
+    for_each_combo_indices(deck, 2, [&](const int* pr, int) {
         throw_if_cancelled(should_cancel);
         ++total;
         std::vector<Card> seven;
