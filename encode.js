@@ -83,7 +83,7 @@ function unpackCards(packed) {
 }
 
 /**
- * PKST v1 binary state (native `encodePokerState`).
+ * PKST packed binary state (native `encodePokerState`).
  * @param {import('./index').NativePokerState} state
  * @returns {Uint8Array}
  */
