@@ -24,6 +24,10 @@ add_library(poker_lib STATIC
     src/icm.cpp
     src/side_pot.cpp
     src/exact_equity.cpp
+    src/range.cpp
+    src/range_equity.cpp
+    src/equity_matrix.cpp
+    src/monte_carlo_detail.cpp
     src/strategy.cpp
     src/opponent_model.cpp
     src/monte_carlo.cpp
@@ -64,6 +68,9 @@ if(POKER_BUILD_TESTS)
         tests/test_state_codec.cpp
         tests/test_fast_evaluator.cpp
         tests/test_bot_config.cpp
+        tests/test_range_equity.cpp
+        tests/test_icm_weitzman.cpp
+        tests/test_golden_regression.cpp
     )
     target_link_libraries(poker_tests PRIVATE poker_lib GTest::gtest_main)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -92,6 +99,7 @@ if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
         native/binding_init.cpp
         native/binding_state.cpp
         native/binding_batch.cpp
+        native/binding_range.cpp
         native/async_workers.cpp
         ${CMAKE_JS_SRC}
     )
