@@ -8,7 +8,7 @@ export function unpackCards(packed: Uint8Array): string[];
 
 import type { NativePokerState } from './index';
 
-/** PKST v1 bytes via native `encodePokerState`. */
+/** PKST packed state bytes via native `encodePokerState`. */
 export function packPokerState(state: NativePokerState): Uint8Array;
 /** Round-trip to `NativePokerState` via native `decodePokerState`. */
 export function unpackPokerState(bytes: Uint8Array): NativePokerState;
