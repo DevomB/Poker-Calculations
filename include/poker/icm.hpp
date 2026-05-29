@@ -6,7 +6,7 @@
 namespace poker {
 
 /**
- * P17: full Harville / Malmuth–Harville placement matrix.
+ * full Harville / Malmuth–Harville placement matrix.
  * `out[i][r]` = P(player index `i` finishes in place `r+1`), where `r=0` is first place.
  */
 [[nodiscard]] std::vector<std::vector<double>> icm_harville_placement_probabilities(

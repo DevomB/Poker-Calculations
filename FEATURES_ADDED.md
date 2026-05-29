@@ -1,6 +1,6 @@
 # Shipped feature inventory — `poker-calculations`
 
-Complete inventory of what the **npm package** ships: **110** native JavaScript functions, **8** TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
+Complete inventory of what the **npm package** ships: **117** native JavaScript functions, TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
 
 **Authoritative sources:** [`index.d.ts`](index.d.ts) (types + JSDoc), [`README.md`](README.md) (overview tables), [`native/binding_register.cpp`](native/binding_register.cpp) (export registration), [documentation site](https://poker-calculations.devomb.com/docs/reference/api) (examples + when-to-use), [`scripts/list-native-exports.mjs`](scripts/list-native-exports.mjs) (runtime export list).
 
@@ -12,7 +12,7 @@ Complete inventory of what the **npm package** ships: **110** native JavaScript 
 
 ---
 
-## JavaScript / N-API exports (110 functions)
+## JavaScript / N-API exports (117 functions)
 
 Includes batch Monte Carlo, `*Async` Promise exports, Float64 ICM paths, and PKST packed state (`encodePokerState` / `decodePokerState`). ICM/stack helpers accept `Float64Array` and optional `returnFormat: 'float64'`. PKST byte layout: magic `PKST`, layout version byte, players, phase, pot fields, per-player hole bytes, community cards, `actedThisStreet` — see `include/poker/state_codec.hpp`.
 
@@ -31,16 +31,28 @@ Implemented in C++ and registered in [`native/binding_register.cpp`](native/bind
 | | `canonicalCardString(card)` | Canonical two-character card (`Th`, `Ac`, …); throws if invalid. |
 | | `parseCompactCardList(text, options?)` | Parse compact card text; default `string[]`, `{ outFormat: 'packed' }` → `Uint8Array` deck ids. |
 | | `handRankCategoryOrder(category)` | Integer order `0..9` for `evaluateHandCategory` labels (`highCard` … `royalFlush`). |
+| | `evaluateHandStrengthFastBatch(holes, boards, boardCards, out?)` | Packed batch of `evaluateHandStrengthFast` (see docs site batch guide). |
+| | `buildPreflopEquityMatrix(options?)` | Row-major `169×169` preflop MC matrix (`PreflopMatrixOptions`). |
+| | `exactHuEquityVsKnownHand(heroHoleCards, villainHoleCards, boardCards)` | Exact HU vs known villain; board empty or 3–5 cards. |
+| | `exactHuEquityVsRange(heroHoleCards, boardCards, range)` | Exact HU vs dense `Float64Array(1326)` or sparse range spec. |
+| | `equityDeltaIfCardRemoved(heroHoleCards, boardCards, range, removedDeckIndex)` | Change in exact range equity when one deck id is dead. |
 | **Monte Carlo equity** | `simulateHandOutcome(holeCards, board, numSimulations, seed, villains?)` | Estimated equity vs one or more random villain hands (default `villains = 1`). |
 | | `simulateHandOutcomeAsync(…, options?)` | Same as sync; Promise on libuv thread pool; optional `AbortSignal`. |
 | | `parallelHandSimulation(holeCards, board, numSimulations, baseSeed, villains, numThreads)` | Same with C++ worker threads and distinct seeds per chunk. |
 | | `parallelHandSimulationAsync(…, options?)` | Same as sync; Promise on libuv thread pool; optional `AbortSignal`. |
-| | `exactHuEquityVsRandomHand(heroHoleCards, boardCards)` | Exact HU equity vs uniform random villain hand; board must have **3–5** cards. |
+| | `simulateHandOutcomeBatch(specs[])` | Many MC spots → `Float64Array` (`SimBatchSpec` per row). |
+| | `simulateHandOutcomeBatchPacked(holes, boards, boardCards, meta, out?)` | Packed batch MC layout. |
+| | `simulateHandOutcomeDetailed(holeCards, board, numSimulations, seed, villains?)` | `{ estimate, se, ciLow, ciHigh, n }` with Wilson CI. |
+| | `simulateEquityVsRange(heroHoleCards, boardCards, range, numSimulations, seed)` | MC vs weighted villain range. |
+| | `exactHuEquityVsRandomHand(heroHoleCards, boardCards)` | Exact HU equity vs uniform random villain hand; board **empty (preflop) or 3–5** cards. |
+| | `exactHuEquityVsRandomHandBatch(holes, boards, boardCards, out?)` | Packed batch exact HU vs random. |
 | | `exactHuEquityVsRandomHandAsync(…, options?)` | Same as sync; Promise on libuv thread pool; optional `AbortSignal`. |
 | | `straightMadeFlopToRiverExactProbabilityAsync(…, options?)` | Async sibling of exact flop→river straight probability; optional `AbortSignal`. |
 | | `benchmarkEvaluatorThroughputAsync(iterations?, options?)` | Async sibling of evaluator benchmark; optional `AbortSignal`. |
 | **Strategy** | `decideAction(state, config, opponentModel?, heroSeat?)` | Rule-based action using MC equity (or strength fallback when sim count is 0), pot odds, call EV; see [decideAction contract](#decideaction-contract). |
 | | `decideActionAsync(…, options?)` | Same as sync; Promise on libuv thread pool; optional `AbortSignal`. |
+| | `encodePokerState(state)` | PKST packed bytes from `NativePokerState`. |
+| | `decodePokerState(bytes)` | Round-trip to `NativePokerState`. |
 | **Pot / chip EV** | `potOddsRatio(pot, toCall)` | `toCall / (pot + toCall)` when valid; else `0`. |
 | | `expectedValueCall(equity, pot, toCall)` | Chip EV of calling once vs folding (0); no future streets. |
 | | `expectedValueCallWithRake(equity, potBeforeCall, toCall, rakeFraction, rakeCap)` | Chip EV of call vs fold when the final HU pot pays rake (same rake model as breakeven-with-rake). |
@@ -120,14 +132,15 @@ Implemented in C++ and registered in [`native/binding_register.cpp`](native/bind
 | | `icmTopKFinishProbabilities(stacks[], k)` | Sum of Harville placement over first `k` finish ranks per player (convenience on placement matrix). |
 | | `icmLastPlaceProbabilitiesHarville(stacks[])` | Harville probability each player finishes **last** (placement matrix last column). |
 | | `icmExpectedPayouts(stacks[], payouts[])` | Expected payout per seat. |
+| | `icmExpectedPayoutsWeitzman(stacks[], payouts[], alpha?, returnFormat?)` | Independent chip-utility ICM (`stack^alpha`, default `alpha=2`); not Harville. |
 | | `icmPairwiseBubbleFactor(stacks[], payouts[], heroIndex, villainIndex, potChips)` | Loss/gain ratio from finite differences on `icmExpectedPayouts`. |
 | **Side pots** | `sidePotLadderFromCommitments(committedChips[])` | Main + side layers; each layer `{ potChips, playerCapContribution[] }`. |
 | | `layeredPotChipEvFromEquities(layerPotChips[], equityPlayerByLayer[][])` | Chip EV; each column sums to `1`. |
 | | `sidePotLayersTotalChips(layers[])` | Sum of `potChips` across layers from `sidePotLadderFromCommitments`. |
 
-### Alphabetical export index (98)
+### Alphabetical export index (117)
 
-`agrestiCoullInterval`, `alphaFrequency`, `bankrollForTargetRorDiffusion`, `benchmarkEvaluatorThroughput`, `betAsPotFraction`, `betaBinomialFoldPosterior`, `bluffToValueRatio`, `breakevenCallEquity`, `breakevenCallEquityFromPotOddsDisplayRatio`, `breakevenCallEquityWithRake`, `breakevenFoldEquityFirstStreetPureBluff`, `breakevenFoldEquityPureBluff`, `breakevenFoldEquityPureBluffWithRake`, `breakevenFoldEquitySecondStreetPureBluff`, `breakevenFoldEquitySemiBluff`, `breakevenFoldEquitySemiBluffWithRake`, `canonicalCardString`, `cardStringsHaveDuplicate`, `chubukovMaxSymmetricJamStackBinarySearch`, `chubukovMaxSymmetricJamStackChipsBinarySearch`, `chubukovMaxSymmetricJamStackFromHandBinarySearch`, `chubukovSymmetricJamBreakevenStack`, `chubukovSymmetricJamEv`, `commitmentRatio`, `compareBestHands`, `decideAction`, `duplicationAdjustedOuts`, `effectiveStack`, `equityToWinningOddsAgainst`, `estimatedOutsFromRuleOfFour`, `estimatedOutsFromRuleOfTwo`, `evaluateBestHand`, `evaluateHandCategory`, `evaluateHandStrength`, `evaluateHandStrengthFast`, `exactHuEquityVsRandomHand`, `expectedValueCall`, `expectedValueCallWithRake`, `flopToRiverAtLeastOneHitDisjointOutsSum`, `flopToRiverAtLeastOneHitProbability`, `flopToRiverAtLeastOneHitUnionFourCategories`, `flopToRiverAtLeastOneHitUnionThreeCategories`, `flopToRiverAtLeastOneHitUnionTwoCategories`, `formatPotOdds`, `formatPotOddsReducedFraction`, `geometricPotAfterMatchedPotFractions`, `handRankCategoryOrder`, `harringtonM`, `harringtonMEffective`, `harringtonMEffectiveActiveAntes`, `harringtonQ`, `hypergeometricOneCardHitProbability`, `icmExpectedPayouts`, `icmHarvillePlacementProbabilities`, `icmLastPlaceProbabilitiesHarville`, `icmPairwiseBubbleFactor`, `icmTopKFinishProbabilities`, `icmWinProbabilitiesHarville`, `impliedBreakevenFutureWin`, `kellyCriterionBinary`, `layeredPotChipEvFromEquities`, `minimumDefenseFrequency`, `monteCarloStandardError`, `monteCarloTrialsForHoeffdingBound`, `monteCarloTrialsForStandardErrorBound`, `multiwaySymmetricBreakevenCallEquity`, `multiwaySymmetricBreakevenCallEquityWithShare`, `nlMinimumRaiseToTotal`, `normalWaldBinomialInterval`, `normalizedStackFractions`, `orbitCostChips`, `parallelHandSimulation`, `parseCompactCardList`, `potOddsDisplayRatioFromBreakevenCallEquity`, `potOddsRatio`, `potOddsRatioDisplay`, `preflopCombosFromNotation`, `preflopCombosFromNotationsList`, `rakeFromPot`, `reverseImpliedOddsMaxFutureLoss`, `riskOfRuinDiffusionApprox`, `ruleOfFourEquity`, `ruleOfTwoEquity`, `runnerRunnerBackdoorFlushTwoCardProbability`, `runnerRunnerStraightDrawHitProbability`, `sidePotLadderFromCommitments`, `sidePotLayersTotalChips`, `simulateHandOutcome`, `spr`, `sprAfterCall`, `stackInBigBlinds`, `straightMadeFlopToRiverExactProbability`, `twoStreetPureBluffEv`, `twoStreetPureBluffSameFoldEquity`, `validateCardString`, `valueToBluffRatio`, `wilsonScoreInterval`, `winningOddsAgainstToEquity`.
+See [API reference](https://poker-calculations.devomb.com/docs/reference/api) for grouped tables with when-to-use notes. Maintainer check: `node scripts/list-native-exports.mjs` (expect count **117**).
 
 ## Card strings
 
@@ -247,4 +260,4 @@ Not separate Node exports; available when linking **`poker_lib`** in C++ or via 
 
 ---
 
-*Last verified: **100** exports in `binding.cpp` / `index.d.ts`, all listed above. Re-run `node scripts/list-native-exports.mjs` after adding bindings.*
+*Last verified: **117** native functions in `binding_register.cpp` / `index.d.ts`. Re-run `node scripts/list-native-exports.mjs` after adding bindings.*
