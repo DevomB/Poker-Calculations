@@ -1,6 +1,7 @@
 #include "poker/monte_carlo.hpp"
 
 #include "poker/cancel.hpp"
+#include "poker/card_string.hpp"
 #include "poker/fast_evaluator.hpp"
 
 #include <algorithm>
@@ -137,7 +138,77 @@ float run_chunk(const std::vector<Card>& player_hand, const std::vector<Card>& c
     return accumulate_showdown_equity(rng, player_hand, community_cards, count, villains, cancel);
 }
 
+template <typename Rng>
+float accumulate_showdown_equity_fixed_villain(Rng& rng, const std::vector<Card>& player_hand,
+                                               const std::vector<Card>& community_cards,
+                                               int villain_deck_a, int villain_deck_b, int iterations,
+                                               const CancelPredicate* cancel) {
+    if (iterations <= 0) {
+        return 0.0F;
+    }
+    throw_if_cancelled(cancel);
+    std::vector<bool> known(52, false);
+    collect_known(player_hand, community_cards, known);
+    if (known[static_cast<std::size_t>(villain_deck_a)] ||
+        known[static_cast<std::size_t>(villain_deck_b)]) {
+        throw std::invalid_argument("villain cards overlap hero or board");
+    }
+    known[static_cast<std::size_t>(villain_deck_a)] = true;
+    known[static_cast<std::size_t>(villain_deck_b)] = true;
+    const Card v0 = card_from_deck_index(villain_deck_a);
+    const Card v1 = card_from_deck_index(villain_deck_b);
+    std::vector<Card> pool = remaining_deck(known);
+
+    double equity_sum = 0.0;
+    std::vector<Card> runout;
+    runout.reserve(5);
+    std::uint8_t ranks[7]{};
+    std::uint8_t suits[7]{};
+    const int need = 5 - static_cast<int>(community_cards.size());
+
+    for (int i = 0; i < iterations; ++i) {
+        if (i > 0 && (i % kCancelCheckInterval) == 0) {
+            throw_if_cancelled(cancel);
+        }
+        std::shuffle(pool.begin(), pool.end(), rng);
+        runout.assign(community_cards.begin(), community_cards.end());
+        for (int k = 0; k < need; ++k) {
+            runout.push_back(pool[static_cast<std::size_t>(k)]);
+        }
+        ranks[0] = player_hand[0].rank();
+        suits[0] = player_hand[0].suit();
+        ranks[1] = player_hand[1].rank();
+        suits[1] = player_hand[1].suit();
+        for (std::size_t b = 0; b < runout.size(); ++b) {
+            ranks[2 + b] = runout[b].rank();
+            suits[2 + b] = runout[b].suit();
+        }
+        const std::uint64_t hero_s = evaluate_seven_strength_fast(ranks, suits);
+        ranks[0] = v0.rank();
+        suits[0] = v0.suit();
+        ranks[1] = v1.rank();
+        suits[1] = v1.suit();
+        const std::uint64_t vil_s = evaluate_seven_strength_fast(ranks, suits);
+        if (hero_s > vil_s) {
+            equity_sum += 1.0;
+        } else if (hero_s == vil_s) {
+            equity_sum += 0.5;
+        }
+    }
+    return static_cast<float>(equity_sum / static_cast<double>(iterations));
+}
+
 }  // namespace
+
+float simulate_hand_outcome_vs_villain_holes(const std::vector<Card>& player_hand,
+                                             const std::vector<Card>& community_cards,
+                                             int villain_deck_a, int villain_deck_b,
+                                             int num_simulations, std::mt19937& rng,
+                                             const CancelPredicate* cancel) {
+    return accumulate_showdown_equity_fixed_villain(rng, player_hand, community_cards,
+                                                    villain_deck_a, villain_deck_b, num_simulations,
+                                                    cancel);
+}
 
 float simulate_hand_outcome(const std::vector<Card>& player_hand,
                             const std::vector<Card>& community_cards, int num_simulations,

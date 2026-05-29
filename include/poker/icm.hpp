@@ -36,4 +36,12 @@ namespace poker {
                                                 const std::vector<double>& payouts, std::size_t hero,
                                                 std::size_t villain, double pot_chips);
 
+/**
+ * Independent Weitzman-style chip utility: each payout tier `k` is split among players in proportion to
+ * `stack_i^alpha` (default `alpha = 2`). Simpler than Harville placement; useful as an alternative model.
+ */
+[[nodiscard]] std::vector<double> icm_expected_payouts_weitzman(const std::vector<double>& stacks,
+                                                                const std::vector<double>& payouts,
+                                                                double alpha = 2.0);
+
 }  // namespace poker

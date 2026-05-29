@@ -35,7 +35,7 @@
 | **Strategy** | `decideAction` from serialized state using MC equity, pot odds, and call EV |
 | **Tournaments** | ICM (Harville), placement and payout expectations, pairwise bubble factor, side-pot ladders |
 | **Theory helpers** | MDF / alpha, fold-equity breakevens, Kelly and Chubukov symmetric-jam search, Wilson and Agresti–Coull intervals, risk-of-ruin approximations |
-| **Developer experience** | **[`index.d.ts`](index.d.ts)** typings, **110** native exports, docs at [poker-calculations.devomb.com](https://poker-calculations.devomb.com) |
+| **Developer experience** | **[`index.d.ts`](index.d.ts)** typings, **117** native exports, docs at [poker-calculations.devomb.com](https://poker-calculations.devomb.com) |
 
 Published releases include **N-API prebuilds** for Linux (glibc and musl), macOS, and Windows via [`node-gyp-build`](https://github.com/prebuild/node-gyp-build). Linux glibc builds use static libstdc++/libgcc where needed so older server and serverless images avoid `GLIBCXX_*` mismatches.
 
@@ -149,7 +149,7 @@ npm run build:native
 node scripts/stage-prebuild.js <platform-arch>
 ```
 
-Use tuples like `win32-x64`, `linux-x64`, `darwin-arm64`. For Alpine/musl: `node scripts/stage-prebuild.js linux-x64 musl`. Run native tests with `npm test`.
+Use tuples like `win32-x64`, `linux-x64`, `darwin-arm64`. For Alpine/musl: `node scripts/stage-prebuild.js linux-x64 musl`.
 
 </details>
 

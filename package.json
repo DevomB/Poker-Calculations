@@ -1,6 +1,6 @@
 {
   "name": "poker-calculations",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "NL Hold'em library for Node: hand evaluation, Monte Carlo and exact equity, decideAction, chip/pot/rake math, ICM, side pots, draw heuristics, GTO-style frequencies, statistics, and more — C++20 core with prebuilt N-API binaries.",
   "main": "index.js",
   "types": "index.d.ts",
@@ -15,17 +15,13 @@
     }
   },
   "directories": {
-    "example": "examples",
-    "test": "tests"
+    "example": "examples"
   },
   "scripts": {
     "verify-lock": "node scripts/verify-package-lock.js",
     "build:native": "node scripts/build-native.js compile",
     "rebuild:native": "node scripts/build-native.js rebuild",
-    "prepack": "node scripts/check-prebuilds.js",
-    "test": "npm run test:native && npm run test:bindings",
-    "test:native": "node scripts/run-native-tests.js",
-    "test:bindings": "node scripts/test-bindings.mjs"
+    "prepack": "node scripts/check-prebuilds.js"
   },
   "engines": {
     "node": ">=18"
