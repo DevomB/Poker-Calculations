@@ -1,3 +1,4 @@
+#include "poker/bit_utils.hpp"
 #include "poker/icm.hpp"
 
 #include <cmath>
@@ -7,15 +8,6 @@
 namespace poker {
 
 namespace {
-
-[[nodiscard]] int popcount32(std::uint32_t x) {
-    int c = 0;
-    while (x != 0) {
-        ++c;
-        x &= x - 1U;
-    }
-    return c;
-}
 
 [[nodiscard]] int lowest_bit_index(std::uint32_t mask) {
     for (int i = 0; i < 32; ++i) {
@@ -41,7 +33,7 @@ void harville_placement_recur(const std::vector<double>& stacks, std::uint32_t m
     if (path_prob < 1e-300) {
         return;
     }
-    const int alive = popcount32(mask);
+    const int alive = popcount_u32(mask);
     if (alive == 1) {
         const int i = lowest_bit_index(mask);
         placement[static_cast<std::size_t>(i)][static_cast<std::size_t>(next_rank - 1)] += path_prob;
@@ -57,6 +49,38 @@ void harville_placement_recur(const std::vector<double>& stacks, std::uint32_t m
         placement[static_cast<std::size_t>(i)][static_cast<std::size_t>(next_rank - 1)] += take;
         const std::uint32_t sub = mask & ~(1U << i);
         harville_placement_recur(stacks, sub, next_rank + 1, take, placement);
+        m &= m - 1;
+    }
+}
+
+void harville_placement_recur_weighted(const std::vector<double>& first_place_weights,
+                                       std::uint32_t mask, int next_rank, double path_prob,
+                                       std::vector<std::vector<double>>& placement) {
+    if (path_prob < 1e-300) {
+        return;
+    }
+    const int alive = popcount_u32(mask);
+    if (alive == 1) {
+        const int i = lowest_bit_index(mask);
+        placement[static_cast<std::size_t>(i)][static_cast<std::size_t>(next_rank - 1)] += path_prob;
+        return;
+    }
+    double sum_w = 0.0;
+    for (std::uint32_t m = mask; m != 0; ) {
+        const int i = lowest_bit_index(m);
+        sum_w += first_place_weights[static_cast<std::size_t>(i)];
+        m &= m - 1;
+    }
+    if (sum_w <= 0.0) {
+        throw std::invalid_argument("ICM skill-adjusted: positive weight sum required");
+    }
+    for (std::uint32_t m = mask; m != 0; ) {
+        const int i = lowest_bit_index(m);
+        const double take =
+            first_place_weights[static_cast<std::size_t>(i)] / sum_w * path_prob;
+        placement[static_cast<std::size_t>(i)][static_cast<std::size_t>(next_rank - 1)] += take;
+        const std::uint32_t sub = mask & ~(1U << i);
+        harville_placement_recur_weighted(first_place_weights, sub, next_rank + 1, take, placement);
         m &= m - 1;
     }
 }
@@ -216,6 +240,51 @@ std::vector<double> icm_expected_payouts_weitzman(const std::vector<double>& sta
         }
         for (std::size_t i = 0; i < n; ++i) {
             ev[i] += prize * (util[i] / sum_util);
+        }
+    }
+    return ev;
+}
+
+std::vector<double> icm_harville_skill_adjusted_payouts(const std::vector<double>& stacks,
+                                                        const std::vector<double>& payouts,
+                                                        const std::vector<double>& skill_weights,
+                                                        double blend) {
+    const std::size_t n = stacks.size();
+    if (payouts.size() != n || skill_weights.size() != n) {
+        throw std::invalid_argument("ICM skill-adjusted: vector lengths must match");
+    }
+    if (!std::isfinite(blend) || blend < 0.0 || blend > 1.0) {
+        throw std::invalid_argument("ICM skill-adjusted: blend must be in [0,1]");
+    }
+    double sum_s = 0.0;
+    double sum_pi = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        if (stacks[i] <= 0.0) {
+            throw std::invalid_argument("ICM skill-adjusted: positive stacks required");
+        }
+        if (skill_weights[i] < 0.0 || !std::isfinite(skill_weights[i])) {
+            throw std::invalid_argument("ICM skill-adjusted: skill weights must be non-negative");
+        }
+        sum_s += stacks[i];
+        sum_pi += skill_weights[i];
+    }
+    if (sum_s <= 0.0 || sum_pi <= 0.0) {
+        throw std::invalid_argument("ICM skill-adjusted: positive sums required");
+    }
+    std::vector<double> w(n, 0.0);
+    for (std::size_t i = 0; i < n; ++i) {
+        w[i] = (1.0 - blend) * (stacks[i] / sum_s) + blend * (skill_weights[i] / sum_pi);
+    }
+    std::uint32_t mask = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        mask |= (1U << static_cast<unsigned>(i));
+    }
+    std::vector<std::vector<double>> placement(n, std::vector<double>(n, 0.0));
+    harville_placement_recur_weighted(w, mask, 1, 1.0, placement);
+    std::vector<double> ev(n, 0.0);
+    for (std::size_t i = 0; i < n; ++i) {
+        for (std::size_t r = 0; r < n; ++r) {
+            ev[i] += placement[i][r] * payouts[r];
         }
     }
     return ev;
