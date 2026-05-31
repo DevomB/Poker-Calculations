@@ -156,7 +156,109 @@ export interface SidePotLayer {
   playerCapContribution: number[];
 }
 
-/** N-API addon (117 native function exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, and related helpers (all implemented in C++). */
+export interface IcmShapleyValuesOptions {
+  method?: 'exact' | 'monteCarlo';
+  permutations?: number;
+  returnFormat?: F64ReturnFormat;
+}
+
+export interface IcmShapleyValuesResult {
+  values: number[] | Float64Array;
+  method: string;
+  se?: number[];
+}
+
+export interface IcmFieldPressureIndexResult {
+  index: number;
+  pairwiseBubbleFactors: number[] | Float64Array;
+  argmaxVillain: number;
+}
+
+export interface IcmChopParetoPair {
+  i: number;
+  j: number;
+  maxTransfer: number;
+}
+
+export interface IcmChopNegotiationAnalysisResult {
+  chipChop: number[];
+  icm: number[];
+  surplus: number[];
+  totalPrizePool: number;
+  paretoPairs: IcmChopParetoPair[];
+}
+
+export interface TournamentDuelAbsorptionResult {
+  heroWinProbability: number;
+  expectedHands: number;
+  heroPrizeEv: number;
+}
+
+export interface MaterializedVillainRangeResult {
+  weights1326: Float64Array;
+  liveComboCount: number;
+  weightSum: number;
+  shannonEntropy: number;
+}
+
+export interface HeroRunoutVulnerabilityResult {
+  pNuts: number;
+  pDominated: number;
+  runoutCount: number;
+}
+
+export interface VillainLeapfrogOutCountsResult {
+  leapfrogDeckIndices: number[];
+  heroImproveDeckIndices: number[];
+}
+
+export interface HeroEquityRunoutQuantilesResult {
+  mean: number;
+  variance: number;
+  p05: number;
+  p50: number;
+  p95: number;
+  n: number;
+}
+
+export interface CardRemovalGradientResult {
+  gradient: Float64Array;
+  baseEquity: number;
+}
+
+export interface RiverIndifferenceBetResult {
+  betSize: number;
+  bluffFrequency: number;
+  defenderMdf: number;
+  evAtIndifference: number;
+}
+
+export interface StageMinimaxRegretBetResult {
+  bestBet: number;
+  minimaxRegret: number;
+  evByAction: number[];
+}
+
+export interface PushFoldThresholdResult {
+  thresholdEquity: number;
+  jamEvAtThreshold: number;
+}
+
+export interface MultiwayIndependenceGapResult {
+  exact: number;
+  independentApprox: number;
+  gap: number;
+  villains: number;
+}
+
+export interface SidePotLayerTournamentEvRow {
+  chipEv: number;
+  icmEvWin: number;
+  icmEvLose: number;
+  icmMarginal: number;
+}
+
+/** N-API addon (140 native function exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, tournament/exact-runout/subgame helpers, and related utilities (all implemented in C++). */
 export interface PokerCalculations {
   evaluateBestHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult;
   evaluateBestHand(
@@ -713,6 +815,141 @@ export interface PokerCalculations {
     deadMoneyChips: number,
     maxStackChips: number
   ): number;
+  icmShapleyValues(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    options?: IcmShapleyValuesOptions
+  ): IcmShapleyValuesResult;
+  icmHarvilleStackJacobian(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+  icmHarvilleSkillAdjustedPayouts(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    skillWeights: F64VectorInput,
+    blend: number,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+  icmFieldPressureIndex(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    heroIndex: number,
+    potChips: number
+  ): IcmFieldPressureIndexResult;
+  icmChopNegotiationAnalysis(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput
+  ): IcmChopNegotiationAnalysisResult;
+  tournamentDuelAbsorptionProbabilities(
+    heroStack: number,
+    villainStack: number,
+    winProbabilityPerHand: number,
+    chipsPerAllIn: number,
+    winnerPrize?: number
+  ): TournamentDuelAbsorptionResult;
+  sidePotLayerTournamentEvDelta(
+    tableStacks: F64VectorInput,
+    payouts: F64VectorInput,
+    heroIndex: number,
+    committedChips: F64VectorInput,
+    equityPlayerByLayer: number[][] | Float64Array
+  ): SidePotLayerTournamentEvRow[];
+  materializeVillainRangeAfterBlockers(
+    range: Float64Array | SparseRangeSpec,
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    knownDead?: CardInput
+  ): MaterializedVillainRangeResult;
+  bayesianRangeUpdateFromAction(
+    range: Float64Array | SparseRangeSpec,
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    action: 'fold' | 'call' | 'raise',
+    alpha: number
+  ): MaterializedVillainRangeResult;
+  solveRiverPolarizedIndifferenceBet(
+    potBeforeBet: number,
+    numValueCombos: number,
+    numBluffCombos: number,
+    mdf?: number
+  ): RiverIndifferenceBetResult;
+  solveStageMinimaxRegretBet(
+    potBeforeBet: number,
+    betSizes: number[],
+    villainFoldFreq: number,
+    villainCallFreq: number,
+    heroEquityWhenCalled: number
+  ): StageMinimaxRegretBetResult;
+  exactInformationRegretVsClairvoyant(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec,
+    potBeforeCall: number,
+    toCall: number
+  ): number;
+  multiwayEquityIndependenceGap(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    numSimulations: number,
+    seed: number,
+    villains: number
+  ): MultiwayIndependenceGapResult;
+  solveSymmetricPushFoldThreshold(
+    effectiveStack: number,
+    smallBlind: number,
+    bigBlind: number,
+    antePerPlayer: number
+  ): PushFoldThresholdResult;
+  exactHeroRunoutVulnerability(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    knownDead?: CardInput
+  ): HeroRunoutVulnerabilityResult;
+  exactHeroRunoutVulnerabilityAsync(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    knownDead?: CardInput,
+    options?: AsyncOptions
+  ): Promise<HeroRunoutVulnerabilityResult>;
+  exactVillainLeapfrogOutCounts(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    knownDead?: CardInput
+  ): VillainLeapfrogOutCountsResult;
+  exactHeroCategoryJointFlopToRiver(
+    heroHoleCards: CardInput,
+    flopThree: CardInput,
+    knownDead?: CardInput
+  ): { jointMatrix: Float64Array };
+  exactRangeDominatedComboFraction(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec
+  ): number;
+  exactHeroEquityRunoutQuantiles(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range?: Float64Array | SparseRangeSpec
+  ): HeroEquityRunoutQuantilesResult;
+  exactHeroEquityRunoutQuantilesAsync(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range?: Float64Array | SparseRangeSpec,
+    options?: AsyncOptions
+  ): Promise<HeroEquityRunoutQuantilesResult>;
+  exactEquityCardRemovalGradient(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec
+  ): CardRemovalGradientResult;
+  exactEquityCardRemovalGradientAsync(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec,
+    options?: AsyncOptions
+  ): Promise<CardRemovalGradientResult>;
 }
 
 declare const api: PokerCalculations;

@@ -1,9 +1,9 @@
 #pragma once
 
+#include "poker/bit_utils.hpp"
 #include "poker/card.hpp"
 #include "poker/card_string.hpp"
 
-#include <bit>
 #include <cstdint>
 #include <vector>
 
@@ -29,7 +29,7 @@ struct DeckBitset {
         }
     }
 
-    [[nodiscard]] int count() const { return static_cast<int>(std::popcount(mask)); }
+    [[nodiscard]] int count() const { return popcount_u64(mask); }
 
     [[nodiscard]] std::vector<int> unused_indices() const {
         std::vector<int> out;
