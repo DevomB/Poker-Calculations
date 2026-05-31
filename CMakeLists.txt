@@ -5,15 +5,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# cmake-js passes CMAKE_JS_INC; skip heavy dev targets so npm install stays lean.
-if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
-    set(_poker_build_tests_default OFF)
-else()
-    set(_poker_build_tests_default ON)
-endif()
-
-option(POKER_BUILD_TESTS "Build unit tests" ${_poker_build_tests_default})
-
 add_library(poker_lib STATIC
     src/card.cpp
     src/card_string.cpp
@@ -35,6 +26,14 @@ add_library(poker_lib STATIC
     src/fast_evaluator.cpp
     src/bot_config.cpp
     src/poker_bot_interface.cpp
+    src/runout_enumerator.cpp
+    src/combinatorics_exact.cpp
+    src/shapley_icm.cpp
+    src/icm_sensitivity.cpp
+    src/tournament_duel.cpp
+    src/range_inference.cpp
+    src/subgame_solvers.cpp
+    src/side_pot_icm.cpp
 )
 target_include_directories(poker_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -42,43 +41,6 @@ target_include_directories(poker_lib PUBLIC
 # Required on Linux (and other ELF): static lib is linked into poker_calculations.node (SHARED).
 set_target_properties(poker_lib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_definitions(poker_lib PUBLIC $<$<BOOL:${WIN32}>:NOMINMAX>)
-
-if(POKER_BUILD_TESTS)
-    include(FetchContent)
-    FetchContent_Declare(
-        googletest
-        URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
-    )
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
-    enable_testing()
-    add_executable(poker_tests
-        tests/test_card_string.cpp
-        tests/test_packed_cards.cpp
-        tests/test_deck.cpp
-        tests/test_game_engine.cpp
-        tests/test_hand_evaluator.cpp
-        tests/test_poker_math.cpp
-        tests/test_icm.cpp
-        tests/test_side_pot.cpp
-        tests/test_exact_equity.cpp
-        tests/test_strategy.cpp
-        tests/test_opponent_model.cpp
-        tests/test_monte_carlo.cpp
-        tests/test_state_codec.cpp
-        tests/test_fast_evaluator.cpp
-        tests/test_bot_config.cpp
-        tests/test_range_equity.cpp
-        tests/test_icm_weitzman.cpp
-        tests/test_golden_regression.cpp
-    )
-    target_link_libraries(poker_tests PRIVATE poker_lib GTest::gtest_main)
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        target_link_libraries(poker_tests PRIVATE stdc++fs)
-    endif()
-    include(GoogleTest)
-    gtest_discover_tests(poker_tests)
-endif()
 
 if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
     execute_process(
@@ -100,6 +62,9 @@ if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
         native/binding_state.cpp
         native/binding_batch.cpp
         native/binding_range.cpp
+        native/binding_combinatorics.cpp
+        native/binding_cooperative_icm.cpp
+        native/binding_subgame.cpp
         native/async_workers.cpp
         ${CMAKE_JS_SRC}
     )

@@ -44,4 +44,12 @@ namespace poker {
                                                                 const std::vector<double>& payouts,
                                                                 double alpha = 2.0);
 
+/**
+ * Harville placement with tilted first-place weights
+ * w_i = (1-blend)*(s_i/sum) + blend*skill_i (skill normalized to sum 1).
+ */
+[[nodiscard]] std::vector<double> icm_harville_skill_adjusted_payouts(
+    const std::vector<double>& stacks, const std::vector<double>& payouts,
+    const std::vector<double>& skill_weights, double blend);
+
 }  // namespace poker

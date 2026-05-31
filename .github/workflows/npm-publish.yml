@@ -4,6 +4,7 @@
 #
 # linux-x64 glibc prebuilds compile in node:22.14-bullseye (older glibc than ubuntu-latest) for
 # broader compatibility on legacy distros. linux-arm (armv7) builds under QEMU via the same image.
+# linux-arm64 musl builds natively on ubuntu-24.04-arm (Alpine container); QEMU arm64 npm is unreliable.
 #
 # Auth: npm Trusted Publishing (OIDC). Configure at npmjs.com for this repo + workflow file
 # npm-publish.yml — no NPM_TOKEN. Requires Node ≥22.14 and npm CLI ≥11.5.1 on the publish job.
@@ -205,26 +206,33 @@ jobs:
     name: Build (Alpine / musl, linux-arm64)
     needs: release-gate
     if: needs.release-gate.outputs.publish == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: node:22.14-alpine
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: docker/setup-qemu-action@v3
+      - name: Install Alpine build dependencies
+        run: apk add --no-cache python3 make g++ cmake git bash
 
-      - name: Build in arm64 Alpine (Docker)
-        run: |
-          docker run --rm --platform linux/arm64 \
-            -v "$PWD:/ws" -w /ws \
-            node:22.14-alpine \
-            sh -exc '
-              apk add --no-cache python3 make g++ cmake git bash
-              npm ci
-              node scripts/build-native.js compile
-              node scripts/stage-prebuild.js linux-arm64 musl
-            '
-          cp prebuilds/linux-arm64/node.napi.musl.node linux-arm64-musl.napi.node
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile native addon (cmake-js)
+        run: node scripts/build-native.js compile
+
+      - name: Stage prebuild (node.napi.musl.node)
+        run: node scripts/stage-prebuild.js linux-arm64 musl
+
+      - name: Flatten artifact name for merge job
+        run: cp prebuilds/linux-arm64/node.napi.musl.node linux-arm64-musl.napi.node
 
       - uses: actions/upload-artifact@v7
         with:

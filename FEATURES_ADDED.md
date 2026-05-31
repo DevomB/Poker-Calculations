@@ -1,6 +1,6 @@
 # Shipped feature inventory — `poker-calculations`
 
-Complete inventory of what the **npm package** ships: **117** native JavaScript functions, TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
+Complete inventory of what the **npm package** ships: **140** native JavaScript functions, TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
 
 **Authoritative sources:** [`index.d.ts`](index.d.ts) (types + JSDoc), [`README.md`](README.md) (overview tables), [`native/binding_register.cpp`](native/binding_register.cpp) (export registration), [documentation site](https://poker-calculations.devomb.com/docs/reference/api) (examples + when-to-use), [`scripts/list-native-exports.mjs`](scripts/list-native-exports.mjs) (runtime export list).
 
@@ -12,7 +12,7 @@ Complete inventory of what the **npm package** ships: **117** native JavaScript 
 
 ---
 
-## JavaScript / N-API exports (117 functions)
+## JavaScript / N-API exports (140 functions)
 
 Includes batch Monte Carlo, `*Async` Promise exports, Float64 ICM paths, and PKST packed state (`encodePokerState` / `decodePokerState`). ICM/stack helpers accept `Float64Array` and optional `returnFormat: 'float64'`. PKST byte layout: magic `PKST`, layout version byte, players, phase, pot fields, per-player hole bytes, community cards, `actedThisStreet` — see `include/poker/state_codec.hpp`.
 
@@ -138,9 +138,34 @@ Implemented in C++ and registered in [`native/binding_register.cpp`](native/bind
 | | `layeredPotChipEvFromEquities(layerPotChips[], equityPlayerByLayer[][])` | Chip EV; each column sums to `1`. |
 | | `sidePotLayersTotalChips(layers[])` | Sum of `potChips` across layers from `sidePotLadderFromCommitments`. |
 
-### Alphabetical export index (117)
+### Tournament, exact runouts, and subgame helpers (23 functions)
 
-See [API reference](https://poker-calculations.devomb.com/docs/reference/api) for grouped tables with when-to-use notes. Maintainer check: `node scripts/list-native-exports.mjs` (expect count **117**).
+| Group | Export | Role |
+| --- | --- | --- |
+| **Tournament ICM** | `icmShapleyValues` | Shapley fair division of prize pool (exact n≤8, else MC permutations). |
+| | `icmHarvilleStackJacobian` | n×n ∂($EV)/∂(stack) via Harville. |
+| | `icmHarvilleSkillAdjustedPayouts` | Harville with skill-tilted first-place weights. |
+| | `icmFieldPressureIndex` | Stack-weighted field bubble pressure + pairwise vector. |
+| | `icmChopNegotiationAnalysis` | Chip-chop vs ICM surplus + Pareto transfer pairs. |
+| | `tournamentDuelAbsorptionProbabilities` | Discrete duel Markov absorption. |
+| | `sidePotLayerTournamentEvDelta` | Per side-pot layer chip EV + ICM win/lose swing. |
+| **Exact combinatorics** | `exactHeroRunoutVulnerability` / `Async` | p(nuts), p(dominated) over runouts. |
+| | `exactVillainLeapfrogOutCounts` | Anti-out / hero-improve deck indices. |
+| | `exactHeroCategoryJointFlopToRiver` | 9×9 joint category matrix on flop. |
+| | `exactRangeDominatedComboFraction` | Weighted dominated combo share (river board). |
+| | `exactHeroEquityRunoutQuantiles` / `Async` | Runout equity distribution quantiles. |
+| | `exactEquityCardRemovalGradient` / `Async` | 52-vector equity sensitivity to dead cards. |
+| **Subgame / range** | `materializeVillainRangeAfterBlockers` | Dense 1326 weights + entropy after blockers. |
+| | `bayesianRangeUpdateFromAction` | Combo posterior after fold/call/raise likelihood. |
+| | `solveRiverPolarizedIndifferenceBet` | Root-find polarized river bet for MDF indifference. |
+| | `solveStageMinimaxRegretBet` | Minimax regret over bet grid. |
+| | `exactInformationRegretVsClairvoyant` | Clairvoyant vs realistic call/fold EV gap. |
+| | `multiwayEquityIndependenceGap` | MC multiway vs independence approximation gap. |
+| | `solveSymmetricPushFoldThreshold` | Symmetric push/fold equity threshold with blinds/antes. |
+
+### Alphabetical export index (140)
+
+See [API reference](https://poker-calculations.devomb.com/docs/reference/api) for grouped tables with when-to-use notes. Maintainer check: `node scripts/list-native-exports.mjs` (expect count **140**).
 
 ## Card strings
 
@@ -260,4 +285,4 @@ Not separate Node exports; available when linking **`poker_lib`** in C++ or via 
 
 ---
 
-*Last verified: **117** native functions in `binding_register.cpp` / `index.d.ts`. Re-run `node scripts/list-native-exports.mjs` after adding bindings.*
+*Last verified: **140** native functions in `binding_register.cpp` / `index.d.ts`. Re-run `node scripts/list-native-exports.mjs` after adding bindings.*
