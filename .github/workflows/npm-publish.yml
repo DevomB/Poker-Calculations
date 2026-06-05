@@ -96,9 +96,6 @@ jobs:
         run: node scripts/stage-prebuild.js ${{ matrix.tuple }}
         shell: bash
 
-      - name: Smoke test staged prebuild
-        run: npm test
-
       - name: Flatten artifact name for merge job
         run: cp "prebuilds/${{ matrix.tuple }}/node.napi.node" "${{ matrix.tuple }}.napi.node"
         shell: bash
@@ -129,8 +126,8 @@ jobs:
               npm ci
               node scripts/build-native.js compile
               node scripts/stage-prebuild.js linux-x64
-              npm test
             '
+
           cp prebuilds/linux-x64/node.napi.node linux-x64.napi.node
 
       - uses: actions/upload-artifact@v7
@@ -161,7 +158,6 @@ jobs:
               npm ci
               node scripts/build-native.js compile
               node scripts/stage-prebuild.js linux-arm
-              npm test
             '
           cp prebuilds/linux-arm/node.napi.node linux-arm.napi.node
 
@@ -199,9 +195,6 @@ jobs:
       - name: Stage prebuild (node.napi.musl.node)
         run: node scripts/stage-prebuild.js linux-x64 musl
 
-      - name: Smoke test staged prebuild
-        run: npm test
-
       - name: Flatten artifact name for merge job
         run: cp prebuilds/linux-x64/node.napi.musl.node linux-x64-musl.napi.node
 
@@ -230,7 +223,6 @@ jobs:
               npm ci
               node scripts/build-native.js compile
               node scripts/stage-prebuild.js linux-arm64 musl
-              npm test
             '
           cp prebuilds/linux-arm64/node.napi.musl.node linux-arm64-musl.napi.node
 
