@@ -52,4 +52,25 @@ namespace poker {
     const std::vector<double>& stacks, const std::vector<double>& payouts,
     const std::vector<double>& skill_weights, double blend);
 
+[[nodiscard]] std::vector<double> icm_equal_chop_payouts(const std::vector<double>& payouts);
+
+[[nodiscard]] std::vector<double> icm_chop_surplus_vs_equal_split(const std::vector<double>& stacks,
+                                                                  const std::vector<double>& payouts);
+
+[[nodiscard]] double icm_total_prize_pool(const std::vector<double>& payouts);
+
+[[nodiscard]] std::vector<double> icm_deal_ev_per_chip(const std::vector<double>& stacks,
+                                                     const std::vector<double>& payouts);
+
+[[nodiscard]] std::vector<double> icm_satellite_advance_probability(const std::vector<double>& stacks,
+                                                                    int paid_places);
+
+[[nodiscard]] double icm_payout_structure_gini(const std::vector<double>& payouts);
+
+[[nodiscard]] double icm_chip_leader_premium_vs_equal_chop(const std::vector<double>& stacks,
+                                                           const std::vector<double>& payouts);
+
+[[nodiscard]] std::vector<double> icm_expected_payouts_delta_from_chip_chop(
+    const std::vector<double>& stacks, const std::vector<double>& payouts);
+
 }  // namespace poker

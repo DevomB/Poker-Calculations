@@ -1,7 +1,12 @@
 #pragma once
 
+#include "poker/cancel.hpp"
+#include "poker/card.hpp"
+#include "poker/types.hpp"
+
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -395,5 +400,170 @@ struct Wilson_interval {
 [[nodiscard]] int chubukov_max_symmetric_jam_stack_chips_binary_search(double equity,
                                                                        double dead_money_chips,
                                                                        int max_stack_chips);
+
+// --- single-street draws ---
+[[nodiscard]] double one_street_at_least_one_hit_probability(double outs, double unseen);
+[[nodiscard]] double flop_to_turn_at_least_one_hit_probability(double outs, double unseen_after_flop);
+[[nodiscard]] double turn_to_river_at_least_one_hit_probability(double outs, double unseen_after_turn);
+[[nodiscard]] double flop_to_turn_at_least_one_hit_union_two_categories(double unseen, double outs_a,
+                                                                        double outs_b, double shared_ab);
+[[nodiscard]] double turn_to_river_at_least_one_hit_union_two_categories(double unseen, double outs_a,
+                                                                         double outs_b, double shared_ab);
+[[nodiscard]] double flop_to_turn_at_least_one_hit_union_three_categories(
+    double unseen, double outs_a, double outs_b, double outs_c, double shared_ab, double shared_ac,
+    double shared_bc, double shared_abc);
+[[nodiscard]] double turn_to_river_at_least_one_hit_union_three_categories(
+    double unseen, double outs_a, double outs_b, double outs_c, double shared_ab, double shared_ac,
+    double shared_bc, double shared_abc);
+[[nodiscard]] double flop_to_turn_at_least_one_hit_union_four_categories(
+    double unseen, double oa, double ob, double oc, double od, double s01, double s02, double s03,
+    double s12, double s13, double s23, double s012, double s013, double s023, double s123,
+    double four_way);
+[[nodiscard]] double turn_to_river_at_least_one_hit_union_four_categories(
+    double unseen, double oa, double ob, double oc, double od, double s01, double s02, double s03,
+    double s12, double s13, double s23, double s012, double s013, double s023, double s123,
+    double four_way);
+[[nodiscard]] double flop_to_turn_at_least_one_hit_disjoint_outs_sum(
+    double unseen, const std::vector<double>& outs_per_disjoint_category);
+[[nodiscard]] double turn_to_river_at_least_one_hit_disjoint_outs_sum(
+    double unseen, const std::vector<double>& outs_per_disjoint_category);
+[[nodiscard]] double hypergeometric_two_card_hit_probability(double outs, double unseen_cards);
+[[nodiscard]] double hypergeometric_two_card_miss_probability(double outs, double unseen_cards);
+[[nodiscard]] double runner_runner_backdoor_flush_one_card_probability(double suit_cards_remaining,
+                                                                       double unseen_cards);
+[[nodiscard]] double blocker_adjusted_outs(double outs, double blocker_fraction);
+[[nodiscard]] double suit_blocker_fraction(double suit_cards_dead, double unseen);
+
+// --- pot / rake / raise ---
+[[nodiscard]] double net_pot_after_rake(double pot_chips, double rake_fraction, double rake_cap);
+[[nodiscard]] double net_pot_after_call_and_rake(double pot_before_call, double to_call,
+                                                 double rake_fraction, double rake_cap);
+[[nodiscard]] double effective_pot_odds_display_after_rake(double pot_before_call, double to_call,
+                                                           double rake_fraction, double rake_cap);
+[[nodiscard]] double implied_breakeven_total_pot(double pot_before_call, double to_call, double equity);
+[[nodiscard]] double implied_odds_required_equity_from_future_win(double pot_before_call, double to_call,
+                                                                  double future_win);
+[[nodiscard]] double expected_value_raise(double equity_when_called, double pot_before_raise,
+                                          double raise_size, double fold_equity, double pot_if_called);
+[[nodiscard]] double expected_value_raise_with_rake(double equity_when_called, double pot_before_raise,
+                                                    double raise_size, double fold_equity,
+                                                    double pot_if_called, double rake_fraction,
+                                                    double rake_cap);
+[[nodiscard]] double breakeven_raise_equity(double pot_before_raise, double raise_size,
+                                            double fold_equity, double pot_if_called);
+[[nodiscard]] double breakeven_call_equity_with_posted_ante(double pot_before_call, double to_call,
+                                                            double ante_to_post);
+[[nodiscard]] double pot_size_after_hu_call(double pot_before_call, double to_call);
+[[nodiscard]] double pot_size_after_hu_bet(double pot_before_bet, double bet_size);
+[[nodiscard]] double expected_value_per_big_blind(double chip_ev, double big_blind);
+
+// --- GTO with rake ---
+[[nodiscard]] double minimum_defense_frequency_with_rake(double pot_before_bet, double bet_size,
+                                                         double rake_fraction, double rake_cap);
+[[nodiscard]] double alpha_frequency_with_rake(double pot_before_bet, double bet_size,
+                                               double rake_fraction, double rake_cap);
+[[nodiscard]] double bluff_to_value_ratio_with_rake(double pot_before_bet, double bet_size,
+                                                    double rake_fraction, double rake_cap);
+[[nodiscard]] double value_to_bluff_ratio_with_rake(double pot_before_bet, double bet_size,
+                                                    double rake_fraction, double rake_cap);
+
+// --- sizing ---
+[[nodiscard]] double spr_after_bet(double pot_before_bet, double bet_size,
+                                  double effective_stack_before_bet);
+[[nodiscard]] double spr_after_raise(double pot_before_raise, double raise_size,
+                                     double effective_stack_before_raise);
+[[nodiscard]] double commitment_ratio_after_bet(double bet_size, double effective_stack_before_bet);
+[[nodiscard]] double bet_size_to_match_pot_fraction(double pot_before_bet, double target_fraction);
+
+// --- Kelly ---
+[[nodiscard]] double half_kelly_criterion_binary(double win_probability, double net_odds);
+[[nodiscard]] double quarter_kelly_criterion_binary(double win_probability, double net_odds);
+[[nodiscard]] double eighth_kelly_criterion_binary(double win_probability, double net_odds);
+[[nodiscard]] double kelly_criterion_binary_clamped(double win_probability, double net_odds);
+
+// --- fold equity extensions ---
+[[nodiscard]] double breakeven_fold_equity_pure_bluff_with_ante(double pot_before_hero_bet,
+                                                                double hero_bet_or_call_size,
+                                                                double ante_to_post);
+[[nodiscard]] double breakeven_fold_equity_semi_bluff_with_ante(double pot_before_hero_bet,
+                                                                double hero_bet_size,
+                                                                double equity_when_called,
+                                                                double total_pot_if_called,
+                                                                double ante_to_post);
+[[nodiscard]] double two_street_pure_bluff_ev_with_rake(double pot_before_street1, double bet_street1,
+                                                        double bet_street2, double fold_equity_street1,
+                                                        double fold_equity_street2, double rake_fraction,
+                                                        double rake_cap);
+[[nodiscard]] double three_street_pure_bluff_same_fold_equity(double pot_before_street1,
+                                                              double bet_street1, double bet_street2,
+                                                              double bet_street3);
+[[nodiscard]] double three_street_pure_bluff_ev(double pot_before_street1, double bet_street1,
+                                                double bet_street2, double bet_street3,
+                                                double fold_equity_street1, double fold_equity_street2,
+                                                double fold_equity_street3);
+
+// --- multiway ---
+[[nodiscard]] double multiway_symmetric_breakeven_call_equity_with_rake(
+    double pot_before, double to_call, int symmetric_extra_callers, double rake_fraction,
+    double rake_cap);
+[[nodiscard]] double multiway_symmetric_breakeven_call_equity_with_share_and_rake(
+    double pot_before, double to_call, int symmetric_extra_callers,
+    Multiway_symmetric_pot_share_model model, double hero_fraction_of_pot_when_win,
+    double rake_fraction, double rake_cap);
+[[nodiscard]] double multiway_expected_value_call(double equity, double pot_before, double to_call,
+                                                  int symmetric_extra_callers);
+
+// --- reverse implied / geometry ---
+[[nodiscard]] double reverse_implied_odds_min_equity(double pot_before_call, double to_call,
+                                                     double max_future_loss);
+[[nodiscard]] double geometric_pot_after_single_matched_bet(double pot0, double bet_size);
+
+// --- statistics ---
+[[nodiscard]] double binomial_proportion_ci_width(int successes, int n_trials, double z);
+[[nodiscard]] std::int64_t monte_carlo_trials_for_wilson_half_width(double p_hat,
+                                                                    double target_half_width, double z);
+[[nodiscard]] double variance_to_standard_deviation_per_hand(double variance_per_hand);
+
+// --- stacks ---
+[[nodiscard]] int preflop_combos_from_notation_minus_blockers(const std::string& notation,
+                                                              int dead_cards_among_combos);
+[[nodiscard]] double stack_to_pot_after_call(double pot_before_call, double to_call,
+                                             double effective_stack_before_call);
+
+// --- push/fold toys ---
+[[nodiscard]] double push_fold_symmetric_ev(double equity, double jam_stack_chips,
+                                            double dead_money_chips);
+[[nodiscard]] double push_fold_symmetric_breakeven_equity(double jam_stack_chips,
+                                                          double dead_money_chips);
+[[nodiscard]] double open_raise_breakeven_fold_equity(double pot_before_hero_bet,
+                                                    double hero_open_raise_size);
+[[nodiscard]] double call_or_fold_chip_ev_delta(double equity, double pot, double to_call);
+
+// --- exact made hands (shared enumerator) ---
+[[nodiscard]] double made_category_flop_to_river_exact_probability(
+    const std::vector<Card>& hero_hole_cards, const std::vector<Card>& flop_three_cards,
+    const std::vector<Card>& known_dead_cards,
+    const std::function<bool(HandRank)>& category_hits,
+    const CancelPredicate* should_cancel = nullptr);
+
+[[nodiscard]] double flush_made_flop_to_river_exact_probability(
+    const std::vector<Card>& hero_hole_cards, const std::vector<Card>& flop_three_cards,
+    const std::vector<Card>& known_dead_cards, const CancelPredicate* should_cancel = nullptr);
+[[nodiscard]] double full_house_made_flop_to_river_exact_probability(
+    const std::vector<Card>& hero_hole_cards, const std::vector<Card>& flop_three_cards,
+    const std::vector<Card>& known_dead_cards, const CancelPredicate* should_cancel = nullptr);
+[[nodiscard]] double trips_made_flop_to_river_exact_probability(
+    const std::vector<Card>& hero_hole_cards, const std::vector<Card>& flop_three_cards,
+    const std::vector<Card>& known_dead_cards, const CancelPredicate* should_cancel = nullptr);
+[[nodiscard]] double two_pair_made_flop_to_river_exact_probability(
+    const std::vector<Card>& hero_hole_cards, const std::vector<Card>& flop_three_cards,
+    const std::vector<Card>& known_dead_cards, const CancelPredicate* should_cancel = nullptr);
+
+[[nodiscard]] double exact_hero_category_at_least_flop_to_river(
+    const std::vector<Card>& hero_hole_cards, const std::vector<Card>& flop_three_cards,
+    const std::vector<Card>& known_dead_cards, int min_category_order,
+    const CancelPredicate* should_cancel = nullptr);
+
+[[nodiscard]] double normalized_range_weight_sum(const std::vector<double>& weights);
 
 }  // namespace poker

@@ -1,5 +1,7 @@
 #include "poker/side_pot.hpp"
 
+#include "poker/poker_math.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -102,6 +104,26 @@ double side_pot_layers_total_chips(const std::vector<Side_pot_layer>& layers) {
         sum += layer.pot_chips;
     }
     return sum;
+}
+
+int side_pot_layer_count(const std::vector<double>& committed_chips) {
+    return static_cast<int>(side_pot_ladder_from_commitments(committed_chips).size());
+}
+
+double side_pot_breakeven_call_equity(double layer_pot_chips, double to_call) {
+    return breakeven_call_equity(layer_pot_chips, to_call);
+}
+
+std::vector<double> layered_pot_chip_ev_from_equities_with_rake(
+    const std::vector<double>& layer_pot_chips,
+    const std::vector<std::vector<double>>& equity_player_by_layer, double rake_fraction,
+    double rake_cap) {
+    std::vector<double> net_pots;
+    net_pots.reserve(layer_pot_chips.size());
+    for (double p : layer_pot_chips) {
+        net_pots.push_back(p - rake_from_pot(p, rake_fraction, rake_cap));
+    }
+    return layered_pot_chip_ev_from_equities(net_pots, equity_player_by_layer);
 }
 
 }  // namespace poker

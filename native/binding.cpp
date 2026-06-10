@@ -1511,3 +1511,721 @@ Napi::Value IcmLastPlaceProbabilitiesHarville(const Napi::CallbackInfo& info) {
 
 }
 
+
+Napi::Value FlopToTurnAtLeastOneHitProbability(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "flopToTurnAtLeastOneHitProbability(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::flop_to_turn_at_least_one_hit_probability(a0, a1));
+}
+Napi::Value TurnToRiverAtLeastOneHitProbability(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "turnToRiverAtLeastOneHitProbability(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::turn_to_river_at_least_one_hit_probability(a0, a1));
+}
+Napi::Value FlopToTurnAtLeastOneHitUnionTwoCategories(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 4 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber(), "flopToTurnAtLeastOneHitUnionTwoCategories(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::flop_to_turn_at_least_one_hit_union_two_categories(a0, a1, a2, a3));
+}
+Napi::Value TurnToRiverAtLeastOneHitUnionTwoCategories(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 4 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber(), "turnToRiverAtLeastOneHitUnionTwoCategories(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::turn_to_river_at_least_one_hit_union_two_categories(a0, a1, a2, a3));
+}
+Napi::Value FlopToTurnAtLeastOneHitUnionThreeCategories(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 8 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber() && info[4].IsNumber() && info[5].IsNumber() && info[6].IsNumber() && info[7].IsNumber(), "flopToTurnAtLeastOneHitUnionThreeCategories(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+        const double a4 = info[4].As<Napi::Number>().DoubleValue();
+        const double a5 = info[5].As<Napi::Number>().DoubleValue();
+        const double a6 = info[6].As<Napi::Number>().DoubleValue();
+        const double a7 = info[7].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::flop_to_turn_at_least_one_hit_union_three_categories(a0, a1, a2, a3, a4, a5, a6, a7));
+}
+Napi::Value TurnToRiverAtLeastOneHitUnionThreeCategories(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 8 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber() && info[4].IsNumber() && info[5].IsNumber() && info[6].IsNumber() && info[7].IsNumber(), "turnToRiverAtLeastOneHitUnionThreeCategories(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+        const double a4 = info[4].As<Napi::Number>().DoubleValue();
+        const double a5 = info[5].As<Napi::Number>().DoubleValue();
+        const double a6 = info[6].As<Napi::Number>().DoubleValue();
+        const double a7 = info[7].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::turn_to_river_at_least_one_hit_union_three_categories(a0, a1, a2, a3, a4, a5, a6, a7));
+}
+Napi::Value FlopToTurnAtLeastOneHitUnionFourCategories(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 16 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber() && info[4].IsNumber() && info[5].IsNumber() && info[6].IsNumber() && info[7].IsNumber() && info[8].IsNumber() && info[9].IsNumber() && info[10].IsNumber() && info[11].IsNumber() && info[12].IsNumber() && info[13].IsNumber() && info[14].IsNumber() && info[15].IsNumber(), "flopToTurnAtLeastOneHitUnionFourCategories(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+        const double a4 = info[4].As<Napi::Number>().DoubleValue();
+        const double a5 = info[5].As<Napi::Number>().DoubleValue();
+        const double a6 = info[6].As<Napi::Number>().DoubleValue();
+        const double a7 = info[7].As<Napi::Number>().DoubleValue();
+        const double a8 = info[8].As<Napi::Number>().DoubleValue();
+        const double a9 = info[9].As<Napi::Number>().DoubleValue();
+        const double a10 = info[10].As<Napi::Number>().DoubleValue();
+        const double a11 = info[11].As<Napi::Number>().DoubleValue();
+        const double a12 = info[12].As<Napi::Number>().DoubleValue();
+        const double a13 = info[13].As<Napi::Number>().DoubleValue();
+        const double a14 = info[14].As<Napi::Number>().DoubleValue();
+        const double a15 = info[15].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::flop_to_turn_at_least_one_hit_union_four_categories(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15));
+}
+Napi::Value TurnToRiverAtLeastOneHitUnionFourCategories(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 16 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber() && info[4].IsNumber() && info[5].IsNumber() && info[6].IsNumber() && info[7].IsNumber() && info[8].IsNumber() && info[9].IsNumber() && info[10].IsNumber() && info[11].IsNumber() && info[12].IsNumber() && info[13].IsNumber() && info[14].IsNumber() && info[15].IsNumber(), "turnToRiverAtLeastOneHitUnionFourCategories(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+        const double a4 = info[4].As<Napi::Number>().DoubleValue();
+        const double a5 = info[5].As<Napi::Number>().DoubleValue();
+        const double a6 = info[6].As<Napi::Number>().DoubleValue();
+        const double a7 = info[7].As<Napi::Number>().DoubleValue();
+        const double a8 = info[8].As<Napi::Number>().DoubleValue();
+        const double a9 = info[9].As<Napi::Number>().DoubleValue();
+        const double a10 = info[10].As<Napi::Number>().DoubleValue();
+        const double a11 = info[11].As<Napi::Number>().DoubleValue();
+        const double a12 = info[12].As<Napi::Number>().DoubleValue();
+        const double a13 = info[13].As<Napi::Number>().DoubleValue();
+        const double a14 = info[14].As<Napi::Number>().DoubleValue();
+        const double a15 = info[15].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::turn_to_river_at_least_one_hit_union_four_categories(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15));
+}
+Napi::Value FlopToTurnAtLeastOneHitDisjointOutsSum(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsArray(), "flopToTurnAtLeastOneHitDisjointOutsSum(unseen, outs[])");
+    const double unseen = info[0].As<Napi::Number>().DoubleValue();
+    std::vector<double> outs;
+    std::string err;
+    if (!read_f64_vector(info[1], "outs", outs, &err)) { POKER_FAIL_TYPE(env, err); }
+    return Napi::Number::New(env, poker::flop_to_turn_at_least_one_hit_disjoint_outs_sum(unseen, outs));
+}
+Napi::Value TurnToRiverAtLeastOneHitDisjointOutsSum(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsArray(), "turnToRiverAtLeastOneHitDisjointOutsSum(unseen, outs[])");
+    const double unseen = info[0].As<Napi::Number>().DoubleValue();
+    std::vector<double> outs;
+    std::string err;
+    if (!read_f64_vector(info[1], "outs", outs, &err)) { POKER_FAIL_TYPE(env, err); }
+    return Napi::Number::New(env, poker::turn_to_river_at_least_one_hit_disjoint_outs_sum(unseen, outs));
+}
+Napi::Value HypergeometricTwoCardHitProbability(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "hypergeometricTwoCardHitProbability(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::hypergeometric_two_card_hit_probability(a0, a1));
+}
+Napi::Value HypergeometricTwoCardMissProbability(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "hypergeometricTwoCardMissProbability(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::hypergeometric_two_card_miss_probability(a0, a1));
+}
+Napi::Value RunnerRunnerBackdoorFlushOneCardProbability(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "runnerRunnerBackdoorFlushOneCardProbability(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::runner_runner_backdoor_flush_one_card_probability(a0, a1));
+}
+Napi::Value BlockerAdjustedOuts(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "blockerAdjustedOuts(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::blocker_adjusted_outs(a0, a1));
+}
+Napi::Value SuitBlockerFraction(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "suitBlockerFraction(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::suit_blocker_fraction(a0, a1));
+}
+Napi::Value NetPotAfterRake(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 3 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber(), "netPotAfterRake(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::net_pot_after_rake(a0, a1, a2));
+}
+Napi::Value NetPotAfterCallAndRake(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 4 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber(), "netPotAfterCallAndRake(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::net_pot_after_call_and_rake(a0, a1, a2, a3));
+}
+Napi::Value EffectivePotOddsDisplayAfterRake(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 4 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber(), "effectivePotOddsDisplayAfterRake(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::effective_pot_odds_display_after_rake(a0, a1, a2, a3));
+}
+Napi::Value ImpliedBreakevenTotalPot(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 3 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber(), "impliedBreakevenTotalPot(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::implied_breakeven_total_pot(a0, a1, a2));
+}
+Napi::Value ImpliedOddsRequiredEquityFromFutureWin(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 3 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber(), "impliedOddsRequiredEquityFromFutureWin(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::implied_odds_required_equity_from_future_win(a0, a1, a2));
+}
+Napi::Value ExpectedValueRaise(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 5 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber() && info[4].IsNumber(), "expectedValueRaise(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+        const double a4 = info[4].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::expected_value_raise(a0, a1, a2, a3, a4));
+}
+Napi::Value ExpectedValueRaiseWithRake(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 7 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber() && info[4].IsNumber() && info[5].IsNumber() && info[6].IsNumber(), "expectedValueRaiseWithRake(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+        const double a4 = info[4].As<Napi::Number>().DoubleValue();
+        const double a5 = info[5].As<Napi::Number>().DoubleValue();
+        const double a6 = info[6].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::expected_value_raise_with_rake(a0, a1, a2, a3, a4, a5, a6));
+}
+Napi::Value BreakevenRaiseEquity(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 4 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber(), "breakevenRaiseEquity(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::breakeven_raise_equity(a0, a1, a2, a3));
+}
+Napi::Value BreakevenCallEquityWithPostedAnte(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 3 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber(), "breakevenCallEquityWithPostedAnte(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::breakeven_call_equity_with_posted_ante(a0, a1, a2));
+}
+Napi::Value PotSizeAfterHuCall(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "potSizeAfterHuCall(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::pot_size_after_hu_call(a0, a1));
+}
+Napi::Value PotSizeAfterHuBet(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "potSizeAfterHuBet(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::pot_size_after_hu_bet(a0, a1));
+}
+Napi::Value ExpectedValuePerBigBlind(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "expectedValuePerBigBlind(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::expected_value_per_big_blind(a0, a1));
+}
+Napi::Value MinimumDefenseFrequencyWithRake(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 4 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber(), "minimumDefenseFrequencyWithRake(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::minimum_defense_frequency_with_rake(a0, a1, a2, a3));
+}
+Napi::Value AlphaFrequencyWithRake(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 4 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber(), "alphaFrequencyWithRake(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::alpha_frequency_with_rake(a0, a1, a2, a3));
+}
+Napi::Value BluffToValueRatioWithRake(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 4 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber(), "bluffToValueRatioWithRake(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::bluff_to_value_ratio_with_rake(a0, a1, a2, a3));
+}
+Napi::Value ValueToBluffRatioWithRake(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 4 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber(), "valueToBluffRatioWithRake(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::value_to_bluff_ratio_with_rake(a0, a1, a2, a3));
+}
+Napi::Value SprAfterBet(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 3 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber(), "sprAfterBet(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::spr_after_bet(a0, a1, a2));
+}
+Napi::Value SprAfterRaise(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 3 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber(), "sprAfterRaise(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::spr_after_raise(a0, a1, a2));
+}
+Napi::Value CommitmentRatioAfterBet(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "commitmentRatioAfterBet(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::commitment_ratio_after_bet(a0, a1));
+}
+Napi::Value BetSizeToMatchPotFraction(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "betSizeToMatchPotFraction(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::bet_size_to_match_pot_fraction(a0, a1));
+}
+Napi::Value HalfKellyCriterionBinary(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "halfKellyCriterionBinary(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::half_kelly_criterion_binary(a0, a1));
+}
+Napi::Value QuarterKellyCriterionBinary(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "quarterKellyCriterionBinary(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::quarter_kelly_criterion_binary(a0, a1));
+}
+Napi::Value EighthKellyCriterionBinary(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "eighthKellyCriterionBinary(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::eighth_kelly_criterion_binary(a0, a1));
+}
+Napi::Value KellyCriterionBinaryClamped(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "kellyCriterionBinaryClamped(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::kelly_criterion_binary_clamped(a0, a1));
+}
+Napi::Value BreakevenFoldEquityPureBluffWithAnte(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 3 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber(), "breakevenFoldEquityPureBluffWithAnte(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::breakeven_fold_equity_pure_bluff_with_ante(a0, a1, a2));
+}
+Napi::Value BreakevenFoldEquitySemiBluffWithAnte(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 5 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber() && info[4].IsNumber(), "breakevenFoldEquitySemiBluffWithAnte(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+        const double a4 = info[4].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::breakeven_fold_equity_semi_bluff_with_ante(a0, a1, a2, a3, a4));
+}
+Napi::Value TwoStreetPureBluffEvWithRake(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 7 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber() && info[4].IsNumber() && info[5].IsNumber() && info[6].IsNumber(), "twoStreetPureBluffEvWithRake(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+        const double a4 = info[4].As<Napi::Number>().DoubleValue();
+        const double a5 = info[5].As<Napi::Number>().DoubleValue();
+        const double a6 = info[6].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::two_street_pure_bluff_ev_with_rake(a0, a1, a2, a3, a4, a5, a6));
+}
+Napi::Value ThreeStreetPureBluffSameFoldEquity(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 4 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber(), "threeStreetPureBluffSameFoldEquity(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::three_street_pure_bluff_same_fold_equity(a0, a1, a2, a3));
+}
+Napi::Value ThreeStreetPureBluffEv(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 7 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber() && info[4].IsNumber() && info[5].IsNumber() && info[6].IsNumber(), "threeStreetPureBluffEv(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+        const double a4 = info[4].As<Napi::Number>().DoubleValue();
+        const double a5 = info[5].As<Napi::Number>().DoubleValue();
+        const double a6 = info[6].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::three_street_pure_bluff_ev(a0, a1, a2, a3, a4, a5, a6));
+}
+Napi::Value MultiwaySymmetricBreakevenCallEquityWithRake(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 5 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber() && info[4].IsNumber(), "multiwaySymmetricBreakevenCallEquityWithRake(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const int a2 = info[2].As<Napi::Number>().Int32Value();
+        const double a3 = info[3].As<Napi::Number>().DoubleValue();
+        const double a4 = info[4].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::multiway_symmetric_breakeven_call_equity_with_rake(a0, a1, a2, a3, a4));
+}
+Napi::Value MultiwaySymmetricBreakevenCallEquityWithShareAndRake(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 7, "multiwaySymmetricBreakevenCallEquityWithShareAndRake(...)");
+    const double pot = info[0].As<Napi::Number>().DoubleValue();
+    const double to_call = info[1].As<Napi::Number>().DoubleValue();
+    const int k = info[2].As<Napi::Number>().Int32Value();
+    const int model = info[3].As<Napi::Number>().Int32Value();
+    const double frac = info[4].As<Napi::Number>().DoubleValue();
+    const double rake_f = info[5].As<Napi::Number>().DoubleValue();
+    const double rake_c = info[6].As<Napi::Number>().DoubleValue();
+    const auto m = model == 1 ? poker::Multiway_symmetric_pot_share_model::FixedHeroShareWhenWins : poker::Multiway_symmetric_pot_share_model::WinnerTakesAll;
+    return Napi::Number::New(env, poker::multiway_symmetric_breakeven_call_equity_with_share_and_rake(pot, to_call, k, m, frac, rake_f, rake_c));
+}
+Napi::Value MultiwayExpectedValueCall(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 4 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber(), "multiwayExpectedValueCall(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+        const int a3 = info[3].As<Napi::Number>().Int32Value();
+    return Napi::Number::New(env, poker::multiway_expected_value_call(a0, a1, a2, a3));
+}
+Napi::Value ReverseImpliedOddsMinEquity(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 3 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber(), "reverseImpliedOddsMinEquity(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::reverse_implied_odds_min_equity(a0, a1, a2));
+}
+Napi::Value GeometricPotAfterSingleMatchedBet(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "geometricPotAfterSingleMatchedBet(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::geometric_pot_after_single_matched_bet(a0, a1));
+}
+Napi::Value BinomialProportionCiWidth(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 3, "binomialProportionCiWidth(successes, nTrials, z)");
+    return Napi::Number::New(env, poker::binomial_proportion_ci_width(info[0].As<Napi::Number>().Int32Value(), info[1].As<Napi::Number>().Int32Value(), info[2].As<Napi::Number>().DoubleValue()));
+}
+Napi::Value MonteCarloTrialsForWilsonHalfWidth(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 3 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber(), "monteCarloTrialsForWilsonHalfWidth(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, static_cast<double>(poker::monte_carlo_trials_for_wilson_half_width(a0, a1, a2)));
+}
+Napi::Value VarianceToStandardDeviationPerHand(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 1 && info[0].IsNumber(), "varianceToStandardDeviationPerHand(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::variance_to_standard_deviation_per_hand(a0));
+}
+Napi::Value IcmEqualChopPayouts(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 1, "icmEqualChopPayouts(payouts)");
+    std::vector<double> payouts;
+    std::string err;
+    if (!read_f64_vector(info[0], "payouts", payouts, &err)) { POKER_FAIL_TYPE(env, err); }
+    return write_f64_vector(env, poker::icm_equal_chop_payouts(payouts), poker_bind::F64ReturnFormat::Array);
+}
+Napi::Value IcmChopSurplusVsEqualSplit(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2, "icmChopSurplusVsEqualSplit(stacks, payouts)");
+    std::vector<double> stacks, payouts;
+    std::string err;
+    if (!read_f64_vector(info[0], "stacks", stacks, &err)) { POKER_FAIL_TYPE(env, err); }
+    if (!read_f64_vector(info[1], "payouts", payouts, &err)) { POKER_FAIL_TYPE(env, err); }
+    return write_f64_vector(env, poker::icm_chop_surplus_vs_equal_split(stacks, payouts), poker_bind::F64ReturnFormat::Array);
+}
+Napi::Value IcmTotalPrizePool(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 1, "icmTotalPrizePool(payouts)");
+    std::vector<double> payouts;
+    std::string err;
+    if (!read_f64_vector(info[0], "payouts", payouts, &err)) { POKER_FAIL_TYPE(env, err); }
+    return Napi::Number::New(env, poker::icm_total_prize_pool(payouts));
+}
+Napi::Value IcmDealEvPerChip(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2, "icmDealEvPerChip(stacks, payouts)");
+    std::vector<double> stacks, payouts;
+    std::string err;
+    if (!read_f64_vector(info[0], "stacks", stacks, &err)) { POKER_FAIL_TYPE(env, err); }
+    if (!read_f64_vector(info[1], "payouts", payouts, &err)) { POKER_FAIL_TYPE(env, err); }
+    return write_f64_vector(env, poker::icm_deal_ev_per_chip(stacks, payouts), poker_bind::F64ReturnFormat::Array);
+}
+Napi::Value IcmSatelliteAdvanceProbability(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[1].IsNumber(), "icmSatelliteAdvanceProbability(stacks, paidPlaces)");
+    std::vector<double> stacks;
+    std::string err;
+    if (!read_f64_vector(info[0], "stacks", stacks, &err)) { POKER_FAIL_TYPE(env, err); }
+    const int k = info[1].As<Napi::Number>().Int32Value();
+    return write_f64_vector(env, poker::icm_satellite_advance_probability(stacks, k), poker_bind::F64ReturnFormat::Array);
+}
+Napi::Value IcmPayoutStructureGini(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 1, "icmPayoutStructureGini(payouts)");
+    std::vector<double> payouts;
+    std::string err;
+    if (!read_f64_vector(info[0], "payouts", payouts, &err)) { POKER_FAIL_TYPE(env, err); }
+    return Napi::Number::New(env, poker::icm_payout_structure_gini(payouts));
+}
+Napi::Value IcmChipLeaderPremiumVsEqualChop(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2, "icmChipLeaderPremiumVsEqualChop(stacks, payouts)");
+    std::vector<double> stacks, payouts;
+    std::string err;
+    if (!read_f64_vector(info[0], "stacks", stacks, &err)) { POKER_FAIL_TYPE(env, err); }
+    if (!read_f64_vector(info[1], "payouts", payouts, &err)) { POKER_FAIL_TYPE(env, err); }
+    return Napi::Number::New(env, poker::icm_chip_leader_premium_vs_equal_chop(stacks, payouts));
+}
+Napi::Value SidePotLayerCount(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 1, "sidePotLayerCount(committedChips)");
+    std::vector<double> v;
+    std::string err;
+    if (!read_f64_vector(info[0], "committedChips", v, &err)) { POKER_FAIL_TYPE(env, err); }
+    return Napi::Number::New(env, poker::side_pot_layer_count(v));
+}
+Napi::Value SidePotBreakevenCallEquity(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "sidePotBreakevenCallEquity(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::side_pot_breakeven_call_equity(a0, a1));
+}
+Napi::Value PreflopCombosFromNotationMinusBlockers(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsString() && info[1].IsNumber(), "preflopCombosFromNotationMinusBlockers(notation, deadCardsAmongCombos)");
+  return Napi::Number::New(env, poker::preflop_combos_from_notation_minus_blockers(info[0].As<Napi::String>().Utf8Value(), info[1].As<Napi::Number>().Int32Value()));
+}
+Napi::Value StackToPotAfterCall(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 3 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber(), "stackToPotAfterCall(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::stack_to_pot_after_call(a0, a1, a2));
+}
+Napi::Value FlushMadeFlopToRiverExactProbability(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    StraightMadeParsed args{};
+    std::string err;
+    if (!parse_straight_made_args(info, args, &err)) { POKER_FAIL_TYPE(env, err); }
+    return Napi::Number::New(env, poker::flush_made_flop_to_river_exact_probability(args.hero, args.flop, args.dead));
+}
+Napi::Value FlushMadeFlopToRiverExactProbabilityAsync(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    StraightMadeParsed args{};
+    std::string err;
+    if (!parse_straight_made_args(info, args, &err)) { POKER_FAIL_TYPE(env, err); }
+    const auto hero = std::move(args.hero);
+    const auto flop = std::move(args.flop);
+    const auto dead = std::move(args.dead);
+    const Napi::Value signal = poker_bind::parse_async_signal(info);
+    return poker_async::enqueue_float_work(env, [hero, flop, dead](const poker::CancelPredicate* cancel) {
+        return poker::flush_made_flop_to_river_exact_probability(hero, flop, dead, cancel);
+    }, signal);
+}
+Napi::Value FullHouseMadeFlopToRiverExactProbability(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    StraightMadeParsed args{};
+    std::string err;
+    if (!parse_straight_made_args(info, args, &err)) { POKER_FAIL_TYPE(env, err); }
+    return Napi::Number::New(env, poker::full_house_made_flop_to_river_exact_probability(args.hero, args.flop, args.dead));
+}
+Napi::Value FullHouseMadeFlopToRiverExactProbabilityAsync(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    StraightMadeParsed args{};
+    std::string err;
+    if (!parse_straight_made_args(info, args, &err)) { POKER_FAIL_TYPE(env, err); }
+    const auto hero = std::move(args.hero);
+    const auto flop = std::move(args.flop);
+    const auto dead = std::move(args.dead);
+    const Napi::Value signal = poker_bind::parse_async_signal(info);
+    return poker_async::enqueue_float_work(env, [hero, flop, dead](const poker::CancelPredicate* cancel) {
+        return poker::full_house_made_flop_to_river_exact_probability(hero, flop, dead, cancel);
+    }, signal);
+}
+Napi::Value TripsMadeFlopToRiverExactProbability(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    StraightMadeParsed args{};
+    std::string err;
+    if (!parse_straight_made_args(info, args, &err)) { POKER_FAIL_TYPE(env, err); }
+    return Napi::Number::New(env, poker::trips_made_flop_to_river_exact_probability(args.hero, args.flop, args.dead));
+}
+Napi::Value TripsMadeFlopToRiverExactProbabilityAsync(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    StraightMadeParsed args{};
+    std::string err;
+    if (!parse_straight_made_args(info, args, &err)) { POKER_FAIL_TYPE(env, err); }
+    const auto hero = std::move(args.hero);
+    const auto flop = std::move(args.flop);
+    const auto dead = std::move(args.dead);
+    const Napi::Value signal = poker_bind::parse_async_signal(info);
+    return poker_async::enqueue_float_work(env, [hero, flop, dead](const poker::CancelPredicate* cancel) {
+        return poker::trips_made_flop_to_river_exact_probability(hero, flop, dead, cancel);
+    }, signal);
+}
+Napi::Value TwoPairMadeFlopToRiverExactProbability(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    StraightMadeParsed args{};
+    std::string err;
+    if (!parse_straight_made_args(info, args, &err)) { POKER_FAIL_TYPE(env, err); }
+    return Napi::Number::New(env, poker::two_pair_made_flop_to_river_exact_probability(args.hero, args.flop, args.dead));
+}
+Napi::Value TwoPairMadeFlopToRiverExactProbabilityAsync(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    StraightMadeParsed args{};
+    std::string err;
+    if (!parse_straight_made_args(info, args, &err)) { POKER_FAIL_TYPE(env, err); }
+    const auto hero = std::move(args.hero);
+    const auto flop = std::move(args.flop);
+    const auto dead = std::move(args.dead);
+    const Napi::Value signal = poker_bind::parse_async_signal(info);
+    return poker_async::enqueue_float_work(env, [hero, flop, dead](const poker::CancelPredicate* cancel) {
+        return poker::two_pair_made_flop_to_river_exact_probability(hero, flop, dead, cancel);
+    }, signal);
+}
+Napi::Value ExactHeroCategoryAtLeastFlopToRiver(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    StraightMadeParsed args{};
+    std::string err;
+    if (!parse_straight_made_args(info, args, &err)) { POKER_FAIL_TYPE(env, err); }
+    POKER_REQUIRE(env, info.Length() >= 4 && info[3].IsNumber(), "exactHeroCategoryAtLeastFlopToRiver(hero, flop, dead?, minCategoryOrder)");
+    const int min_cat = info[3].As<Napi::Number>().Int32Value();
+    return Napi::Number::New(env, poker::exact_hero_category_at_least_flop_to_river(args.hero, args.flop, args.dead, min_cat));
+}
+Napi::Value ExactHeroCategoryAtLeastFlopToRiverAsync(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    StraightMadeParsed args{};
+    std::string err;
+    if (!parse_straight_made_args(info, args, &err)) { POKER_FAIL_TYPE(env, err); }
+    POKER_REQUIRE(env, info.Length() >= 4 && info[3].IsNumber(), "exactHeroCategoryAtLeastFlopToRiverAsync(hero, flop, dead?, minCategoryOrder)");
+    const int min_cat = info[3].As<Napi::Number>().Int32Value();
+    const auto hero = std::move(args.hero);
+    const auto flop = std::move(args.flop);
+    const auto dead = std::move(args.dead);
+    const Napi::Value signal = poker_bind::parse_async_signal(info);
+    return poker_async::enqueue_float_work(env, [hero, flop, dead, min_cat](const poker::CancelPredicate* cancel) {
+        return poker::exact_hero_category_at_least_flop_to_river(hero, flop, dead, min_cat, cancel);
+    }, signal);
+}
+Napi::Value PushFoldSymmetricEv(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 3 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber(), "pushFoldSymmetricEv(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::push_fold_symmetric_ev(a0, a1, a2));
+}
+Napi::Value PushFoldSymmetricBreakevenEquity(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "pushFoldSymmetricBreakevenEquity(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::push_fold_symmetric_breakeven_equity(a0, a1));
+}
+Napi::Value OpenRaiseBreakevenFoldEquity(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2 && info[0].IsNumber() && info[1].IsNumber(), "openRaiseBreakevenFoldEquity(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::open_raise_breakeven_fold_equity(a0, a1));
+}
+Napi::Value CallOrFoldChipEvDelta(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 3 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber(), "callOrFoldChipEvDelta(...)");
+        const double a0 = info[0].As<Napi::Number>().DoubleValue();
+        const double a1 = info[1].As<Napi::Number>().DoubleValue();
+        const double a2 = info[2].As<Napi::Number>().DoubleValue();
+    return Napi::Number::New(env, poker::call_or_fold_chip_ev_delta(a0, a1, a2));
+}
+Napi::Value NormalizedRangeWeightSum(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 1, "normalizedRangeWeightSum(weights)");
+    std::vector<double> weights;
+    std::string err;
+    if (!read_f64_vector(info[0], "weights", weights, &err)) { POKER_FAIL_TYPE(env, err); }
+    return Napi::Number::New(env, poker::normalized_range_weight_sum(weights));
+}
+Napi::Value LayeredPotChipEvFromEquitiesWithRake(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 4, "layeredPotChipEvFromEquitiesWithRake(layerPotChips, equities, rakeFraction, rakeCap)");
+    std::vector<double> pots;
+    std::vector<std::vector<double>> eq;
+    std::string err;
+    if (!read_f64_vector(info[0], "layerPotChips", pots, &err)) { POKER_FAIL_TYPE(env, err); }
+    if (!read_f64_matrix(info[1], "equities", eq, &err)) { POKER_FAIL_TYPE(env, err); }
+    const double rf = info[2].As<Napi::Number>().DoubleValue();
+    const double rc = info[3].As<Napi::Number>().DoubleValue();
+    return write_f64_vector(env, poker::layered_pot_chip_ev_from_equities_with_rake(pots, eq, rf, rc), poker_bind::F64ReturnFormat::Array);
+}
+Napi::Value IcmExpectedPayoutsDeltaFromChipChop(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2, "icmExpectedPayoutsDeltaFromChipChop(stacks, payouts)");
+    std::vector<double> stacks, payouts;
+    std::string err;
+    if (!read_f64_vector(info[0], "stacks", stacks, &err)) { POKER_FAIL_TYPE(env, err); }
+    if (!read_f64_vector(info[1], "payouts", payouts, &err)) { POKER_FAIL_TYPE(env, err); }
+    return write_f64_vector(env, poker::icm_expected_payouts_delta_from_chip_chop(stacks, payouts), poker_bind::F64ReturnFormat::Array);
+}
