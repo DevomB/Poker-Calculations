@@ -1,6 +1,7 @@
 #include "poker/bit_utils.hpp"
 #include "poker/icm.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
