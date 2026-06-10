@@ -290,4 +290,126 @@ std::vector<double> icm_harville_skill_adjusted_payouts(const std::vector<double
     return ev;
 }
 
+std::vector<double> icm_equal_chop_payouts(const std::vector<double>& payouts) {
+    if (payouts.empty()) {
+        throw std::invalid_argument("payouts must be non-empty");
+    }
+    double total = 0.0;
+    for (double p : payouts) {
+        if (!std::isfinite(p) || p < 0.0) {
+            throw std::invalid_argument("payouts must be finite and non-negative");
+        }
+        total += p;
+    }
+    const double each = total / static_cast<double>(payouts.size());
+    return std::vector<double>(payouts.size(), each);
+}
+
+std::vector<double> icm_chop_surplus_vs_equal_split(const std::vector<double>& stacks,
+                                                  const std::vector<double>& payouts) {
+    const std::vector<double> icm = icm_expected_payouts(stacks, payouts);
+    const std::vector<double> eq = icm_equal_chop_payouts(payouts);
+    std::vector<double> out(icm.size());
+    for (std::size_t i = 0; i < icm.size(); ++i) {
+        out[i] = icm[i] - eq[i];
+    }
+    return out;
+}
+
+double icm_total_prize_pool(const std::vector<double>& payouts) {
+    double total = 0.0;
+    for (double p : payouts) {
+        if (!std::isfinite(p) || p < 0.0) {
+            throw std::invalid_argument("payouts must be finite and non-negative");
+        }
+        total += p;
+    }
+    return total;
+}
+
+std::vector<double> icm_deal_ev_per_chip(const std::vector<double>& stacks,
+                                         const std::vector<double>& payouts) {
+    const std::vector<double> ev = icm_expected_payouts(stacks, payouts);
+    std::vector<double> out(ev.size());
+    for (std::size_t i = 0; i < ev.size(); ++i) {
+        if (stacks[i] <= 0.0) {
+            throw std::invalid_argument("stacks must be positive");
+        }
+        out[i] = ev[i] / stacks[i];
+    }
+    return out;
+}
+
+std::vector<double> icm_satellite_advance_probability(const std::vector<double>& stacks,
+                                                      int paid_places) {
+    return icm_top_k_finish_probabilities(stacks, paid_places);
+}
+
+double icm_payout_structure_gini(const std::vector<double>& payouts) {
+    if (payouts.empty()) {
+        throw std::invalid_argument("payouts must be non-empty");
+    }
+    std::vector<double> sorted = payouts;
+    for (double p : sorted) {
+        if (!std::isfinite(p) || p < 0.0) {
+            throw std::invalid_argument("payouts must be finite and non-negative");
+        }
+    }
+    std::sort(sorted.begin(), sorted.end());
+    const double n = static_cast<double>(sorted.size());
+    double sum = 0.0;
+    for (double p : sorted) {
+        sum += p;
+    }
+    if (sum <= 0.0) {
+        return 0.0;
+    }
+    double num = 0.0;
+    for (std::size_t i = 0; i < sorted.size(); ++i) {
+        num += (2.0 * static_cast<double>(i + 1) - n - 1.0) * sorted[i];
+    }
+    return num / (n * sum);
+}
+
+double icm_chip_leader_premium_vs_equal_chop(const std::vector<double>& stacks,
+                                             const std::vector<double>& payouts) {
+    if (stacks.empty()) {
+        throw std::invalid_argument("stacks must be non-empty");
+    }
+    std::size_t leader = 0;
+    for (std::size_t i = 1; i < stacks.size(); ++i) {
+        if (stacks[i] > stacks[leader]) {
+            leader = i;
+        }
+    }
+    const std::vector<double> surplus = icm_chop_surplus_vs_equal_split(stacks, payouts);
+    const std::vector<double> eq = icm_equal_chop_payouts(payouts);
+    if (eq[leader] <= 0.0) {
+        return 0.0;
+    }
+    return surplus[leader] / eq[leader];
+}
+
+std::vector<double> icm_expected_payouts_delta_from_chip_chop(const std::vector<double>& stacks,
+                                                              const std::vector<double>& payouts) {
+    const std::vector<double> icm = icm_expected_payouts(stacks, payouts);
+    const double total = icm_total_prize_pool(payouts);
+    double sum_s = 0.0;
+    for (double s : stacks) {
+        if (s < 0.0 || !std::isfinite(s)) {
+            throw std::invalid_argument("stacks must be finite and non-negative");
+        }
+        sum_s += s;
+    }
+    if (sum_s <= 0.0) {
+        throw std::invalid_argument("sum of stacks must be positive");
+    }
+    std::vector<double> out(icm.size());
+    for (std::size_t i = 0; i < icm.size(); ++i) {
+        const double chip_chop = total * (stacks[i] / sum_s);
+        out[i] = icm[i] - chip_chop;
+    }
+    return out;
+}
+
 }  // namespace poker

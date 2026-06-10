@@ -123,6 +123,86 @@ Napi::Value SimulateHandOutcomeDetailed(const Napi::CallbackInfo& info);
 Napi::Value BuildPreflopEquityMatrix(const Napi::CallbackInfo& info);
 Napi::Value EquityDeltaIfCardRemoved(const Napi::CallbackInfo& info);
 Napi::Value IcmExpectedPayoutsWeitzman(const Napi::CallbackInfo& info);
+Napi::Value FlopToTurnAtLeastOneHitProbability(const Napi::CallbackInfo& info);
+Napi::Value TurnToRiverAtLeastOneHitProbability(const Napi::CallbackInfo& info);
+Napi::Value FlopToTurnAtLeastOneHitUnionTwoCategories(const Napi::CallbackInfo& info);
+Napi::Value TurnToRiverAtLeastOneHitUnionTwoCategories(const Napi::CallbackInfo& info);
+Napi::Value FlopToTurnAtLeastOneHitUnionThreeCategories(const Napi::CallbackInfo& info);
+Napi::Value TurnToRiverAtLeastOneHitUnionThreeCategories(const Napi::CallbackInfo& info);
+Napi::Value FlopToTurnAtLeastOneHitUnionFourCategories(const Napi::CallbackInfo& info);
+Napi::Value TurnToRiverAtLeastOneHitUnionFourCategories(const Napi::CallbackInfo& info);
+Napi::Value FlopToTurnAtLeastOneHitDisjointOutsSum(const Napi::CallbackInfo& info);
+Napi::Value TurnToRiverAtLeastOneHitDisjointOutsSum(const Napi::CallbackInfo& info);
+Napi::Value HypergeometricTwoCardHitProbability(const Napi::CallbackInfo& info);
+Napi::Value HypergeometricTwoCardMissProbability(const Napi::CallbackInfo& info);
+Napi::Value RunnerRunnerBackdoorFlushOneCardProbability(const Napi::CallbackInfo& info);
+Napi::Value BlockerAdjustedOuts(const Napi::CallbackInfo& info);
+Napi::Value SuitBlockerFraction(const Napi::CallbackInfo& info);
+Napi::Value NetPotAfterRake(const Napi::CallbackInfo& info);
+Napi::Value NetPotAfterCallAndRake(const Napi::CallbackInfo& info);
+Napi::Value EffectivePotOddsDisplayAfterRake(const Napi::CallbackInfo& info);
+Napi::Value ImpliedBreakevenTotalPot(const Napi::CallbackInfo& info);
+Napi::Value ImpliedOddsRequiredEquityFromFutureWin(const Napi::CallbackInfo& info);
+Napi::Value ExpectedValueRaise(const Napi::CallbackInfo& info);
+Napi::Value ExpectedValueRaiseWithRake(const Napi::CallbackInfo& info);
+Napi::Value BreakevenRaiseEquity(const Napi::CallbackInfo& info);
+Napi::Value BreakevenCallEquityWithPostedAnte(const Napi::CallbackInfo& info);
+Napi::Value PotSizeAfterHuCall(const Napi::CallbackInfo& info);
+Napi::Value PotSizeAfterHuBet(const Napi::CallbackInfo& info);
+Napi::Value ExpectedValuePerBigBlind(const Napi::CallbackInfo& info);
+Napi::Value MinimumDefenseFrequencyWithRake(const Napi::CallbackInfo& info);
+Napi::Value AlphaFrequencyWithRake(const Napi::CallbackInfo& info);
+Napi::Value BluffToValueRatioWithRake(const Napi::CallbackInfo& info);
+Napi::Value ValueToBluffRatioWithRake(const Napi::CallbackInfo& info);
+Napi::Value SprAfterBet(const Napi::CallbackInfo& info);
+Napi::Value SprAfterRaise(const Napi::CallbackInfo& info);
+Napi::Value CommitmentRatioAfterBet(const Napi::CallbackInfo& info);
+Napi::Value BetSizeToMatchPotFraction(const Napi::CallbackInfo& info);
+Napi::Value HalfKellyCriterionBinary(const Napi::CallbackInfo& info);
+Napi::Value QuarterKellyCriterionBinary(const Napi::CallbackInfo& info);
+Napi::Value EighthKellyCriterionBinary(const Napi::CallbackInfo& info);
+Napi::Value KellyCriterionBinaryClamped(const Napi::CallbackInfo& info);
+Napi::Value BreakevenFoldEquityPureBluffWithAnte(const Napi::CallbackInfo& info);
+Napi::Value BreakevenFoldEquitySemiBluffWithAnte(const Napi::CallbackInfo& info);
+Napi::Value TwoStreetPureBluffEvWithRake(const Napi::CallbackInfo& info);
+Napi::Value ThreeStreetPureBluffSameFoldEquity(const Napi::CallbackInfo& info);
+Napi::Value ThreeStreetPureBluffEv(const Napi::CallbackInfo& info);
+Napi::Value MultiwaySymmetricBreakevenCallEquityWithRake(const Napi::CallbackInfo& info);
+Napi::Value MultiwaySymmetricBreakevenCallEquityWithShareAndRake(const Napi::CallbackInfo& info);
+Napi::Value MultiwayExpectedValueCall(const Napi::CallbackInfo& info);
+Napi::Value ReverseImpliedOddsMinEquity(const Napi::CallbackInfo& info);
+Napi::Value GeometricPotAfterSingleMatchedBet(const Napi::CallbackInfo& info);
+Napi::Value BinomialProportionCiWidth(const Napi::CallbackInfo& info);
+Napi::Value MonteCarloTrialsForWilsonHalfWidth(const Napi::CallbackInfo& info);
+Napi::Value VarianceToStandardDeviationPerHand(const Napi::CallbackInfo& info);
+Napi::Value IcmEqualChopPayouts(const Napi::CallbackInfo& info);
+Napi::Value IcmChopSurplusVsEqualSplit(const Napi::CallbackInfo& info);
+Napi::Value IcmTotalPrizePool(const Napi::CallbackInfo& info);
+Napi::Value IcmDealEvPerChip(const Napi::CallbackInfo& info);
+Napi::Value IcmSatelliteAdvanceProbability(const Napi::CallbackInfo& info);
+Napi::Value IcmPayoutStructureGini(const Napi::CallbackInfo& info);
+Napi::Value IcmChipLeaderPremiumVsEqualChop(const Napi::CallbackInfo& info);
+Napi::Value SidePotLayerCount(const Napi::CallbackInfo& info);
+Napi::Value SidePotBreakevenCallEquity(const Napi::CallbackInfo& info);
+Napi::Value PreflopCombosFromNotationMinusBlockers(const Napi::CallbackInfo& info);
+Napi::Value StackToPotAfterCall(const Napi::CallbackInfo& info);
+Napi::Value FlushMadeFlopToRiverExactProbability(const Napi::CallbackInfo& info);
+Napi::Value FlushMadeFlopToRiverExactProbabilityAsync(const Napi::CallbackInfo& info);
+Napi::Value FullHouseMadeFlopToRiverExactProbability(const Napi::CallbackInfo& info);
+Napi::Value FullHouseMadeFlopToRiverExactProbabilityAsync(const Napi::CallbackInfo& info);
+Napi::Value TripsMadeFlopToRiverExactProbability(const Napi::CallbackInfo& info);
+Napi::Value TripsMadeFlopToRiverExactProbabilityAsync(const Napi::CallbackInfo& info);
+Napi::Value TwoPairMadeFlopToRiverExactProbability(const Napi::CallbackInfo& info);
+Napi::Value TwoPairMadeFlopToRiverExactProbabilityAsync(const Napi::CallbackInfo& info);
+Napi::Value ExactHeroCategoryAtLeastFlopToRiver(const Napi::CallbackInfo& info);
+Napi::Value ExactHeroCategoryAtLeastFlopToRiverAsync(const Napi::CallbackInfo& info);
+Napi::Value PushFoldSymmetricEv(const Napi::CallbackInfo& info);
+Napi::Value PushFoldSymmetricBreakevenEquity(const Napi::CallbackInfo& info);
+Napi::Value OpenRaiseBreakevenFoldEquity(const Napi::CallbackInfo& info);
+Napi::Value CallOrFoldChipEvDelta(const Napi::CallbackInfo& info);
+Napi::Value NormalizedRangeWeightSum(const Napi::CallbackInfo& info);
+Napi::Value LayeredPotChipEvFromEquitiesWithRake(const Napi::CallbackInfo& info);
+Napi::Value IcmExpectedPayoutsDeltaFromChipChop(const Napi::CallbackInfo& info);
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     poker_bind::init_binding(env);
@@ -273,6 +353,86 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("exactEquityCardRemovalGradient", ExactEquityCardRemovalGradient),
         Napi::PropertyDescriptor::Function("exactEquityCardRemovalGradientAsync",
                                           ExactEquityCardRemovalGradientAsync),
+        Napi::PropertyDescriptor::Function("flopToTurnAtLeastOneHitProbability", FlopToTurnAtLeastOneHitProbability),
+        Napi::PropertyDescriptor::Function("turnToRiverAtLeastOneHitProbability", TurnToRiverAtLeastOneHitProbability),
+        Napi::PropertyDescriptor::Function("flopToTurnAtLeastOneHitUnionTwoCategories", FlopToTurnAtLeastOneHitUnionTwoCategories),
+        Napi::PropertyDescriptor::Function("turnToRiverAtLeastOneHitUnionTwoCategories", TurnToRiverAtLeastOneHitUnionTwoCategories),
+        Napi::PropertyDescriptor::Function("flopToTurnAtLeastOneHitUnionThreeCategories", FlopToTurnAtLeastOneHitUnionThreeCategories),
+        Napi::PropertyDescriptor::Function("turnToRiverAtLeastOneHitUnionThreeCategories", TurnToRiverAtLeastOneHitUnionThreeCategories),
+        Napi::PropertyDescriptor::Function("flopToTurnAtLeastOneHitUnionFourCategories", FlopToTurnAtLeastOneHitUnionFourCategories),
+        Napi::PropertyDescriptor::Function("turnToRiverAtLeastOneHitUnionFourCategories", TurnToRiverAtLeastOneHitUnionFourCategories),
+        Napi::PropertyDescriptor::Function("flopToTurnAtLeastOneHitDisjointOutsSum", FlopToTurnAtLeastOneHitDisjointOutsSum),
+        Napi::PropertyDescriptor::Function("turnToRiverAtLeastOneHitDisjointOutsSum", TurnToRiverAtLeastOneHitDisjointOutsSum),
+        Napi::PropertyDescriptor::Function("hypergeometricTwoCardHitProbability", HypergeometricTwoCardHitProbability),
+        Napi::PropertyDescriptor::Function("hypergeometricTwoCardMissProbability", HypergeometricTwoCardMissProbability),
+        Napi::PropertyDescriptor::Function("runnerRunnerBackdoorFlushOneCardProbability", RunnerRunnerBackdoorFlushOneCardProbability),
+        Napi::PropertyDescriptor::Function("blockerAdjustedOuts", BlockerAdjustedOuts),
+        Napi::PropertyDescriptor::Function("suitBlockerFraction", SuitBlockerFraction),
+        Napi::PropertyDescriptor::Function("netPotAfterRake", NetPotAfterRake),
+        Napi::PropertyDescriptor::Function("netPotAfterCallAndRake", NetPotAfterCallAndRake),
+        Napi::PropertyDescriptor::Function("effectivePotOddsDisplayAfterRake", EffectivePotOddsDisplayAfterRake),
+        Napi::PropertyDescriptor::Function("impliedBreakevenTotalPot", ImpliedBreakevenTotalPot),
+        Napi::PropertyDescriptor::Function("impliedOddsRequiredEquityFromFutureWin", ImpliedOddsRequiredEquityFromFutureWin),
+        Napi::PropertyDescriptor::Function("expectedValueRaise", ExpectedValueRaise),
+        Napi::PropertyDescriptor::Function("expectedValueRaiseWithRake", ExpectedValueRaiseWithRake),
+        Napi::PropertyDescriptor::Function("breakevenRaiseEquity", BreakevenRaiseEquity),
+        Napi::PropertyDescriptor::Function("breakevenCallEquityWithPostedAnte", BreakevenCallEquityWithPostedAnte),
+        Napi::PropertyDescriptor::Function("potSizeAfterHuCall", PotSizeAfterHuCall),
+        Napi::PropertyDescriptor::Function("potSizeAfterHuBet", PotSizeAfterHuBet),
+        Napi::PropertyDescriptor::Function("expectedValuePerBigBlind", ExpectedValuePerBigBlind),
+        Napi::PropertyDescriptor::Function("minimumDefenseFrequencyWithRake", MinimumDefenseFrequencyWithRake),
+        Napi::PropertyDescriptor::Function("alphaFrequencyWithRake", AlphaFrequencyWithRake),
+        Napi::PropertyDescriptor::Function("bluffToValueRatioWithRake", BluffToValueRatioWithRake),
+        Napi::PropertyDescriptor::Function("valueToBluffRatioWithRake", ValueToBluffRatioWithRake),
+        Napi::PropertyDescriptor::Function("sprAfterBet", SprAfterBet),
+        Napi::PropertyDescriptor::Function("sprAfterRaise", SprAfterRaise),
+        Napi::PropertyDescriptor::Function("commitmentRatioAfterBet", CommitmentRatioAfterBet),
+        Napi::PropertyDescriptor::Function("betSizeToMatchPotFraction", BetSizeToMatchPotFraction),
+        Napi::PropertyDescriptor::Function("halfKellyCriterionBinary", HalfKellyCriterionBinary),
+        Napi::PropertyDescriptor::Function("quarterKellyCriterionBinary", QuarterKellyCriterionBinary),
+        Napi::PropertyDescriptor::Function("eighthKellyCriterionBinary", EighthKellyCriterionBinary),
+        Napi::PropertyDescriptor::Function("kellyCriterionBinaryClamped", KellyCriterionBinaryClamped),
+        Napi::PropertyDescriptor::Function("breakevenFoldEquityPureBluffWithAnte", BreakevenFoldEquityPureBluffWithAnte),
+        Napi::PropertyDescriptor::Function("breakevenFoldEquitySemiBluffWithAnte", BreakevenFoldEquitySemiBluffWithAnte),
+        Napi::PropertyDescriptor::Function("twoStreetPureBluffEvWithRake", TwoStreetPureBluffEvWithRake),
+        Napi::PropertyDescriptor::Function("threeStreetPureBluffSameFoldEquity", ThreeStreetPureBluffSameFoldEquity),
+        Napi::PropertyDescriptor::Function("threeStreetPureBluffEv", ThreeStreetPureBluffEv),
+        Napi::PropertyDescriptor::Function("multiwaySymmetricBreakevenCallEquityWithRake", MultiwaySymmetricBreakevenCallEquityWithRake),
+        Napi::PropertyDescriptor::Function("multiwaySymmetricBreakevenCallEquityWithShareAndRake", MultiwaySymmetricBreakevenCallEquityWithShareAndRake),
+        Napi::PropertyDescriptor::Function("multiwayExpectedValueCall", MultiwayExpectedValueCall),
+        Napi::PropertyDescriptor::Function("reverseImpliedOddsMinEquity", ReverseImpliedOddsMinEquity),
+        Napi::PropertyDescriptor::Function("geometricPotAfterSingleMatchedBet", GeometricPotAfterSingleMatchedBet),
+        Napi::PropertyDescriptor::Function("binomialProportionCiWidth", BinomialProportionCiWidth),
+        Napi::PropertyDescriptor::Function("monteCarloTrialsForWilsonHalfWidth", MonteCarloTrialsForWilsonHalfWidth),
+        Napi::PropertyDescriptor::Function("varianceToStandardDeviationPerHand", VarianceToStandardDeviationPerHand),
+        Napi::PropertyDescriptor::Function("icmEqualChopPayouts", IcmEqualChopPayouts),
+        Napi::PropertyDescriptor::Function("icmChopSurplusVsEqualSplit", IcmChopSurplusVsEqualSplit),
+        Napi::PropertyDescriptor::Function("icmTotalPrizePool", IcmTotalPrizePool),
+        Napi::PropertyDescriptor::Function("icmDealEvPerChip", IcmDealEvPerChip),
+        Napi::PropertyDescriptor::Function("icmSatelliteAdvanceProbability", IcmSatelliteAdvanceProbability),
+        Napi::PropertyDescriptor::Function("icmPayoutStructureGini", IcmPayoutStructureGini),
+        Napi::PropertyDescriptor::Function("icmChipLeaderPremiumVsEqualChop", IcmChipLeaderPremiumVsEqualChop),
+        Napi::PropertyDescriptor::Function("sidePotLayerCount", SidePotLayerCount),
+        Napi::PropertyDescriptor::Function("sidePotBreakevenCallEquity", SidePotBreakevenCallEquity),
+        Napi::PropertyDescriptor::Function("preflopCombosFromNotationMinusBlockers", PreflopCombosFromNotationMinusBlockers),
+        Napi::PropertyDescriptor::Function("stackToPotAfterCall", StackToPotAfterCall),
+        Napi::PropertyDescriptor::Function("flushMadeFlopToRiverExactProbability", FlushMadeFlopToRiverExactProbability),
+        Napi::PropertyDescriptor::Function("flushMadeFlopToRiverExactProbabilityAsync", FlushMadeFlopToRiverExactProbabilityAsync),
+        Napi::PropertyDescriptor::Function("fullHouseMadeFlopToRiverExactProbability", FullHouseMadeFlopToRiverExactProbability),
+        Napi::PropertyDescriptor::Function("fullHouseMadeFlopToRiverExactProbabilityAsync", FullHouseMadeFlopToRiverExactProbabilityAsync),
+        Napi::PropertyDescriptor::Function("tripsMadeFlopToRiverExactProbability", TripsMadeFlopToRiverExactProbability),
+        Napi::PropertyDescriptor::Function("tripsMadeFlopToRiverExactProbabilityAsync", TripsMadeFlopToRiverExactProbabilityAsync),
+        Napi::PropertyDescriptor::Function("twoPairMadeFlopToRiverExactProbability", TwoPairMadeFlopToRiverExactProbability),
+        Napi::PropertyDescriptor::Function("twoPairMadeFlopToRiverExactProbabilityAsync", TwoPairMadeFlopToRiverExactProbabilityAsync),
+        Napi::PropertyDescriptor::Function("exactHeroCategoryAtLeastFlopToRiver", ExactHeroCategoryAtLeastFlopToRiver),
+        Napi::PropertyDescriptor::Function("exactHeroCategoryAtLeastFlopToRiverAsync", ExactHeroCategoryAtLeastFlopToRiverAsync),
+        Napi::PropertyDescriptor::Function("pushFoldSymmetricEv", PushFoldSymmetricEv),
+        Napi::PropertyDescriptor::Function("pushFoldSymmetricBreakevenEquity", PushFoldSymmetricBreakevenEquity),
+        Napi::PropertyDescriptor::Function("openRaiseBreakevenFoldEquity", OpenRaiseBreakevenFoldEquity),
+        Napi::PropertyDescriptor::Function("callOrFoldChipEvDelta", CallOrFoldChipEvDelta),
+        Napi::PropertyDescriptor::Function("normalizedRangeWeightSum", NormalizedRangeWeightSum),
+        Napi::PropertyDescriptor::Function("layeredPotChipEvFromEquitiesWithRake", LayeredPotChipEvFromEquitiesWithRake),
+        Napi::PropertyDescriptor::Function("icmExpectedPayoutsDeltaFromChipChop", IcmExpectedPayoutsDeltaFromChipChop),
     });
     return exports;
 }
