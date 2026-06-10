@@ -258,7 +258,7 @@ export interface SidePotLayerTournamentEvRow {
   icmMarginal: number;
 }
 
-/** N-API addon (140 native function exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, tournament/exact-runout/subgame helpers, and related utilities (all implemented in C++). */
+/** N-API addon (220 native function exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, tournament/exact-runout/subgame helpers, and related utilities (all implemented in C++). */
 export interface PokerCalculations {
   evaluateBestHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult;
   evaluateBestHand(
@@ -950,7 +950,342 @@ export interface PokerCalculations {
     range: Float64Array | SparseRangeSpec,
     options?: AsyncOptions
   ): Promise<CardRemovalGradientResult>;
+  /** One-card hypergeometric hit rate `outs / unseen`. */
+  flopToTurnAtLeastOneHitProbability(outs: number, unseenAfterFlop: number): number;
+  turnToRiverAtLeastOneHitProbability(outs: number, unseenAfterTurn: number): number;
+  flopToTurnAtLeastOneHitUnionTwoCategories(
+    unseen: number,
+    outsA: number,
+    outsB: number,
+    sharedAb: number
+  ): number;
+  turnToRiverAtLeastOneHitUnionTwoCategories(
+    unseen: number,
+    outsA: number,
+    outsB: number,
+    sharedAb: number
+  ): number;
+  flopToTurnAtLeastOneHitUnionThreeCategories(
+    unseen: number,
+    outsA: number,
+    outsB: number,
+    outsC: number,
+    sharedAb: number,
+    sharedAc: number,
+    sharedBc: number,
+    sharedAbc: number
+  ): number;
+  turnToRiverAtLeastOneHitUnionThreeCategories(
+    unseen: number,
+    outsA: number,
+    outsB: number,
+    outsC: number,
+    sharedAb: number,
+    sharedAc: number,
+    sharedBc: number,
+    sharedAbc: number
+  ): number;
+  flopToTurnAtLeastOneHitUnionFourCategories(
+    unseen: number,
+    outsA: number,
+    outsB: number,
+    outsC: number,
+    outsD: number,
+    s01: number,
+    s02: number,
+    s03: number,
+    s12: number,
+    s13: number,
+    s23: number,
+    s012: number,
+    s013: number,
+    s023: number,
+    s123: number,
+    fourWay: number
+  ): number;
+  turnToRiverAtLeastOneHitUnionFourCategories(
+    unseen: number,
+    outsA: number,
+    outsB: number,
+    outsC: number,
+    outsD: number,
+    s01: number,
+    s02: number,
+    s03: number,
+    s12: number,
+    s13: number,
+    s23: number,
+    s012: number,
+    s013: number,
+    s023: number,
+    s123: number,
+    fourWay: number
+  ): number;
+  flopToTurnAtLeastOneHitDisjointOutsSum(unseen: number, outsPerCategory: number[]): number;
+  turnToRiverAtLeastOneHitDisjointOutsSum(unseen: number, outsPerCategory: number[]): number;
+  hypergeometricTwoCardHitProbability(outs: number, unseenCards: number): number;
+  hypergeometricTwoCardMissProbability(outs: number, unseenCards: number): number;
+  runnerRunnerBackdoorFlushOneCardProbability(
+    suitCardsRemaining: number,
+    unseenCards: number
+  ): number;
+  blockerAdjustedOuts(outs: number, blockerFraction: number): number;
+  suitBlockerFraction(suitCardsDead: number, unseen: number): number;
+  netPotAfterRake(potChips: number, rakeFraction: number, rakeCap: number): number;
+  netPotAfterCallAndRake(
+    potBeforeCall: number,
+    toCall: number,
+    rakeFraction: number,
+    rakeCap: number
+  ): number;
+  effectivePotOddsDisplayAfterRake(
+    potBeforeCall: number,
+    toCall: number,
+    rakeFraction: number,
+    rakeCap: number
+  ): number;
+  impliedBreakevenTotalPot(potBeforeCall: number, toCall: number, equity: number): number;
+  impliedOddsRequiredEquityFromFutureWin(
+    potBeforeCall: number,
+    toCall: number,
+    futureWin: number
+  ): number;
+  expectedValueRaise(
+    equityWhenCalled: number,
+    potBeforeRaise: number,
+    raiseSize: number,
+    foldEquity: number,
+    potIfCalled: number
+  ): number;
+  expectedValueRaiseWithRake(
+    equityWhenCalled: number,
+    potBeforeRaise: number,
+    raiseSize: number,
+    foldEquity: number,
+    potIfCalled: number,
+    rakeFraction: number,
+    rakeCap: number
+  ): number;
+  breakevenRaiseEquity(
+    potBeforeRaise: number,
+    raiseSize: number,
+    foldEquity: number,
+    potIfCalled: number
+  ): number;
+  breakevenCallEquityWithPostedAnte(
+    potBeforeCall: number,
+    toCall: number,
+    anteToPost: number
+  ): number;
+  potSizeAfterHuCall(potBeforeCall: number, toCall: number): number;
+  potSizeAfterHuBet(potBeforeBet: number, betSize: number): number;
+  expectedValuePerBigBlind(chipEv: number, bigBlind: number): number;
+  minimumDefenseFrequencyWithRake(
+    potBeforeBet: number,
+    betSize: number,
+    rakeFraction: number,
+    rakeCap: number
+  ): number;
+  alphaFrequencyWithRake(
+    potBeforeBet: number,
+    betSize: number,
+    rakeFraction: number,
+    rakeCap: number
+  ): number;
+  bluffToValueRatioWithRake(
+    potBeforeBet: number,
+    betSize: number,
+    rakeFraction: number,
+    rakeCap: number
+  ): number;
+  valueToBluffRatioWithRake(
+    potBeforeBet: number,
+    betSize: number,
+    rakeFraction: number,
+    rakeCap: number
+  ): number;
+  sprAfterBet(potBeforeBet: number, betSize: number, effectiveStackBeforeBet: number): number;
+  sprAfterRaise(potBeforeRaise: number, raiseSize: number, effectiveStackBeforeRaise: number): number;
+  commitmentRatioAfterBet(betSize: number, effectiveStackBeforeBet: number): number;
+  betSizeToMatchPotFraction(potBeforeBet: number, targetFraction: number): number;
+  halfKellyCriterionBinary(winProbability: number, netOdds: number): number;
+  quarterKellyCriterionBinary(winProbability: number, netOdds: number): number;
+  eighthKellyCriterionBinary(winProbability: number, netOdds: number): number;
+  kellyCriterionBinaryClamped(winProbability: number, netOdds: number): number;
+  breakevenFoldEquityPureBluffWithAnte(
+    potBeforeHeroBet: number,
+    heroBetOrCallSize: number,
+    anteToPost: number
+  ): number;
+  breakevenFoldEquitySemiBluffWithAnte(
+    potBeforeHeroBet: number,
+    heroBetSize: number,
+    equityWhenCalled: number,
+    totalPotIfCalled: number,
+    anteToPost: number
+  ): number;
+  twoStreetPureBluffEvWithRake(
+    potBeforeStreet1: number,
+    betStreet1: number,
+    betStreet2: number,
+    foldEquityStreet1: number,
+    foldEquityStreet2: number,
+    rakeFraction: number,
+    rakeCap: number
+  ): number;
+  threeStreetPureBluffSameFoldEquity(
+    potBeforeStreet1: number,
+    betStreet1: number,
+    betStreet2: number,
+    betStreet3: number
+  ): number;
+  threeStreetPureBluffEv(
+    potBeforeStreet1: number,
+    betStreet1: number,
+    betStreet2: number,
+    betStreet3: number,
+    foldEquityStreet1: number,
+    foldEquityStreet2: number,
+    foldEquityStreet3: number
+  ): number;
+  multiwaySymmetricBreakevenCallEquityWithRake(
+    potBefore: number,
+    toCall: number,
+    symmetricExtraCallers: number,
+    rakeFraction: number,
+    rakeCap: number
+  ): number;
+  multiwaySymmetricBreakevenCallEquityWithShareAndRake(
+    potBefore: number,
+    toCall: number,
+    symmetricExtraCallers: number,
+    shareModel: 0 | 1,
+    heroFractionWhenWin: number,
+    rakeFraction: number,
+    rakeCap: number
+  ): number;
+  multiwayExpectedValueCall(
+    equity: number,
+    potBefore: number,
+    toCall: number,
+    symmetricExtraCallers: number
+  ): number;
+  reverseImpliedOddsMinEquity(
+    potBeforeCall: number,
+    toCall: number,
+    maxFutureLoss: number
+  ): number;
+  geometricPotAfterSingleMatchedBet(pot0: number, betSize: number): number;
+  binomialProportionCiWidth(successes: number, nTrials: number, z: number): number;
+  monteCarloTrialsForWilsonHalfWidth(
+    pHat: number,
+    targetHalfWidth: number,
+    z: number
+  ): number;
+  varianceToStandardDeviationPerHand(variancePerHand: number): number;
+  icmEqualChopPayouts(payouts: F64VectorInput, returnFormat?: F64ReturnFormat): number[] | Float64Array;
+  icmChopSurplusVsEqualSplit(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+  icmTotalPrizePool(payouts: F64VectorInput): number;
+  icmDealEvPerChip(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+  icmSatelliteAdvanceProbability(
+    stacks: F64VectorInput,
+    paidPlaces: number,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+  icmPayoutStructureGini(payouts: F64VectorInput): number;
+  icmChipLeaderPremiumVsEqualChop(stacks: F64VectorInput, payouts: F64VectorInput): number;
+  sidePotLayerCount(committedChips: F64VectorInput): number;
+  sidePotBreakevenCallEquity(layerPotChips: number, toCall: number): number;
+  preflopCombosFromNotationMinusBlockers(notation: string, deadCardsAmongCombos: number): number;
+  stackToPotAfterCall(
+    potBeforeCall: number,
+    toCall: number,
+    effectiveStackBeforeCall: number
+  ): number;
+  flushMadeFlopToRiverExactProbability(
+    heroHoleCards: CardInput,
+    flopThree: CardInput,
+    knownDead: CardInput
+  ): number;
+  flushMadeFlopToRiverExactProbabilityAsync(
+    heroHoleCards: CardInput,
+    flopThree: CardInput,
+    knownDead: CardInput,
+    options?: AsyncOptions
+  ): Promise<number>;
+  fullHouseMadeFlopToRiverExactProbability(
+    heroHoleCards: CardInput,
+    flopThree: CardInput,
+    knownDead: CardInput
+  ): number;
+  fullHouseMadeFlopToRiverExactProbabilityAsync(
+    heroHoleCards: CardInput,
+    flopThree: CardInput,
+    knownDead: CardInput,
+    options?: AsyncOptions
+  ): Promise<number>;
+  tripsMadeFlopToRiverExactProbability(
+    heroHoleCards: CardInput,
+    flopThree: CardInput,
+    knownDead: CardInput
+  ): number;
+  tripsMadeFlopToRiverExactProbabilityAsync(
+    heroHoleCards: CardInput,
+    flopThree: CardInput,
+    knownDead: CardInput,
+    options?: AsyncOptions
+  ): Promise<number>;
+  twoPairMadeFlopToRiverExactProbability(
+    heroHoleCards: CardInput,
+    flopThree: CardInput,
+    knownDead: CardInput
+  ): number;
+  twoPairMadeFlopToRiverExactProbabilityAsync(
+    heroHoleCards: CardInput,
+    flopThree: CardInput,
+    knownDead: CardInput,
+    options?: AsyncOptions
+  ): Promise<number>;
+  exactHeroCategoryAtLeastFlopToRiver(
+    heroHoleCards: CardInput,
+    flopThree: CardInput,
+    knownDead: CardInput,
+    minCategoryOrder: number
+  ): number;
+  exactHeroCategoryAtLeastFlopToRiverAsync(
+    heroHoleCards: CardInput,
+    flopThree: CardInput,
+    knownDead: CardInput,
+    minCategoryOrder: number,
+    options?: AsyncOptions
+  ): Promise<number>;
+  pushFoldSymmetricEv(equity: number, jamStackChips: number, deadMoneyChips: number): number;
+  pushFoldSymmetricBreakevenEquity(jamStackChips: number, deadMoneyChips: number): number;
+  openRaiseBreakevenFoldEquity(potBeforeHeroBet: number, heroOpenRaiseSize: number): number;
+  callOrFoldChipEvDelta(equity: number, pot: number, toCall: number): number;
+  normalizedRangeWeightSum(weights: F64VectorInput): number;
+  layeredPotChipEvFromEquitiesWithRake(
+    layerPotChips: F64VectorInput,
+    equityPlayerByLayer: number[][] | Float64Array,
+    rakeFraction: number,
+    rakeCap: number,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+  icmExpectedPayoutsDeltaFromChipChop(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
 }
 
 declare const api: PokerCalculations;
 export = api;
+

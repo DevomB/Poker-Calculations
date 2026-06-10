@@ -1,6 +1,6 @@
 # Shipped feature inventory — `poker-calculations`
 
-Complete inventory of what the **npm package** ships: **140** native JavaScript functions, TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
+Complete inventory of what the **npm package** ships: **220** native JavaScript functions, TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
 
 **Authoritative sources:** [`index.d.ts`](index.d.ts) (types + JSDoc), [`README.md`](README.md) (overview tables), [`native/binding_register.cpp`](native/binding_register.cpp) (export registration), [documentation site](https://poker-calculations.devomb.com/docs/reference/api) (examples + when-to-use), [`scripts/list-native-exports.mjs`](scripts/list-native-exports.mjs) (runtime export list).
 
@@ -12,7 +12,7 @@ Complete inventory of what the **npm package** ships: **140** native JavaScript 
 
 ---
 
-## JavaScript / N-API exports (140 functions)
+## JavaScript / N-API exports (220 functions)
 
 Includes batch Monte Carlo, `*Async` Promise exports, Float64 ICM paths, and PKST packed state (`encodePokerState` / `decodePokerState`). ICM/stack helpers accept `Float64Array` and optional `returnFormat: 'float64'`. PKST byte layout: magic `PKST`, layout version byte, players, phase, pot fields, per-player hole bytes, community cards, `actedThisStreet` — see `include/poker/state_codec.hpp`.
 
