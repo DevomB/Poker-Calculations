@@ -1,6 +1,6 @@
 {
   "name": "poker-calculations",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "NL Hold'em library for Node: hand evaluation, Monte Carlo and exact equity, decideAction, chip/pot/rake math, ICM, side pots, draw heuristics, GTO-style frequencies, statistics, and more — C++20 core with prebuilt N-API binaries.",
   "main": "index.js",
   "types": "index.d.ts",
