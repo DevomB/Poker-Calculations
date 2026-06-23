@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <numeric>
 #include <sstream>
@@ -698,19 +699,17 @@ std::vector<double> normalized_stack_fractions(const std::vector<double>& stacks
     if (stacks.empty()) {
         throw std::invalid_argument("normalizedStackFractions: stacks must be non-empty");
     }
-    double sum = 0.0;
-    for (double s : stacks) {
+    const double sum = std::accumulate(stacks.begin(), stacks.end(), 0.0, [](double acc, double s) {
         assert_non_neg_finite("stack", s);
-        sum += s;
-    }
+        return acc + s;
+    });
     if (sum <= 0.0) {
         throw std::invalid_argument("normalizedStackFractions: sum of stacks must be positive");
     }
     std::vector<double> out;
     out.reserve(stacks.size());
-    for (double s : stacks) {
-        out.push_back(s / sum);
-    }
+    std::transform(stacks.begin(), stacks.end(), std::back_inserter(out),
+                   [sum](double s) { return s / sum; });
     return out;
 }
 
@@ -1124,11 +1123,11 @@ double nl_minimum_raise_to_total(double current_max_wager, double last_raise_inc
 double orbit_cost_chips(double small_blind, double big_blind, const std::vector<double>& antes_from_seats) {
     assert_non_neg_finite("smallBlind", small_blind);
     assert_non_neg_finite("bigBlind", big_blind);
-    double sum_antes = 0.0;
-    for (double a : antes_from_seats) {
-        assert_non_neg_finite("anteSeat", a);
-        sum_antes += a;
-    }
+    const double sum_antes = std::accumulate(
+        antes_from_seats.begin(), antes_from_seats.end(), 0.0, [](double acc, double a) {
+            assert_non_neg_finite("anteSeat", a);
+            return acc + a;
+        });
     return small_blind + big_blind + sum_antes;
 }
 
@@ -1137,11 +1136,10 @@ double harrington_q(double hero_stack, const std::vector<double>& stacks) {
     if (stacks.empty()) {
         throw std::invalid_argument("stacks must be non-empty");
     }
-    double sum = 0.0;
-    for (double s : stacks) {
+    const double sum = std::accumulate(stacks.begin(), stacks.end(), 0.0, [](double acc, double s) {
         assert_positive_finite("stack", s);
-        sum += s;
-    }
+        return acc + s;
+    });
     const double mean = sum / static_cast<double>(stacks.size());
     return hero_stack / mean;
 }
@@ -1213,11 +1211,9 @@ int preflop_combos_from_notation(const std::string& notation_raw) {
 }
 
 int preflop_combos_from_notations_list(const std::vector<std::string>& notations) {
-    int sum = 0;
-    for (const std::string& n : notations) {
-        sum += preflop_combos_from_notation(n);
-    }
-    return sum;
+    return std::accumulate(notations.begin(), notations.end(), 0, [](int acc, const std::string& n) {
+        return acc + preflop_combos_from_notation(n);
+    });
 }
 
 double one_street_at_least_one_hit_probability(double outs, double unseen) {
@@ -1878,14 +1874,12 @@ double exact_hero_category_at_least_flop_to_river(
 }
 
 double normalized_range_weight_sum(const std::vector<double>& weights) {
-    double sum = 0.0;
-    for (double w : weights) {
+    return std::accumulate(weights.begin(), weights.end(), 0.0, [](double acc, double w) {
         if (!std::isfinite(w) || w < 0.0) {
             throw std::invalid_argument("weights must be finite and non-negative");
         }
-        sum += w;
-    }
-    return sum;
+        return acc + w;
+    });
 }
 
 }  // namespace poker

@@ -143,7 +143,7 @@ std::vector<poker::Card> parse_cards_from_js(const Napi::Env& env, const Napi::V
 }
 
 bool js_card_array_has_duplicate(const Napi::Env& env, const Napi::Array& arr, std::string* err) {
-    bool seen[52]{};
+    std::array<bool, 52> seen{};
     const uint32_t n = arr.Length();
     for (uint32_t i = 0; i < n; ++i) {
         poker::Card c{};
@@ -154,10 +154,10 @@ bool js_card_array_has_duplicate(const Napi::Env& env, const Napi::Array& arr, s
             return false;
         }
         const int didx = poker::deck_index_from_card(c);
-        if (seen[didx]) {
+        if (seen[static_cast<std::size_t>(didx)]) {
             return true;
         }
-        seen[didx] = true;
+        seen[static_cast<std::size_t>(didx)] = true;
     }
     return false;
 }
