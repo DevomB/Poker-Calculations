@@ -3,8 +3,10 @@
 #include <array>
 #include <cctype>
 #include <functional>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 namespace poker {
 
@@ -22,12 +24,13 @@ constexpr unsigned char ascii_toupper(unsigned char c) noexcept {
 constexpr std::array<std::uint8_t, 256> make_rank_lut() {
     std::array<std::uint8_t, 256> lut{};
     lut.fill(kLutInvalid);
-    const char* ranks = "23456789TJQKA";
-    for (int i = 0; i < 13; ++i) {
-        const unsigned char lo = static_cast<unsigned char>(ranks[i]);
+    std::uint8_t rank = 0;
+    for (const char ch : std::string_view{"23456789TJQKA"}) {
+        const unsigned char lo = static_cast<unsigned char>(ch);
         const unsigned char up = ascii_toupper(lo);
-        lut[lo] = static_cast<std::uint8_t>(i);
-        lut[up] = static_cast<std::uint8_t>(i);
+        lut[lo] = rank;
+        lut[up] = rank;
+        ++rank;
     }
     return lut;
 }
@@ -35,12 +38,13 @@ constexpr std::array<std::uint8_t, 256> make_rank_lut() {
 constexpr std::array<std::uint8_t, 256> make_suit_lut() {
     std::array<std::uint8_t, 256> lut{};
     lut.fill(kLutInvalid);
-    const char* suits = "cdhs";
-    for (int i = 0; i < 4; ++i) {
-        const unsigned char lo = static_cast<unsigned char>(suits[i]);
+    std::uint8_t suit = 0;
+    for (const char ch : std::string_view{"cdhs"}) {
+        const unsigned char lo = static_cast<unsigned char>(ch);
         const unsigned char up = ascii_toupper(lo);
-        lut[lo] = static_cast<std::uint8_t>(i);
-        lut[up] = static_cast<std::uint8_t>(i);
+        lut[lo] = suit;
+        lut[up] = suit;
+        ++suit;
     }
     return lut;
 }
@@ -62,7 +66,7 @@ void trim_ascii_range(const char*& p, std::size_t& n) {
 }
 
 struct CompactScanState {
-    bool seen[52]{};
+    std::array<bool, 52> seen{};
 };
 
 void scan_compact_card_list_impl(const std::string& raw,
@@ -90,10 +94,10 @@ void scan_compact_card_list_impl(const std::string& raw,
             throw std::invalid_argument("parseCompactCardList: invalid card at offset " + std::to_string(pos));
         }
         const int didx = deck_index_from_card(c);
-        if (st.seen[didx]) {
+        if (st.seen[static_cast<std::size_t>(didx)]) {
             throw std::invalid_argument("parseCompactCardList: duplicate card");
         }
-        st.seen[didx] = true;
+        st.seen[static_cast<std::size_t>(didx)] = true;
         on_card(c, pos);
         pos += len;
     }
@@ -117,9 +121,16 @@ Card card_from_deck_index(int idx) {
 bool parse_packed_cards(const std::uint8_t* data, const std::size_t n, std::vector<Card>& out,
                         std::string* err) {
     out.clear();
+    if (data == nullptr && n != 0) {
+        if (err) {
+            *err = "packed cards data must not be null";
+        }
+        return false;
+    }
+    const std::span<const std::uint8_t> bytes{data, n};
     out.reserve(n);
-    for (std::size_t i = 0; i < n; ++i) {
-        const int idx = static_cast<int>(data[i]);
+    for (std::size_t i = 0; i < bytes.size(); ++i) {
+        const int idx = static_cast<int>(bytes[i]);
         if (idx < 0 || idx > 51) {
             if (err) {
                 *err = "invalid deck index at byte " + std::to_string(i) + " (must be 0..51)";
@@ -133,16 +144,16 @@ bool parse_packed_cards(const std::uint8_t* data, const std::size_t n, std::vect
 }
 
 bool cards_have_duplicate(const std::vector<Card>& cards) {
-    bool seen[52]{};
+    std::array<bool, 52> seen{};
     for (const Card& c : cards) {
         const int idx = deck_index_from_card(c);
         if (idx < 0 || idx > 51) {
             continue;
         }
-        if (seen[idx]) {
+        if (seen[static_cast<std::size_t>(idx)]) {
             return true;
         }
-        seen[idx] = true;
+        seen[static_cast<std::size_t>(idx)] = true;
     }
     return false;
 }
@@ -183,37 +194,46 @@ bool parse_card_string(const std::string& raw, Card& out) {
 }
 
 bool packed_cards_have_duplicate(const std::uint8_t* data, const std::size_t n, std::string* err) {
-    bool seen[52]{};
-    for (std::size_t i = 0; i < n; ++i) {
-        const int idx = static_cast<int>(data[i]);
+    if (data == nullptr && n != 0) {
+        if (err) {
+            *err = "packed cards data must not be null";
+        }
+        return false;
+    }
+    std::array<bool, 52> seen{};
+    const std::span<const std::uint8_t> bytes{data, n};
+    for (std::size_t i = 0; i < bytes.size(); ++i) {
+        const int idx = static_cast<int>(bytes[i]);
         if (idx < 0 || idx > 51) {
             if (err) {
                 *err = "invalid deck index at byte " + std::to_string(i) + " (must be 0..51)";
             }
             return false;
         }
-        if (seen[idx]) {
+        if (seen[static_cast<std::size_t>(idx)]) {
             return true;
         }
-        seen[idx] = true;
+        seen[static_cast<std::size_t>(idx)] = true;
     }
     return false;
 }
 
 bool card_strings_have_duplicate(const std::vector<std::string>& cards) {
-    bool seen[52]{};
-    for (std::size_t idx = 0; idx < cards.size(); ++idx) {
+    std::array<bool, 52> seen{};
+    std::size_t idx = 0;
+    for (const std::string& card : cards) {
         Card c{};
-        const char* p = cards[idx].data();
-        std::size_t n = cards[idx].size();
+        const char* p = card.data();
+        std::size_t n = card.size();
         if (!parse_card_string_unchecked(p, n, c)) {
             throw std::invalid_argument("invalid card string at index " + std::to_string(idx));
         }
         const int didx = deck_index_from_card(c);
-        if (seen[didx]) {
+        if (seen[static_cast<std::size_t>(didx)]) {
             return true;
         }
-        seen[didx] = true;
+        seen[static_cast<std::size_t>(didx)] = true;
+        ++idx;
     }
     return false;
 }

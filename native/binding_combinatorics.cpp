@@ -11,7 +11,9 @@
 
 #include <cstring>
 #include <functional>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 using poker_bind::parse_cards_from_js;
@@ -123,39 +125,42 @@ Napi::Value ExactHeroRunoutVulnerabilityAsync(const Napi::CallbackInfo& info) {
             POKER_FAIL_TYPE(env, err);
         }
     }
-    const Napi::Value signal = poker_bind::parse_async_signal(info);
+    (void)poker_bind::parse_async_signal(info);
     auto deferred = Napi::Promise::Deferred::New(env);
-    struct Ctx {
-        std::vector<poker::Card> hero;
-        std::vector<poker::Card> board;
-        std::vector<poker::Card> dead;
-        Napi::Promise::Deferred deferred;
-    };
-    auto* ctx = new Ctx{hero, board, dead, deferred};
     class Worker : public Napi::AsyncWorker {
      public:
-        Worker(Napi::Promise::Deferred d, Ctx* c) : Napi::AsyncWorker(d.Env()), deferred_(d), ctx_(c) {}
+        Worker(Napi::Promise::Deferred d, std::vector<poker::Card> hero,
+               std::vector<poker::Card> board, std::vector<poker::Card> dead)
+            : Napi::AsyncWorker(d.Env()),
+              deferred_(d),
+              hero_(std::move(hero)),
+              board_(std::move(board)),
+              dead_(std::move(dead)) {}
+
         void Execute() override {
-            result_ = poker::exact_hero_runout_vulnerability(ctx_->hero, ctx_->board, ctx_->dead);
+            result_ = poker::exact_hero_runout_vulnerability(hero_, board_, dead_);
         }
+
         void OnOK() override {
             Napi::HandleScope scope(Env());
             deferred_.Resolve(vulnerability_to_js(Env(), result_));
-            delete ctx_;
         }
+
         void OnError(const Napi::Error& e) override {
             Napi::HandleScope scope(Env());
             deferred_.Reject(e.Value());
-            delete ctx_;
         }
 
      private:
         Napi::Promise::Deferred deferred_;
-        Ctx* ctx_;
+        std::vector<poker::Card> hero_;
+        std::vector<poker::Card> board_;
+        std::vector<poker::Card> dead_;
         poker::HeroRunoutVulnerabilityResult result_{};
     };
-    auto* w = new Worker(deferred, ctx);
-    w->Queue();
+    auto worker = std::make_unique<Worker>(deferred, hero, board, dead);
+    worker->Queue();
+    worker.release();
     return deferred.Promise();
 }
 
@@ -286,42 +291,46 @@ Napi::Value ExactHeroEquityRunoutQuantilesAsync(const Napi::CallbackInfo& info) 
         }
     }
     auto deferred = Napi::Promise::Deferred::New(env);
-    struct Ctx {
-        std::vector<poker::Card> hero;
-        std::vector<poker::Card> board;
-        bool vs_range;
-        poker::SparseRange range;
-        Napi::Promise::Deferred deferred;
-    };
-    auto* ctx = new Ctx{hero, board, vs_range, range, deferred};
     class Worker : public Napi::AsyncWorker {
      public:
-        Worker(Napi::Promise::Deferred d, Ctx* c) : Napi::AsyncWorker(d.Env()), deferred_(d), ctx_(c) {}
+        Worker(Napi::Promise::Deferred d, std::vector<poker::Card> hero,
+               std::vector<poker::Card> board, bool vs_range, poker::SparseRange range)
+            : Napi::AsyncWorker(d.Env()),
+              deferred_(d),
+              hero_(std::move(hero)),
+              board_(std::move(board)),
+              vs_range_(vs_range),
+              range_(std::move(range)) {}
+
         void Execute() override {
-            if (ctx_->vs_range) {
-                result_ = poker::exact_hero_equity_runout_quantiles_vs_range(ctx_->hero, ctx_->board,
-                                                                            ctx_->range);
+            if (vs_range_) {
+                result_ = poker::exact_hero_equity_runout_quantiles_vs_range(hero_, board_, range_);
             } else {
-                result_ = poker::exact_hero_equity_runout_quantiles_vs_random(ctx_->hero, ctx_->board, {});
+                result_ = poker::exact_hero_equity_runout_quantiles_vs_random(hero_, board_, {});
             }
         }
+
         void OnOK() override {
             Napi::HandleScope scope(Env());
             deferred_.Resolve(quantiles_to_js(Env(), result_));
-            delete ctx_;
         }
+
         void OnError(const Napi::Error& e) override {
             Napi::HandleScope scope(Env());
             deferred_.Reject(e.Value());
-            delete ctx_;
         }
 
      private:
         Napi::Promise::Deferred deferred_;
-        Ctx* ctx_;
+        std::vector<poker::Card> hero_;
+        std::vector<poker::Card> board_;
+        bool vs_range_{false};
+        poker::SparseRange range_;
         poker::HeroEquityRunoutQuantilesResult result_{};
     };
-    (new Worker(deferred, ctx))->Queue();
+    auto worker = std::make_unique<Worker>(deferred, hero, board, vs_range, range);
+    worker->Queue();
+    worker.release();
     return deferred.Promise();
 }
 
@@ -373,19 +382,20 @@ Napi::Value ExactEquityCardRemovalGradientAsync(const Napi::CallbackInfo& info) 
         POKER_FAIL_TYPE(env, err);
     }
     auto deferred = Napi::Promise::Deferred::New(env);
-    struct Ctx {
-        std::vector<poker::Card> hero;
-        std::vector<poker::Card> board;
-        poker::SparseRange range;
-        Napi::Promise::Deferred deferred;
-    };
-    auto* ctx = new Ctx{hero, board, range, deferred};
     class Worker : public Napi::AsyncWorker {
      public:
-        Worker(Napi::Promise::Deferred d, Ctx* c) : Napi::AsyncWorker(d.Env()), deferred_(d), ctx_(c) {}
+        Worker(Napi::Promise::Deferred d, std::vector<poker::Card> hero,
+               std::vector<poker::Card> board, poker::SparseRange range)
+            : Napi::AsyncWorker(d.Env()),
+              deferred_(d),
+              hero_(std::move(hero)),
+              board_(std::move(board)),
+              range_(std::move(range)) {}
+
         void Execute() override {
-            result_ = poker::exact_equity_card_removal_gradient(ctx_->hero, ctx_->board, ctx_->range);
+            result_ = poker::exact_equity_card_removal_gradient(hero_, board_, range_);
         }
+
         void OnOK() override {
             Napi::HandleScope scope(Env());
             Napi::Object o = Napi::Object::New(Env());
@@ -396,18 +406,21 @@ Napi::Value ExactEquityCardRemovalGradientAsync(const Napi::CallbackInfo& info) 
             o.Set("gradient", g);
             o.Set("baseEquity", Napi::Number::New(Env(), result_.base_equity));
             deferred_.Resolve(o);
-            delete ctx_;
         }
+
         void OnError(const Napi::Error& e) override {
             deferred_.Reject(e.Value());
-            delete ctx_;
         }
 
      private:
         Napi::Promise::Deferred deferred_;
-        Ctx* ctx_;
+        std::vector<poker::Card> hero_;
+        std::vector<poker::Card> board_;
+        poker::SparseRange range_;
         poker::CardRemovalGradientResult result_{};
     };
-    (new Worker(deferred, ctx))->Queue();
+    auto worker = std::make_unique<Worker>(deferred, hero, board, range);
+    worker->Queue();
+    worker.release();
     return deferred.Promise();
 }

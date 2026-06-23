@@ -2,6 +2,7 @@
 
 #include "poker/strategy.hpp"
 
+#include <memory>
 #include <utility>
 
 namespace poker_async {
@@ -230,43 +231,34 @@ class BenchmarkThroughputWorker : public CancellableWorker {
     poker::EvaluatorBenchmarkResult bench_{};
 };
 
-}  // namespace
-
-Napi::Promise enqueue_float_work(Napi::Env env, FloatWorkFn run, Napi::Value signal) {
+template <typename Worker, typename... Args>
+Napi::Promise queue_cancellable_worker(Napi::Env env, Napi::Value signal, Args&&... args) {
     auto deferred = Napi::Promise::Deferred::New(env);
-    auto* worker = new FloatResultWorker(deferred, std::move(run));
+    auto worker = std::make_unique<Worker>(deferred, std::forward<Args>(args)...);
     if (!worker->PrepareSignal(signal)) {
-        delete worker;
         return deferred.Promise();
     }
     worker->Queue();
+    worker.release();
     return deferred.Promise();
+}
+
+}  // namespace
+
+Napi::Promise enqueue_float_work(Napi::Env env, FloatWorkFn run, Napi::Value signal) {
+    return queue_cancellable_worker<FloatResultWorker>(env, signal, std::move(run));
 }
 
 Napi::Promise enqueue_decide_action(Napi::Env env, poker::PokerGameState state,
                                     std::vector<poker::Card> hero_hole, poker::BotConfig cfg,
                                     std::optional<poker::OpponentModel> opponent, int hero_seat,
                                     Napi::Value signal) {
-    auto deferred = Napi::Promise::Deferred::New(env);
-    auto* worker = new DecideActionWorker(deferred, std::move(state), std::move(hero_hole), cfg,
-                                          opponent, hero_seat);
-    if (!worker->PrepareSignal(signal)) {
-        delete worker;
-        return deferred.Promise();
-    }
-    worker->Queue();
-    return deferred.Promise();
+    return queue_cancellable_worker<DecideActionWorker>(
+        env, signal, std::move(state), std::move(hero_hole), cfg, opponent, hero_seat);
 }
 
 Napi::Promise enqueue_benchmark(Napi::Env env, std::size_t iterations, Napi::Value signal) {
-    auto deferred = Napi::Promise::Deferred::New(env);
-    auto* worker = new BenchmarkThroughputWorker(deferred, iterations);
-    if (!worker->PrepareSignal(signal)) {
-        delete worker;
-        return deferred.Promise();
-    }
-    worker->Queue();
-    return deferred.Promise();
+    return queue_cancellable_worker<BenchmarkThroughputWorker>(env, signal, iterations);
 }
 
 }  // namespace poker_async

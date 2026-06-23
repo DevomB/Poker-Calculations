@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
+#include <numeric>
 #include <stdexcept>
 
 namespace poker {
@@ -20,11 +22,8 @@ std::vector<Side_pot_layer> side_pot_ladder_from_commitments(
     }
     std::vector<double> levels;
     levels.reserve(committed_chips.size());
-    for (double c : committed_chips) {
-        if (c > 0.0) {
-            levels.push_back(c);
-        }
-    }
+    std::copy_if(committed_chips.begin(), committed_chips.end(), std::back_inserter(levels),
+                 [](double c) { return c > 0.0; });
     if (levels.empty()) {
         return {};
     }
@@ -96,14 +95,12 @@ std::vector<double> layered_pot_chip_ev_from_equities(
 }
 
 double side_pot_layers_total_chips(const std::vector<Side_pot_layer>& layers) {
-    double sum = 0.0;
-    for (const auto& layer : layers) {
+    return std::accumulate(layers.begin(), layers.end(), 0.0, [](double acc, const auto& layer) {
         if (!std::isfinite(layer.pot_chips) || layer.pot_chips < 0.0) {
             throw std::invalid_argument("side pot layer potChips must be finite and non-negative");
         }
-        sum += layer.pot_chips;
-    }
-    return sum;
+        return acc + layer.pot_chips;
+    });
 }
 
 int side_pot_layer_count(const std::vector<double>& committed_chips) {
@@ -120,9 +117,10 @@ std::vector<double> layered_pot_chip_ev_from_equities_with_rake(
     double rake_cap) {
     std::vector<double> net_pots;
     net_pots.reserve(layer_pot_chips.size());
-    for (double p : layer_pot_chips) {
-        net_pots.push_back(p - rake_from_pot(p, rake_fraction, rake_cap));
-    }
+    std::transform(layer_pot_chips.begin(), layer_pot_chips.end(), std::back_inserter(net_pots),
+                   [rake_fraction, rake_cap](double p) {
+                       return p - rake_from_pot(p, rake_fraction, rake_cap);
+                   });
     return layered_pot_chip_ev_from_equities(net_pots, equity_player_by_layer);
 }
 
