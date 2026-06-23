@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <functional>
+#include <iterator>
+#include <numeric>
 #include <stdexcept>
 
 namespace poker {
@@ -114,9 +117,7 @@ std::vector<double> icm_win_probabilities_harville(const std::vector<double>& st
     const auto p = icm_harville_placement_probabilities(stacks);
     const std::size_t n = stacks.size();
     std::vector<double> win(n, 0.0);
-    for (std::size_t i = 0; i < n; ++i) {
-        win[i] = p[i][0];
-    }
+    std::transform(p.begin(), p.end(), win.begin(), [](const auto& row) { return row[0]; });
     return win;
 }
 
@@ -127,11 +128,9 @@ std::vector<double> icm_top_k_finish_probabilities(const std::vector<double>& st
     }
     const auto placement = icm_harville_placement_probabilities(stacks);
     std::vector<double> out(n, 0.0);
-    for (std::size_t i = 0; i < n; ++i) {
-        for (int r = 0; r < k; ++r) {
-            out[i] += placement[i][static_cast<std::size_t>(r)];
-        }
-    }
+    std::transform(placement.begin(), placement.end(), out.begin(), [k](const auto& row) {
+        return std::accumulate(row.begin(), row.begin() + k, 0.0);
+    });
     return out;
 }
 
@@ -140,9 +139,8 @@ std::vector<double> icm_last_place_probabilities_harville(const std::vector<doub
     const std::size_t n = stacks.size();
     std::vector<double> out(n, 0.0);
     const std::size_t last = n - 1;
-    for (std::size_t i = 0; i < n; ++i) {
-        out[i] = placement[i][last];
-    }
+    std::transform(placement.begin(), placement.end(), out.begin(),
+                   [last](const auto& row) { return row[last]; });
     return out;
 }
 
@@ -159,11 +157,9 @@ std::vector<double> icm_expected_payouts(const std::vector<double>& stacks,
     }
     const auto placement = icm_harville_placement_probabilities(stacks);
     std::vector<double> ev(n, 0.0);
-    for (std::size_t i = 0; i < n; ++i) {
-        for (std::size_t r = 0; r < n; ++r) {
-            ev[i] += placement[i][r] * payouts[r];
-        }
-    }
+    std::transform(placement.begin(), placement.end(), ev.begin(), [&payouts](const auto& row) {
+        return std::inner_product(row.begin(), row.end(), payouts.begin(), 0.0);
+    });
     return ev;
 }
 
@@ -283,11 +279,9 @@ std::vector<double> icm_harville_skill_adjusted_payouts(const std::vector<double
     std::vector<std::vector<double>> placement(n, std::vector<double>(n, 0.0));
     harville_placement_recur_weighted(w, mask, 1, 1.0, placement);
     std::vector<double> ev(n, 0.0);
-    for (std::size_t i = 0; i < n; ++i) {
-        for (std::size_t r = 0; r < n; ++r) {
-            ev[i] += placement[i][r] * payouts[r];
-        }
-    }
+    std::transform(placement.begin(), placement.end(), ev.begin(), [&payouts](const auto& row) {
+        return std::inner_product(row.begin(), row.end(), payouts.begin(), 0.0);
+    });
     return ev;
 }
 
@@ -295,13 +289,12 @@ std::vector<double> icm_equal_chop_payouts(const std::vector<double>& payouts) {
     if (payouts.empty()) {
         throw std::invalid_argument("payouts must be non-empty");
     }
-    double total = 0.0;
-    for (double p : payouts) {
+    const double total = std::accumulate(payouts.begin(), payouts.end(), 0.0, [](double acc, double p) {
         if (!std::isfinite(p) || p < 0.0) {
             throw std::invalid_argument("payouts must be finite and non-negative");
         }
-        total += p;
-    }
+        return acc + p;
+    });
     const double each = total / static_cast<double>(payouts.size());
     return std::vector<double>(payouts.size(), each);
 }
@@ -311,21 +304,17 @@ std::vector<double> icm_chop_surplus_vs_equal_split(const std::vector<double>& s
     const std::vector<double> icm = icm_expected_payouts(stacks, payouts);
     const std::vector<double> eq = icm_equal_chop_payouts(payouts);
     std::vector<double> out(icm.size());
-    for (std::size_t i = 0; i < icm.size(); ++i) {
-        out[i] = icm[i] - eq[i];
-    }
+    std::transform(icm.begin(), icm.end(), eq.begin(), out.begin(), std::minus<>());
     return out;
 }
 
 double icm_total_prize_pool(const std::vector<double>& payouts) {
-    double total = 0.0;
-    for (double p : payouts) {
+    return std::accumulate(payouts.begin(), payouts.end(), 0.0, [](double acc, double p) {
         if (!std::isfinite(p) || p < 0.0) {
             throw std::invalid_argument("payouts must be finite and non-negative");
         }
-        total += p;
-    }
-    return total;
+        return acc + p;
+    });
 }
 
 std::vector<double> icm_deal_ev_per_chip(const std::vector<double>& stacks,
@@ -358,10 +347,7 @@ double icm_payout_structure_gini(const std::vector<double>& payouts) {
     }
     std::sort(sorted.begin(), sorted.end());
     const double n = static_cast<double>(sorted.size());
-    double sum = 0.0;
-    for (double p : sorted) {
-        sum += p;
-    }
+    const double sum = std::accumulate(sorted.begin(), sorted.end(), 0.0);
     if (sum <= 0.0) {
         return 0.0;
     }
@@ -377,12 +363,8 @@ double icm_chip_leader_premium_vs_equal_chop(const std::vector<double>& stacks,
     if (stacks.empty()) {
         throw std::invalid_argument("stacks must be non-empty");
     }
-    std::size_t leader = 0;
-    for (std::size_t i = 1; i < stacks.size(); ++i) {
-        if (stacks[i] > stacks[leader]) {
-            leader = i;
-        }
-    }
+    const auto leader_it = std::max_element(stacks.begin(), stacks.end());
+    const std::size_t leader = static_cast<std::size_t>(std::distance(stacks.begin(), leader_it));
     const std::vector<double> surplus = icm_chop_surplus_vs_equal_split(stacks, payouts);
     const std::vector<double> eq = icm_equal_chop_payouts(payouts);
     if (eq[leader] <= 0.0) {

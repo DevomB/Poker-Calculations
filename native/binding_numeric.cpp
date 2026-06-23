@@ -1,5 +1,6 @@
 #include "binding_numeric.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <stdexcept>
 
@@ -96,10 +97,10 @@ bool read_f64_matrix_flat(const Napi::Value& data_v, int cols, const char* ctx,
     const std::size_t rows = flat.size() / static_cast<std::size_t>(cols);
     out.resize(rows);
     for (std::size_t r = 0; r < rows; ++r) {
-        out[r].resize(static_cast<std::size_t>(cols));
-        for (int c = 0; c < cols; ++c) {
-            out[r][static_cast<std::size_t>(c)] = flat[r * static_cast<std::size_t>(cols) + static_cast<std::size_t>(c)];
-        }
+        auto& row = out[r];
+        row.resize(static_cast<std::size_t>(cols));
+        const double* row_begin = flat.data() + r * static_cast<std::size_t>(cols);
+        std::copy_n(row_begin, static_cast<std::size_t>(cols), row.begin());
     }
     return true;
 }
