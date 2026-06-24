@@ -65,6 +65,7 @@ if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
         native/binding_combinatorics.cpp
         native/binding_cooperative_icm.cpp
         native/binding_subgame.cpp
+        native/binding_strategy_tools.cpp
         native/async_workers.cpp
         ${CMAKE_JS_SRC}
     )
