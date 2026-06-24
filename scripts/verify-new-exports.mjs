@@ -1,5 +1,5 @@
 /**
- * Runtime checks for exports added in the 2.3.x expansion (140 → 220).
+ * Runtime checks for the native public export surface.
  * Run from NPM/: `node scripts/verify-new-exports.mjs` (requires built native addon).
  */
 import { createRequire } from 'node:module';
@@ -12,7 +12,7 @@ const require = createRequire(join(root, 'package.json'));
 
 let poker;
 try {
-  poker = require('../index.js');
+  poker = require('./index.js');
 } catch (e) {
   console.error('Native addon not loaded — run `npm run build:native` first.');
   console.error(e.message);
@@ -253,11 +253,36 @@ assertNear(
 assertNear('callOrFoldChipEvDelta', poker.callOrFoldChipEvDelta(0.4, 100, 50), poker.expectedValueCall(0.4, 100, 50));
 assertNear('normalizedRangeWeightSum', poker.normalizedRangeWeightSum([1, 2, 3]), 6);
 
+// --- range, board, and policy diagnostics ---
+const dense = new Float64Array(1326);
+dense.fill(1 / 1326);
+assertNear('normalizeSparseRange sum', poker.normalizedRangeWeightSum(poker.normalizeSparseRange(dense)), 1, 1e-6);
+assertTrue('rangeTopCombos rows', poker.rangeTopCombos(dense, 3).length === 3);
+assertTrue('boardWetnessScore in [0,1]', poker.boardWetnessScore(['Qh', 'Jh', '2c']) >= 0 && poker.boardWetnessScore(['Qh', 'Jh', '2c']) <= 1);
+assertTrue('boardTextureScore has wetness', typeof poker.boardTextureScore(['Qh', 'Jh', '2c']).wetness === 'number');
+assertTrue('cbetSizeEvGrid rows', poker.cbetSizeEvGrid(dense, dense, ['Qh', 'Jh', '2c'], 100, [33, 66]).rows.length === 2);
+assertTrue('opponentAggressionFactor number', typeof poker.opponentAggressionFactor(3, 2, 5) === 'number');
+const state = {
+  players: [
+    { holeCards: ['Ah', 'Kh'], stack: 200, seat: 0, committedThisStreet: 0 },
+    { holeCards: ['7c', '7d'], stack: 180, seat: 1, folded: false },
+  ],
+  communityCards: ['Qh', 'Jh', '2c'],
+  phase: 'flop',
+  pot: 30,
+  currentBet: 10,
+  smallBlind: 1,
+  bigBlind: 2,
+  actingIndex: 0,
+  actedThisStreet: [false, true],
+};
+assertTrue('legalActionSummary', typeof poker.legalActionSummary(state).toCall === 'number');
+
 // --- export count ---
 const reg = readFileSync(join(root, 'native', 'binding_register.cpp'), 'utf8');
 const regCount = (reg.match(/PropertyDescriptor::Function/g) || []).length;
-assertTrue('binding_register count 220', regCount === 220);
+assertTrue('binding_register count 300', regCount === 300);
 const exportCount = Object.keys(poker).filter((k) => typeof poker[k] === 'function').length;
-assertTrue('runtime export count 220', exportCount === 220);
+assertTrue('runtime export count 300', exportCount === 300);
 
-console.log('OK: verify-new-exports.mjs — all checks passed.');
+console.log('OK: verify-new-exports.mjs - all checks passed.');
