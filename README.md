@@ -32,11 +32,13 @@
 | --- | --- |
 | **Hands & equity** | Best-five evaluation, parallel MC simulation, exact HU equity vs a random hand, draw and runner-runner probabilities |
 | **Table math** | SPR, pot odds, rake-aware call EV, breakeven equity, Harrington *M* / *Q*, sizing and commitment |
-| **Strategy** | `decideAction` from serialized state using MC equity, pot odds, and call EV |
+| **Strategy** | `decideAction` from serialized state using MC equity, pot odds, call EV, legal-action summaries, and diagnostics |
 | **Tournaments** | ICM (Harville and Weitzman chip utility), placement and payout expectations, pairwise bubble factor, side-pot ladders |
 | **Theory helpers** | MDF / alpha, fold-equity breakevens, Kelly and Chubukov symmetric-jam search, Wilson and Agresti–Coull intervals, risk-of-ruin approximations |
 | **Tournament & runouts** | Shapley ICM, runout equity spread, range materialization, subgame bet toys — [guide](https://poker-calculations.devomb.com/docs/guides/tournament-runouts-and-bots) |
-| **Developer experience** | **[`index.d.ts`](index.d.ts)** typings, **140** native exports, docs at [poker-calculations.devomb.com](https://poker-calculations.devomb.com) |
+| **Ranges & boards** | Range algebra, range distances, notation buckets, board texture, scare cards, and range-board coverage |
+| **Opponent modeling** | Fold-to-c-bet posteriors, aggression/showdown tendency estimates, range elasticity, and exploit adjustments |
+| **Developer experience** | **[`index.d.ts`](index.d.ts)** typings, **300** native exports, docs at [poker-calculations.devomb.com](https://poker-calculations.devomb.com) |
 
 Published releases include **N-API prebuilds** for Linux (glibc and musl), macOS, and Windows via [`node-gyp-build`](https://github.com/prebuild/node-gyp-build). Linux glibc builds use static libstdc++/libgcc where needed so older server and serverless images avoid `GLIBCXX_*` mismatches.
 
@@ -125,12 +127,16 @@ All exports come from the native addon. Grouped overview—see the [reference](h
 | Area | Examples |
 | --- | --- |
 | **Hands & equity** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandStrengthFast`, `simulateHandOutcome`, `simulateHandOutcomeAsync`, `parallelHandSimulation`, `exactHuEquityVsRandomHand`, … |
-| **Strategy** | `decideAction`, `decideActionAsync` |
+| **Strategy** | `decideAction`, `decideActionAsync`, `legalActionSummary`, `decideActionWithDiagnostics` |
 | **Pot / EV** | `potOddsRatio`, `expectedValueCall`, `breakevenCallEquity`, `rakeFromPot` |
 | **Stacks & display** | `spr`, `harringtonM`, `harringtonQ`, `stackInBigBlinds`, `formatPotOdds` |
 | **Draws & heuristics** | `ruleOfTwoEquity`, `hypergeometricOneCardHitProbability`, `flopToRiverAtLeastOneHitProbability` |
 | **GTO-style** | `minimumDefenseFrequency`, `alphaFrequency`, `bluffToValueRatio` |
 | **Fold equity** | `breakevenFoldEquityPureBluff`, `breakevenFoldEquitySemiBluff` |
+| **Range tools** | `normalizeSparseRange`, `rangeTopCombos`, `rangeBucketWeightsByNotation`, `rangeDistanceJensenShannon` |
+| **Board texture** | `boardTextureScore`, `enumerateScareCards`, `rangeBoardCoverage`, `heroBoardConnectivityScore` |
+| **Sizing plans** | `cbetSizeEvGrid`, `probeBetEvGrid`, `geometricStreetSizingPlan`, `thinValueMargin` |
+| **Opponent modeling** | `opponentFoldToCbetPosterior`, `opponentAggressionFactor`, `villainLineRangeShift` |
 | **ICM & side pots** | `icmExpectedPayouts`, `icmExpectedPayoutsWeitzman`, `icmPairwiseBubbleFactor`, `sidePotLadderFromCommitments` |
 | **Stats & risk** | `wilsonScoreInterval`, `riskOfRuinDiffusionApprox`, `monteCarloStandardError` |
 | **Kelly & jam** | `kellyCriterionBinary`, `chubukovSymmetricJamEv`, `chubukovMaxSymmetricJamStackBinarySearch` |

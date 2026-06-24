@@ -258,7 +258,123 @@ export interface SidePotLayerTournamentEvRow {
   icmMarginal: number;
 }
 
-/** N-API addon (220 native function exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, tournament/exact-runout/subgame helpers, and related utilities (all implemented in C++). */
+export interface RangeComboWeight {
+  comboIndex: number;
+  cardA: Card52;
+  cardB: Card52;
+  notation: string;
+  weight: number;
+}
+
+export interface RangeNotationWeight {
+  notation: string;
+  weight: number;
+}
+
+export interface RangeClassWeights {
+  pairs: number;
+  suitedBroadways: number;
+  offsuitBroadways: number;
+  suitedConnectors: number;
+  suitedAces: number;
+  other: number;
+}
+
+export interface BoardTextureResult {
+  pairedness: number;
+  suitedness: number;
+  connectedness: number;
+  highCardPressure: number;
+  wetness: number;
+  staticness: number;
+}
+
+export interface CardScore {
+  deckIndex: Card52;
+  card: string;
+  score: number;
+}
+
+export interface EquityDistributionResult {
+  mean: number;
+  variance: number;
+  p05: number;
+  p50: number;
+  p95: number;
+  n: number;
+}
+
+export interface RangeCoverageResult {
+  madeHandShare: number;
+  drawShare: number;
+  overcardShare: number;
+  airShare: number;
+}
+
+export interface EvGridRow {
+  betSize: number;
+  foldFrequency: number;
+  equityWhenCalled: number;
+  ev: number;
+}
+
+export interface EvGridResult {
+  rows: EvGridRow[];
+  bestBet: number;
+  bestEv: number;
+}
+
+export interface OpponentBiasResult {
+  wentToShowdownRate: number;
+  wonAtShowdownRate: number;
+  showdownBias: number;
+}
+
+export interface LegalActionSummaryResult {
+  canFold: boolean;
+  canCheck: boolean;
+  canCall: boolean;
+  canRaise: boolean;
+  toCall: number;
+  minRaiseTo: number;
+  maxRaiseTo: number;
+  actingIndex: number;
+}
+
+export interface PokerStateValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+export interface ActionEvBreakdownResult {
+  foldEv: number;
+  checkEv: number;
+  callEv: number;
+  raiseEv: number;
+  equity: number;
+  toCall: number;
+}
+
+export interface DecisionDiagnosticResult {
+  decision: DecisionResult;
+  legalActions: LegalActionSummaryResult;
+  ev?: ActionEvBreakdownResult;
+  reason: string;
+  error?: string;
+}
+
+export interface DecisionFactor {
+  name: string;
+  weight: number;
+  description: string;
+}
+
+export interface CandidateAction {
+  action: 'fold' | 'check' | 'call' | 'raise';
+  amount: number;
+}
+
+/** N-API addon (300 native function exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, tournament/exact-runout/subgame helpers, board texture, range tools, opponent modeling, and related utilities (all implemented in C++). */
 export interface PokerCalculations {
   evaluateBestHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult;
   evaluateBestHand(
@@ -1284,6 +1400,216 @@ export interface PokerCalculations {
     payouts: F64VectorInput,
     returnFormat?: F64ReturnFormat
   ): number[] | Float64Array;
+
+  normalizeSparseRange(range: SparseRangeSpec | Float64Array): Float64Array;
+  pruneRangeByMinWeight(range: SparseRangeSpec | Float64Array, minWeight: number): SparseRangeSpec;
+  mergeSparseRanges(
+    a: SparseRangeSpec | Float64Array,
+    b: SparseRangeSpec | Float64Array,
+    weightA: number,
+    weightB: number
+  ): Float64Array;
+  intersectSparseRanges(a: SparseRangeSpec | Float64Array, b: SparseRangeSpec | Float64Array): Float64Array;
+  subtractSparseRange(base: SparseRangeSpec | Float64Array, remove: SparseRangeSpec | Float64Array): Float64Array;
+  rangeComboCount(range: SparseRangeSpec | Float64Array, minWeight?: number): number;
+  rangeShannonEntropy(range: SparseRangeSpec | Float64Array): number;
+  rangeGiniCoefficient(range: SparseRangeSpec | Float64Array): number;
+  rangeCoverageFraction(range: SparseRangeSpec | Float64Array): number;
+  rangeWeightTopKMass(range: SparseRangeSpec | Float64Array, k: number): number;
+  rangeDistanceL1(a: SparseRangeSpec | Float64Array, b: SparseRangeSpec | Float64Array): number;
+  rangeDistanceL2(a: SparseRangeSpec | Float64Array, b: SparseRangeSpec | Float64Array): number;
+  rangeDistanceJensenShannon(a: SparseRangeSpec | Float64Array, b: SparseRangeSpec | Float64Array): number;
+  rangeCosineSimilarity(a: SparseRangeSpec | Float64Array, b: SparseRangeSpec | Float64Array): number;
+  rangeTopCombos(range: SparseRangeSpec | Float64Array, k: number): RangeComboWeight[];
+  rangeBucketWeightsByHandClass(range: SparseRangeSpec | Float64Array): RangeClassWeights;
+  rangeBucketWeightsByNotation(range: SparseRangeSpec | Float64Array): RangeNotationWeight[];
+  rangeFromNotationWeights(entries: RangeNotationWeight[]): Float64Array;
+  rangeBlockerPressureByCard(range: SparseRangeSpec | Float64Array, deadCards?: CardInput): Float64Array;
+  rangeRemovalSensitivityVsHero(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: SparseRangeSpec | Float64Array
+  ): Float64Array;
+
+  classifyBoardTexture(board: CardInput): string;
+  boardTextureScore(board: CardInput): BoardTextureResult;
+  boardWetnessScore(board: CardInput): number;
+  boardPairednessIndex(board: CardInput): number;
+  boardFlushPressure(board: CardInput, deadCards?: CardInput): number;
+  boardStraightPressure(board: CardInput, deadCards?: CardInput): number;
+  boardNutAdvantageApprox(
+    heroRange: SparseRangeSpec | Float64Array,
+    villainRange: SparseRangeSpec | Float64Array,
+    board: CardInput
+  ): number;
+  boardRangeInteractionScore(range: SparseRangeSpec | Float64Array, board: CardInput): number;
+  boardStaticnessIndex(board: CardInput): number;
+  boardTurnVolatility(flop: CardInput): Float64Array;
+  boardRiverScareCardScore(turnBoard: CardInput, riverDeckIndex: Card52): number;
+  enumerateScareCards(
+    board: CardInput,
+    rangeA: SparseRangeSpec | Float64Array,
+    rangeB: SparseRangeSpec | Float64Array
+  ): CardScore[];
+  boardEquityShiftDistribution(
+    heroRange: SparseRangeSpec | Float64Array,
+    villainRange: SparseRangeSpec | Float64Array,
+    board: CardInput
+  ): EquityDistributionResult;
+  rangeBoardCoverage(range: SparseRangeSpec | Float64Array, board: CardInput): RangeCoverageResult;
+  heroBoardConnectivityScore(heroHoleCards: CardInput, board: CardInput): number;
+  blockerMatrixByCard(range: SparseRangeSpec | Float64Array, board?: CardInput): Float64Array;
+
+  exactEquityDistributionVsRange(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    villainRange: SparseRangeSpec | Float64Array
+  ): EquityDistributionResult;
+  exactEquityPercentileVsRange(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    villainRange: SparseRangeSpec | Float64Array,
+    percentile: number
+  ): number;
+  exactEquityRealizationEstimate(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    villainRange: SparseRangeSpec | Float64Array,
+    position: string,
+    spr: number
+  ): number;
+  equityRealizationPenalty(equity: number, position: string, spr: number, boardStaticness: number): number;
+  riverCallThresholdDistribution(
+    turnBoard: CardInput,
+    villainRange: SparseRangeSpec | Float64Array,
+    betSizes: F64VectorInput
+  ): Float64Array;
+  turnBarrelRunoutEvDistribution(
+    heroHoleCards: CardInput,
+    turnBoard: CardInput,
+    villainRange: SparseRangeSpec | Float64Array,
+    betSize: number
+  ): EquityDistributionResult;
+  delayedCbetRunoutScore(
+    heroRange: SparseRangeSpec | Float64Array,
+    villainRange: SparseRangeSpec | Float64Array,
+    flop: CardInput
+  ): Float64Array;
+  protectionBetBenefit(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    villainRange: SparseRangeSpec | Float64Array,
+    betSize: number
+  ): number;
+  equityDenialValue(heroEquity: number, villainFoldShare: number, pot: number, betSize: number): number;
+  showdownValueIndex(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    villainRange: SparseRangeSpec | Float64Array
+  ): number;
+
+  cbetSizeEvGrid(
+    heroRange: SparseRangeSpec | Float64Array,
+    villainRange: SparseRangeSpec | Float64Array,
+    board: CardInput,
+    pot: number,
+    betSizes: F64VectorInput
+  ): EvGridResult;
+  probeBetEvGrid(
+    heroRange: SparseRangeSpec | Float64Array,
+    villainRange: SparseRangeSpec | Float64Array,
+    board: CardInput,
+    pot: number,
+    betSizes: F64VectorInput
+  ): EvGridResult;
+  checkRaiseSemiBluffEv(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    villainRange: SparseRangeSpec | Float64Array,
+    pot: number,
+    betSize: number,
+    raiseSize: number
+  ): number;
+  overbetPolarizationScore(range: SparseRangeSpec | Float64Array, board: CardInput, betSize: number, pot: number): number;
+  geometricStreetSizingPlan(pot: number, effectiveStack: number, streetsRemaining: number): Float64Array;
+  riverValueBetThreshold(pot: number, betSize: number, villainCallRangeShare: number): number;
+  riverBluffCandidateScore(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    villainRange: SparseRangeSpec | Float64Array
+  ): number;
+  thinValueMargin(heroEquityWhenCalled: number, pot: number, betSize: number): number;
+  betSizingIndifferencePoint(pot: number, foldFrequency: number, equityWhenCalled: number): number;
+  multiStreetStackOffThreshold(pot: number, effectiveStack: number, equity: number, streetsRemaining: number): number;
+  foldEquityNeededByStreetPlan(pot: number, bets: F64VectorInput, equityWhenCalled: number): number;
+  bluffCatchDecisionScore(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    villainRange: SparseRangeSpec | Float64Array,
+    pot: number,
+    toCall: number
+  ): number;
+  blockerAwareBluffFrequency(
+    valueCombos: number,
+    bluffCandidates: F64VectorInput,
+    targetAlpha: number
+  ): Float64Array;
+  valueTargetingScore(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    villainRange: SparseRangeSpec | Float64Array,
+    betSize: number
+  ): number;
+
+  opponentFoldToCbetPosterior(
+    priorAlpha: number,
+    priorBeta: number,
+    folds: number,
+    continues: number
+  ): BetaBinomialFoldPosterior;
+  opponentAggressionFactor(bets: number, raises: number, calls: number): number;
+  opponentShowdownBiasEstimate(wentToShowdown: number, wonAtShowdown: number, hands: number): OpponentBiasResult;
+  opponentRangeElasticityFromSizing(sizes: F64VectorInput, continueRates: F64VectorInput): number;
+  exploitativeBetSizeAdjustment(baseSize: number, elasticity: number, valueDensity: number): number;
+  exploitativeCallThresholdAdjustment(baseThreshold: number, bluffBias: number, aggression: number): number;
+  villainLineRangeShift(
+    priorRange: SparseRangeSpec | Float64Array,
+    actionSequence: string[],
+    model?: NativeOpponentModel
+  ): Float64Array;
+  villainCappedRangeScore(range: SparseRangeSpec | Float64Array, board: CardInput): number;
+  villainPolarizedRangeScore(range: SparseRangeSpec | Float64Array, board: CardInput): number;
+  villainFloatFrequencyEstimate(flopCallRange: SparseRangeSpec | Float64Array, madeHandShare: number, drawShare: number): number;
+
+  legalActionSummary(state: NativePokerState | PokerStateBytes): LegalActionSummaryResult;
+  actionMaskFromState(state: NativePokerState | PokerStateBytes): number;
+  normalizeBotConfig(config: Partial<NativeBotConfig>): NativeBotConfig;
+  validatePokerState(state: NativePokerState | PokerStateBytes): PokerStateValidationResult;
+  stateToFeatureVector(state: NativePokerState | PokerStateBytes): Float64Array;
+  actionEvBreakdown(
+    state: NativePokerState | PokerStateBytes,
+    config: NativeBotConfig,
+    opponentModel?: NativeOpponentModel | null,
+    heroSeat?: number
+  ): ActionEvBreakdownResult;
+  decideActionWithDiagnostics(
+    state: NativePokerState | PokerStateBytes,
+    config: NativeBotConfig,
+    opponentModel?: NativeOpponentModel | null,
+    heroSeat?: number
+  ): DecisionDiagnosticResult;
+  explainDecisionFactors(
+    state: NativePokerState | PokerStateBytes,
+    config: NativeBotConfig,
+    opponentModel?: NativeOpponentModel | null,
+    heroSeat?: number
+  ): DecisionFactor[];
+  candidateActionSet(state: NativePokerState | PokerStateBytes, sizingFractions: F64VectorInput): CandidateAction[];
+  runBotPolicyBatch(
+    states: Array<NativePokerState | PokerStateBytes>,
+    config: NativeBotConfig,
+    opponentModels?: Array<NativeOpponentModel | null>
+  ): DecisionDiagnosticResult[];
 }
 
 declare const api: PokerCalculations;
