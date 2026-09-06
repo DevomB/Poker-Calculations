@@ -19,6 +19,7 @@
   },
   "scripts": {
     "verify-lock": "node scripts/verify-package-lock.js",
+    "smoke": "node scripts/smoke-load.js",
     "build:native": "node scripts/build-native.js compile",
     "rebuild:native": "node scripts/build-native.js rebuild",
     "prepack": "node scripts/check-prebuilds.js"
