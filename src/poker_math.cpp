@@ -1378,16 +1378,14 @@ double implied_odds_required_equity_from_future_win(double pot_before_call, doub
     assert_non_neg_finite("potBeforeCall", pot_before_call);
     assert_non_neg_finite("toCall", to_call);
     assert_non_neg_finite("futureWin", future_win);
-    const double immediate = pot_before_call + to_call;
-    const double total_needed = immediate + future_win;
-    if (total_needed <= 0.0) {
+    // Same convention as breakeven_call_equity: equity = risk / (risk + reward), where the reward
+    // is the current pot plus the chips expected to be won later. Equals
+    // breakeven_call_equity(pot_before_call + future_win, to_call).
+    const double total_pot = pot_before_call + to_call + future_win;
+    if (total_pot <= 0.0) {
         return 0.0;
     }
-    const double denom = total_needed - to_call;
-    if (denom <= 0.0) {
-        throw std::invalid_argument("futureWin too small for positive equity requirement");
-    }
-    return to_call / denom;
+    return to_call / total_pot;
 }
 
 double expected_value_raise(double equity_when_called, double pot_before_raise, double raise_size,
@@ -1433,8 +1431,9 @@ double breakeven_raise_equity(double pot_before_raise, double raise_size, double
         throw std::invalid_argument("foldEquity must be finite");
     }
     const double fe = clamp01(fold_equity);
+    // Solve expected_value_raise(e) = fe * pot_before_raise + (1 - fe) * (e * pot_if_called - raise_size) = 0.
     const double win_fold = pot_before_raise;
-    const double num = raise_size - fe * win_fold;
+    const double num = (1.0 - fe) * raise_size - fe * win_fold;
     const double den = (1.0 - fe) * pot_if_called;
     if (den <= 0.0) {
         throw std::invalid_argument("degenerate breakevenRaiseEquity");
@@ -1561,15 +1560,17 @@ double breakeven_fold_equity_pure_bluff_with_ante(double pot_before_hero_bet,
                                                   double hero_bet_or_call_size,
                                                   double ante_to_post) {
     assert_non_neg_finite("anteToPost", ante_to_post);
-    return breakeven_fold_equity_pure_bluff(pot_before_hero_bet + ante_to_post,
-                                            hero_bet_or_call_size);
+    // The ante hero must post is part of hero's risk (as in breakeven_call_equity_with_posted_ante):
+    // a fold still wins pot_before_hero_bet, a call loses the ante together with the bet.
+    return breakeven_fold_equity_pure_bluff(pot_before_hero_bet, hero_bet_or_call_size + ante_to_post);
 }
 
 double breakeven_fold_equity_semi_bluff_with_ante(double pot_before_hero_bet, double hero_bet_size,
                                                   double equity_when_called, double total_pot_if_called,
                                                   double ante_to_post) {
     assert_non_neg_finite("anteToPost", ante_to_post);
-    return breakeven_fold_equity_semi_bluff(pot_before_hero_bet + ante_to_post, hero_bet_size,
+    // Hero's outlay when called is bet + ante; the posted ante also sits in the pot hero can win.
+    return breakeven_fold_equity_semi_bluff(pot_before_hero_bet, hero_bet_size + ante_to_post,
                                             equity_when_called, total_pot_if_called + ante_to_post);
 }
 
@@ -1637,14 +1638,9 @@ double multiway_symmetric_breakeven_call_equity_with_rake(double pot_before, dou
     if (symmetric_extra_callers < 0) {
         throw std::invalid_argument("symmetricExtraCallers must be non-negative");
     }
-    const double k = static_cast<double>(symmetric_extra_callers);
-    const double final_pot = pot_before + to_call * (2.0 + k);
-    const double net = net_pot_after_rake(final_pot, rake_fraction, rake_cap);
-    const double denom = net + to_call;
-    if (denom <= 0.0 || to_call == 0.0) {
-        return 0.0;
-    }
-    return to_call / denom;
+    return multiway_symmetric_breakeven_call_equity_with_share_and_rake(
+        pot_before, to_call, symmetric_extra_callers, Multiway_symmetric_pot_share_model::WinnerTakesAll,
+        1.0, rake_fraction, rake_cap);
 }
 
 double multiway_symmetric_breakeven_call_equity_with_share_and_rake(
@@ -1672,8 +1668,11 @@ double multiway_symmetric_breakeven_call_equity_with_share_and_rake(
     } else {
         throw std::invalid_argument("unknown Multiway_symmetric_pot_share_model");
     }
+    // Same pot geometry as multiway_symmetric_breakeven_call_equity_with_share (hero's call plus k
+    // symmetric callers join pot_before); the rake is taken from that final pot, so zero rake
+    // reproduces the unraked result exactly.
     const double k = static_cast<double>(symmetric_extra_callers);
-    const double final_pot = pot_before + to_call * (2.0 + k);
+    const double final_pot = pot_before + to_call * (1.0 + k);
     const double net = net_pot_after_rake(final_pot, rake_fraction, rake_cap);
     const double eff = share * net;
     if (eff <= 0.0) {

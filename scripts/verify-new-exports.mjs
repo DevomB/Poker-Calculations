@@ -59,10 +59,17 @@ assertNear(
   poker.hypergeometricTwoCardHitProbability(9, 47) + poker.hypergeometricTwoCardMissProbability(9, 47),
   1,
 );
+// One card of the suit on the next street (s/u) is always at least as likely as both runner-runner
+// cards being suited (C(s,2)/C(u,2)).
+assertNear(
+  'runnerRunnerBackdoorFlushOneCardProbability',
+  poker.runnerRunnerBackdoorFlushOneCardProbability(9, 47),
+  9 / 47,
+);
 assertTrue(
-  'runnerRunnerBackdoorFlushOneCard <= twoCard',
-  poker.runnerRunnerBackdoorFlushOneCardProbability(9, 47) <=
-    poker.runnerRunnerBackdoorFlushTwoCardProbability(9, 47) + EPS,
+  'runnerRunnerBackdoorFlushTwoCard <= oneCard',
+  poker.runnerRunnerBackdoorFlushTwoCardProbability(9, 47) <=
+    poker.runnerRunnerBackdoorFlushOneCardProbability(9, 47) + EPS,
 );
 assertNear('blockerAdjustedOuts(0 frac)', poker.blockerAdjustedOuts(9, 0), 9);
 assertNear('blockerAdjustedOuts(1 frac)', poker.blockerAdjustedOuts(9, 1), 0);
@@ -243,7 +250,7 @@ for (const fn of [
 assertNear(
   'pushFoldSymmetricEv',
   poker.pushFoldSymmetricEv(0.5, 100, 20),
-  poker.chubukovSymmetricJamEv(0.5, 100, 20),
+  poker.chubukovSymmetricJamEv(100, 20, 0.5), // (jamStackChips, deadMoneyChips, equity)
 );
 assertNear(
   'openRaiseBreakevenFoldEquity',
