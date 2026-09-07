@@ -188,6 +188,249 @@ export interface IcmChopNegotiationAnalysisResult {
   paretoPairs: IcmChopParetoPair[];
 }
 
+export interface PkoKnockoutMatrixResult {
+  matrix: Float64Array;
+  n: number;
+}
+
+/** Freezeout ICM plus expected bounty collection (ICMBU). */
+export interface PkoIcmbuResult {
+  icm: number[] | Float64Array;
+  bounty: number[] | Float64Array;
+  icmbu: number[] | Float64Array;
+}
+
+/** Freezeout vs ICMBU and chip-share of the bounty pool vs expected collection. */
+export interface PkoBountyRiskPremiumResult {
+  freezeoutIcm: number[];
+  icmbu: number[];
+  icmbuMinusFreezeout: number[];
+  chipShareBountyEv: number[];
+  bountyRiskPremium: number[];
+}
+
+export interface PkoCallEvResult {
+  callEv: number;
+  foldEv: number;
+  delta: number;
+}
+
+export interface PkoJamEvResult {
+  jamEv: number;
+  foldEv: number;
+  delta: number;
+}
+
+/**
+ * Mystery bounty remaining-prize EV.
+ * `oneDraw` is the weighted mean of one knockout. `allRemaining` is the leftover pool
+ * (winner-take-all). `sampleK` is E[sum of k draws]; equal-weight WOR is exact via linearity.
+ */
+export interface MysteryBountyEvResult {
+  oneDraw: number;
+  allRemaining: number;
+  sampleK: number;
+  k: number;
+}
+
+export interface PkoCoveringHuntResult {
+  huntEv: number;
+  checkDownEv: number;
+  delta: number;
+  equityUsed: number;
+}
+
+export interface PkoWinnerTakeBountiesResult {
+  adjustedPayouts: number[] | Float64Array;
+  ev: number[] | Float64Array;
+  winProbabilities: number[] | Float64Array;
+  bountyToWinnerEv: number[] | Float64Array;
+}
+
+/** Equity if called: scalar P(win) with P(tie)=0, `[equity, tie]`, or `[win, tie, lose]`. */
+export type PkoOutcomeInput = number | F64VectorInput;
+
+export interface FutureGrowthShareResult {
+  netGrowth: number[];
+  growthShare: number[];
+  survivorCount: number;
+}
+
+export interface IcmJamVsFoldEvResult {
+  foldEv: number;
+  jamEv: number;
+  delta: number;
+}
+
+export interface IcmCallVsFoldEvResult {
+  foldEv: number;
+  callEv: number;
+  delta: number;
+}
+
+export interface IcmStallingEvOptions {
+  modelCollision?: boolean;
+}
+
+export interface IcmStallingEvResult {
+  nowEv: number;
+  stallEv: number;
+  stallingPremium: number;
+  collisionEv: number;
+  collisionModeled: boolean;
+}
+
+export interface IcmPayJumpSurvivalOptions {
+  /** `vanish` (default): busted chips leave the table. `chipLeader`: chips move to the current leader. */
+  bustChips?: 'vanish' | 'chipLeader';
+}
+
+export interface IcmPayJumpSurvivalResult {
+  nowEv: number;
+  afterBustEv: number;
+  ladderDelta: number;
+  bustedIndex: number;
+}
+
+export interface IcmDeadPotDollarEvResult {
+  nowEv: number;
+  winEv: number;
+  delta: number;
+}
+
+export interface MultiwayWinTieLoseResult {
+  win: number[];
+  split: number[];
+  lose: number[];
+}
+
+export interface MultiwaySidePotChipEvResult {
+  chipEv: number[];
+  layerCount: number;
+}
+
+export interface MultiwayAheadFrequencyResult {
+  /** 1 if uniquely best on the current flop/turn, `1/k` if tied for best, else 0. */
+  pAheadNow: number;
+  /** Player 0 exact showdown equity (chop share `1/tiedAtBest`). */
+  pWinShowdown: number;
+}
+
+export interface MultiwayTieFrequencyResult {
+  /** P(player 0 is tied for best at showdown). */
+  pHeroSplit: number;
+  /** P(two or more players share the best hand at showdown). */
+  pAnySplit: number;
+}
+
+export interface MultiwayBestWorstRunoutResult {
+  supported: boolean;
+  bestCard?: string;
+  worstCard?: string;
+  bestEquity?: number;
+  worstEquity?: number;
+}
+
+export interface CfrNodeUpdateResult {
+  regrets: Float64Array;
+  strategy: Float64Array;
+}
+
+export interface StrategySupportSizeResult {
+  mixedCount: number;
+  pureMass: number;
+}
+
+export interface CfrRiverSolveResult {
+  betFreq: number;
+  callFreq: number;
+  evBettor: number;
+  evDefender: number;
+  iterations: number;
+  betMix: Float64Array;
+  callMix: Float64Array;
+}
+
+export interface BestResponseRiverResult {
+  value: number;
+  callFrequency: number;
+  action: 'call' | 'fold';
+}
+
+export interface StrategyProfileEvResult {
+  evBettor: number;
+  evDefender: number;
+}
+
+export interface CfrPushFoldResult {
+  jamFreq: number;
+  callFreq: number;
+  evJammer: number;
+  evCaller: number;
+  iterations: number;
+  jamMix: Float64Array;
+  callMix: Float64Array;
+}
+
+export interface RiverHandClassFreqs {
+  airBet: number;
+  drawBet: number;
+  madeBet: number;
+  strongBet: number;
+  airCall: number;
+  drawCall: number;
+  madeCall: number;
+  strongCall: number;
+}
+
+export interface RiverTopBetCombo {
+  comboIndex: number;
+  cardA: number;
+  cardB: number;
+  betFrequency: number;
+  weight: number;
+}
+
+export interface HuRiverCheckBetTreeResult extends CfrRiverSolveResult {
+  classes: RiverHandClassFreqs;
+  topBetCombos: RiverTopBetCombo[];
+}
+
+export interface NashPushFoldOptions {
+  stackBb?: number;
+  heroStack?: number;
+  villainStack?: number;
+  smallBlind?: number;
+  bigBlind?: number;
+  /** Total ante already in the pot (chips). */
+  ante?: number;
+  maxIterations?: number;
+  tolerance?: number;
+  equityIterations?: number;
+  equitySeed?: number;
+  otherStacks?: F64VectorInput;
+  payouts?: F64VectorInput;
+  maxStackBb?: number;
+  nOpponents?: number;
+  stacks?: F64VectorInput;
+  shoverStack?: number;
+  callerStacks?: F64VectorInput;
+}
+
+export interface NashJamCallSolveResult {
+  jam: Float64Array;
+  call: Float64Array;
+  heroEv: number;
+  villainEv: number;
+  iterations: number;
+}
+
+export interface NashMultiwayShoveCallResult {
+  jam: Float64Array;
+  calls: Float64Array[];
+  iterations: number;
+}
+
 export interface TournamentDuelAbsorptionResult {
   heroWinProbability: number;
   expectedHands: number;
@@ -374,7 +617,7 @@ export interface CandidateAction {
   amount: number;
 }
 
-/** N-API addon (300 native function exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, tournament/exact-runout/subgame helpers, board texture, range tools, opponent modeling, and related utilities (all implemented in C++). */
+/** N-API addon (350 native function exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, tournament/exact-runout/subgame helpers, board texture, range tools, opponent modeling, PKO/FGS/Nash/CFR/exact-multiway, and related utilities (all implemented in C++). */
 export interface PokerCalculations {
   evaluateBestHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult;
   evaluateBestHand(
@@ -1610,7 +1853,535 @@ export interface PokerCalculations {
     config: NativeBotConfig,
     opponentModels?: Array<NativeOpponentModel | null>
   ): DecisionDiagnosticResult[];
+  /**
+   * Covering PKO knockout matrix. P(j busts) from Harville last-place among players with chips;
+   * P(i knocks j | j busts) = stack_i / (total − stack_j) when i covers j, else 0. Diagonal 0.
+   * Rows need not sum to 1. Returns flat n×n row-major `Float64Array` plus `n`.
+   */
+  pkoKnockoutProbabilityMatrix(stacks: F64VectorInput): PkoKnockoutMatrixResult;
+
+  /**
+   * E[bounty $] per player: sum_j bountyValue[j] * P(i knocks j). Self-bounty ignored.
+   */
+  pkoExpectedBountyCollection(
+    stacks: F64VectorInput,
+    bountyValues: F64VectorInput,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+
+  /**
+   * ICMBU: freezeout `icmExpectedPayouts` plus `pkoExpectedBountyCollection`.
+   * Zero bounties match freezeout ICM. Zero-stack seats get last-place prizes.
+   */
+  pkoIcmbuPayouts(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    bountyValues: F64VectorInput,
+    returnFormat?: F64ReturnFormat
+  ): PkoIcmbuResult;
+
+  /**
+   * Freezeout ICM vs ICMBU, and chip-EV share of the bounty pool vs expected collection
+   * (`bountyRiskPremium` = chip share − expected collection).
+   */
+  pkoBountyRiskPremium(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    bountyValues: F64VectorInput
+  ): PkoBountyRiskPremiumResult;
+
+  /**
+   * $EV(call all-in) vs $EV(fold) when villain has a bounty. Fold leaves stacks as given
+   * (pot already posted). Call uses ICM on post-hand stacks; hero collects villain's bounty
+   * if the villain busts.
+   */
+  pkoCallEvVsShove(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    bountyValues: F64VectorInput,
+    heroIndex: number,
+    villainIndex: number,
+    pot: number,
+    heroEquityIfCall: PkoOutcomeInput
+  ): PkoCallEvResult;
+
+  /**
+   * $EV(jam) vs $EV(fold) including bounties. Villain folds with `foldEquity`: hero is assigned
+   * `pot`. Called: same all-in resolution as `pkoCallEvVsShove`.
+   */
+  pkoJamEvVsFold(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    bountyValues: F64VectorInput,
+    heroIndex: number,
+    villainIndex: number,
+    pot: number,
+    foldEquity: number,
+    equityWhenCalled: PkoOutcomeInput
+  ): PkoJamEvResult;
+
+  /**
+   * Remaining mystery prizes: weighted mean of one knockout, leftover-pool sum, and optional
+   * E[sum of k draws] (`k` omitted or 0 skips the sample). Equal weights if `weights` omitted.
+   */
+  mysteryBountyExpectedValue(
+    values: F64VectorInput,
+    weights?: F64VectorInput | number,
+    k?: number
+  ): MysteryBountyEvResult;
+
+  /**
+   * Progressive KO posted bounty: `base + carryFraction * collected`.
+   * `knockouts` length n = dollars already collected onto each head; n×n (nested or flat) =
+   * M[i][j] weight that i collected j's *base* bounty. `carryFraction` 1.0 = classic PKO.
+   */
+  progressiveKoPostedBounty(
+    baseBounties: F64VectorInput,
+    knockouts: F64VectorInput | number[][],
+    carryFraction: number,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+
+  /**
+   * Isolate vs a covered shorter stack (HU all-in, rest fold). Default equity is the
+   * stack-ratio proxy hunter / (hunter + prey). Check-down is the fold $EV.
+   */
+  pkoCoveringHuntEv(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    bountyValues: F64VectorInput,
+    hunterIndex: number,
+    preyIndex: number,
+    pot: number,
+    equity?: number
+  ): PkoCoveringHuntResult;
+
+  /**
+   * Add leftover bounty pool to first prize. Returns adjusted payouts, ICM $EV on those
+   * payouts, Harville win probs, and P(i first) * remaining pool.
+   */
+  pkoWinnerTakeRemainingBounties(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    remainingBountyPool: number,
+    returnFormat?: F64ReturnFormat
+  ): PkoWinnerTakeBountiesResult;
+
+  /**
+   * Average-position FGS $EV. Each orbit every alive seat pays `min(stack, sb+bb+ante)`;
+   * chips leave the table (not awarded to a blind seat). Bust = $0; remaining seats take
+   * Harville ICM on the top-k prizes. `orbits === 0` or zero cost matches `icmExpectedPayouts`
+   * when every stack is still positive.
+   */
+  futureGameSimulationPayouts(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    orbits: number,
+    smallBlind: number,
+    bigBlind: number,
+    ante?: number,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+
+  /**
+   * Net chip growth from blinds over `orbits`. Short stacks bust and stop paying;
+   * leftover collected blinds split among survivors. Equal stacks that all survive have pay == receive.
+   */
+  futureGrowthShare(
+    stacks: F64VectorInput,
+    orbits: number,
+    smallBlind: number,
+    bigBlind: number,
+    ante?: number
+  ): FutureGrowthShareResult;
+
+  /**
+   * Hero posts `heroPost`; every other seat posts `posts[i]`. Subtract (clamp 0), then ICM
+   * on remaining stacks. Posted chips are dead for placement.
+   */
+  icmPayoutsAfterBlindPost(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    heroIndex: number,
+    heroPost: number,
+    posts: F64VectorInput,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+
+  /**
+   * Jam vs fold $EV. Fold = ICM on the given stacks (blinds already posted if you modeled that).
+   * Jam = `foldEquity` * collect-pot + (1-FE) * stack-off mix at `equityWhenCalled` (ties as half).
+   */
+  icmJamVsFoldEv(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    heroIndex: number,
+    villainIndex: number,
+    pot: number,
+    foldEquity: number,
+    equityWhenCalled: number
+  ): IcmJamVsFoldEvResult;
+
+  /**
+   * Call vs fold $EV facing a shove. Fold keeps stacks as given. Call puts `callAmount`
+   * from hero and `min(villain, call)` from villain into `pot`, then mixes win/lose ICM.
+   */
+  icmCallVsFoldEv(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    heroIndex: number,
+    villainIndex: number,
+    pot: number,
+    callAmount: number,
+    heroEquity: number
+  ): IcmCallVsFoldEvResult;
+
+  /**
+   * Calling bubble factor for one hero-vs-villain all-in:
+   * `(EV_now - EV_lose) / (EV_win - EV_now)` after transferring `chipsAtRisk`.
+   * Distinct from `icmPairwiseBubbleFactor`. Tiny gain with a real loss returns `+Infinity`.
+   */
+  icmCallingBubbleFactor(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    heroIndex: number,
+    villainIndex: number,
+    chipsAtRisk: number
+  ): number;
+
+  /** FGS across a blind schedule. Each level applies `orbitsAtLevel[i]` average-position orbits. */
+  fgsPayoutsBlindSchedule(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    smallBlinds: F64VectorInput,
+    bigBlinds: F64VectorInput,
+    antes: F64VectorInput,
+    orbitsAtLevel: F64VectorInput,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+
+  /**
+   * Stalling premium = FGS(1 orbit)[hero] − ICM now. Optional two-shortest-stack 50/50 collision.
+   */
+  icmStallingEv(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    heroIndex: number,
+    smallBlind: number,
+    bigBlind: number,
+    ante?: number,
+    options?: IcmStallingEvOptions
+  ): IcmStallingEvResult;
+
+  /**
+   * $EV if the shortest other alive stack busts next (`vanish` chips leave; `chipLeader` they move
+   * to the current leader).
+   */
+  icmPayJumpSurvivalEv(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    heroIndex: number,
+    options?: IcmPayJumpSurvivalOptions
+  ): IcmPayJumpSurvivalResult;
+
+  /**
+   * $EV of hero winning a dead pot of `deadChips` (chips in the middle owned by nobody).
+   * Two-point ICM: hero stack += deadChips vs ICM now.
+   */
+  icmDeadPotDollarEv(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    heroIndex: number,
+    deadChips: number
+  ): IcmDeadPotDollarEvResult;
+
+  /**
+   * Exact 3-way equity for known holes. Board 0–5 cards; optional dead/muck.
+   * Equities length 3, sum to 1. Ties split `1/tiedAtBest`.
+   */
+  exactThreeWayEquityKnownHands(
+    hand0: CardInput,
+    hand1: CardInput,
+    hand2: CardInput,
+    boardCards: CardInput,
+    deadCards?: CardInput
+  ): number[];
+
+  /**
+   * Per-player win / split / lose frequencies (win = unique best, split = tied best, lose = rest).
+   */
+  exactThreeWayWinTieLoseKnownHands(
+    hand0: CardInput,
+    hand1: CardInput,
+    hand2: CardInput,
+    boardCards: CardInput,
+    deadCards?: CardInput
+  ): MultiwayWinTieLoseResult;
+
+  /** Exact 4-way equity for known holes. Equities length 4, sum to 1. */
+  exactFourWayEquityKnownHands(
+    hand0: CardInput,
+    hand1: CardInput,
+    hand2: CardInput,
+    hand3: CardInput,
+    boardCards: CardInput,
+    deadCards?: CardInput
+  ): number[];
+
+  /**
+   * Exact n-way equity for 3–6 known hole pairs (n<3 is rejected; use HU APIs).
+   * Enumerates remaining boards. Optional dead/muck.
+   */
+  exactMultiwayEquityKnownHands(
+    holeHands: CardInput[],
+    boardCards: CardInput,
+    deadCards?: CardInput
+  ): number[];
+
+  /** Same as `exactMultiwayEquityKnownHands` with required dead/muck cards. */
+  exactMultiwayEquityWithDeadCards(
+    holeHands: CardInput[],
+    boardCards: CardInput,
+    deadCards: CardInput
+  ): number[];
+
+  /**
+   * Side-pot chip EV from commitments and exact equities among players eligible for each layer.
+   */
+  exactMultiwaySidePotChipEv(
+    committedChips: F64VectorInput,
+    holeHands: CardInput[],
+    boardCards: CardInput,
+    deadCards?: CardInput
+  ): MultiwaySidePotChipEvResult;
+
+  /**
+   * P(hero / player 0 is best on the current flop or turn) vs exact showdown equity.
+   * Board length must be 3 or 4.
+   */
+  exactMultiwayAheadFrequency(
+    holeHands: CardInput[],
+    boardCards: CardInput,
+    deadCards?: CardInput
+  ): MultiwayAheadFrequencyResult;
+
+  /** P(showdown split involving hero) and P(any split). */
+  exactMultiwayTieFrequency(
+    holeHands: CardInput[],
+    boardCards: CardInput,
+    deadCards?: CardInput
+  ): MultiwayTieFrequencyResult;
+
+  /** Number of remaining boards given holes + board + optional dead. */
+  exactMultiwayRunoutCount(
+    holeHands: CardInput[],
+    boardCards: CardInput,
+    deadCards?: CardInput
+  ): number;
+
+  /**
+   * Best and worst next-street card for hero (player 0) by exact equity after that card.
+   * Turn card when board has 3; river card when board has 4. Otherwise `{ supported: false }`.
+   */
+  exactMultiwayBestWorstRunout(
+    holeHands: CardInput[],
+    boardCards: CardInput,
+    deadCards?: CardInput
+  ): MultiwayBestWorstRunoutResult;
+
+  /**
+   * Regret matching: `max(r,0)/sum`. Uniform if every regret is ≤ 0.
+   */
+  regretMatchingStrategy(regrets: F64VectorInput): Float64Array;
+
+  /**
+   * HU river CFR. Tree: bettor Check or Bet; vs Check defender checks back to showdown;
+   * vs Bet defender Fold or Call. Showdown via exact 7-card compare.
+   * `heroRange` is the bettor. Default 400 iterations.
+   */
+  cfrRiverBetCallFoldSolve(
+    pot: number,
+    betSize: number,
+    heroRange: SparseRangeSpec | Float64Array,
+    villainRange: SparseRangeSpec | Float64Array,
+    board: CardInput,
+    iterations?: number
+  ): CfrRiverSolveResult;
+
+  /**
+   * Hero is the defender. `villainBetMix` is a scalar bet frequency or a length-1326 mix.
+   */
+  bestResponseRiver(
+    pot: number,
+    betSize: number,
+    heroRange: SparseRangeSpec | Float64Array,
+    villainRange: SparseRangeSpec | Float64Array,
+    board: CardInput,
+    villainBetMix: number | F64VectorInput
+  ): BestResponseRiverResult;
+
+  /**
+   * NashConv = `0.5 * (BR0 + BR1 - EV0 - EV1)` on the river check/bet tree. ≥ 0.
+   */
+  exploitabilityRiver(
+    pot: number,
+    betSize: number,
+    heroRange: SparseRangeSpec | Float64Array,
+    villainRange: SparseRangeSpec | Float64Array,
+    board: CardInput,
+    bettorMix: number | F64VectorInput,
+    callerMix: number | F64VectorInput
+  ): number;
+
+  /**
+   * HU preflop jam/fold vs call/fold via regret matching. Stacks in BB (blinds 0.5/1).
+   * Called equity is Monte Carlo vs the opposing hole.
+   */
+  cfrHeadsUpPushFoldSolve(
+    jammerRange: SparseRangeSpec | Float64Array,
+    callerRange: SparseRangeSpec | Float64Array,
+    stackBb: number,
+    iterations?: number
+  ): CfrPushFoldResult;
+
+  /**
+   * Fictitious play on the same river check/bet tree as `cfrRiverBetCallFoldSolve`.
+   */
+  fictitiousPlayRiver(
+    pot: number,
+    betSize: number,
+    heroRange: SparseRangeSpec | Float64Array,
+    villainRange: SparseRangeSpec | Float64Array,
+    board: CardInput,
+    iterations?: number
+  ): CfrRiverSolveResult;
+
+  /**
+   * Chip EV of a fixed bet/call profile. No solving.
+   */
+  evOfStrategyProfile(
+    pot: number,
+    betSize: number,
+    heroRange: SparseRangeSpec | Float64Array,
+    villainRange: SparseRangeSpec | Float64Array,
+    board: CardInput,
+    bettorMix: number | F64VectorInput,
+    callerMix: number | F64VectorInput
+  ): StrategyProfileEvResult;
+
+  /**
+   * `mixedCount` = action probs in `(eps, 1-eps)`. `pureMass` = mean of entries `≥ 1-eps`.
+   */
+  strategySupportSize(actionProbs: F64VectorInput, eps?: number): StrategySupportSizeResult;
+
+  /**
+   * One CFR info-set step: `regret += reach * instantaneous`, then regret-match.
+   */
+  cfrNodeReachUpdate(
+    cumulativeRegrets: F64VectorInput,
+    instantaneousRegrets: F64VectorInput,
+    reach?: number
+  ): CfrNodeUpdateResult;
+
+  /**
+   * Full river check/bet CFR plus air/draw/made/strong frequencies and top-k bet combos.
+   */
+  solveHuRiverCheckBetTree(
+    pot: number,
+    betSize: number,
+    heroRange: SparseRangeSpec | Float64Array,
+    villainRange: SparseRangeSpec | Float64Array,
+    board: CardInput,
+    iterations?: number,
+    topK?: number
+  ): HuRiverCheckBetTreeResult;
+
+  /**
+   * HU Nash jam frequencies (169). SB jam/fold vs BB call/fold, chip EV.
+   * Accepts `stackBb` or `{ stackBb, smallBlind, bigBlind, ante, ... }`.
+   */
+  nashHeadsUpJamRange(
+    stackBbOrOptions: number | NashPushFoldOptions,
+    smallBlind?: number,
+    bigBlind?: number,
+    ante?: number
+  ): Float64Array;
+
+  /** HU Nash call frequencies vs jam (169), same order and inputs as `nashHeadsUpJamRange`. */
+  nashHeadsUpCallRange(
+    stackBbOrOptions: number | NashPushFoldOptions,
+    smallBlind?: number,
+    bigBlind?: number,
+    ante?: number
+  ): Float64Array;
+  nashHeadsUpJamCallSolve(
+    stackBbOrOptions: number | NashPushFoldOptions,
+    smallBlind?: number,
+    bigBlind?: number,
+    ante?: number
+  ): NashJamCallSolveResult;
+
+  /**
+   * SB vs BB jam/fold (SB blind is dead in the pot). Same solve as HU Nash;
+   * complete-or-jam is not modeled.
+   */
+  nashBlindVsBlindSolve(
+    stackBbOrOptions: number | NashPushFoldOptions,
+    smallBlind?: number,
+    bigBlind?: number,
+    ante?: number
+  ): NashJamCallSolveResult;
+
+  /**
+   * First-in jam vs `nOpponents` with `stacks[]`. Sequential first-caller:
+   * earlier seats fold with Nash fold freq; first caller uses HU call vs the jam.
+   */
+  nashFirstInJamRange(options: NashPushFoldOptions): Float64Array;
+  nashFirstInJamRange(
+    stackBb: number,
+    nOpponents: number,
+    stacks: F64VectorInput,
+    smallBlind?: number,
+    bigBlind?: number,
+    ante?: number
+  ): Float64Array;
+
+  /** Per-hand max stack in BB that still jams at Nash (indifference / threshold). */
+  nashJamFoldChart169(
+    bigBlindOrOptions: number | NashPushFoldOptions,
+    ante?: number,
+    stackBb?: number
+  ): Float64Array;
+
+  /** Per-hand max stack in BB that still calls a jam at Nash. */
+  nashCallChart169(
+    bigBlindOrOptions: number | NashPushFoldOptions,
+    ante?: number,
+    stackBb?: number
+  ): Float64Array;
+
+  /** Stack in BB where jam EV ≈ fold EV vs a Nash caller for one hand (`"AKo"` or 0..168). */
+  nashIndifferenceStackBb(
+    hand: string | number,
+    maxStackBbOrOptions?: number | NashPushFoldOptions,
+    smallBlind?: number,
+    bigBlind?: number,
+    ante?: number
+  ): number;
+
+  /**
+   * HU Nash with Harville ICM $EV. `otherStacks` are remaining table stacks;
+   * `payouts` is first-to-last prize. Showdown ties use equity split (no chop vector).
+   */
+  nashIcmHeadsUpJamCallSolve(options: NashPushFoldOptions): NashJamCallSolveResult;
+
+  /**
+   * One shover, N callers (1–3 typical, up to 8). Sequential first-caller approximation.
+   * ICM when `payouts` is set.
+   */
+  nashMultiwayShoveCall(options: NashPushFoldOptions): NashMultiwayShoveCallResult;
 }
+
 
 declare const api: PokerCalculations;
 export = api;

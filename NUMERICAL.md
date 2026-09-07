@@ -25,6 +25,17 @@ Cards use `deckIndex = rank * 4 + suit` with rank `0..12` (2..A) and suit `0..3`
 
 `exactHuEquityVsRange` costs O(|range| × runouts per combo). Sparse ranges skip zero-weight combos.
 
+## Complexity (exact multiway known hands)
+
+`exactMultiwayEquityKnownHands` and siblings enumerate remaining boards only (holes are known). Tie rule is the multi-way showdown rule above.
+
+| Players | Board | Dead | Runouts |
+|---------|-------|------|---------|
+| 3 | 0 (preflop) | 0 | C(46,5) |
+| 4 | 0 (preflop) | 0 | C(44,5) |
+| 6 | 0 (preflop) | 0 | C(40,5) |
+| n | 5 (river) | any | 1 |
+
 ## Floating point
 
 - Most APIs return `double`; batch MC paths may use `float` internally then widen.

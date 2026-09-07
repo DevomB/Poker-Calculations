@@ -1,6 +1,6 @@
 ﻿# Shipped feature inventory â€” `poker-calculations`
 
-Complete inventory of what the **npm package** ships: **300** native JavaScript functions, TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
+Complete inventory of what the **npm package** ships: **350** native JavaScript functions, TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
 
 **Authoritative sources:** [`index.d.ts`](index.d.ts) (types + JSDoc), [`README.md`](README.md) (overview tables), [`native/binding_register.cpp`](native/binding_register.cpp) (export registration), [documentation site](https://poker-calculations.devomb.com/docs/reference/api) (examples + when-to-use), [`scripts/list-native-exports.mjs`](scripts/list-native-exports.mjs) (runtime export list).
 
@@ -12,7 +12,7 @@ Complete inventory of what the **npm package** ships: **300** native JavaScript 
 
 ---
 
-## JavaScript / N-API exports (300 functions)
+## JavaScript / N-API exports (350 functions)
 
 Includes batch Monte Carlo, `*Async` Promise exports, Float64 ICM paths, and PKST packed state (`encodePokerState` / `decodePokerState`). ICM/stack helpers accept `Float64Array` and optional `returnFormat: 'float64'`. PKST byte layout: magic `PKST`, layout version byte, players, phase, pot fields, per-player hole bytes, community cards, `actedThisStreet` â€” see `include/poker/state_codec.hpp`.
 
@@ -35,6 +35,16 @@ Implemented in C++ and registered in [`native/binding_register.cpp`](native/bind
 | | `buildPreflopEquityMatrix(options?)` | Row-major `169Ã—169` preflop MC matrix (`PreflopMatrixOptions`). |
 | | `exactHuEquityVsKnownHand(heroHoleCards, villainHoleCards, boardCards)` | Exact HU vs known villain; board empty or 3â€“5 cards. |
 | | `exactHuEquityVsRange(heroHoleCards, boardCards, range)` | Exact HU vs dense `Float64Array(1326)` or sparse range spec. |
+| **Exact multiway** | `exactThreeWayEquityKnownHands(hand0, hand1, hand2, board[, dead])` | Exact 3-way equity; known holes; board 0–5; equities sum to 1. |
+| | `exactThreeWayWinTieLoseKnownHands(hand0, hand1, hand2, board[, dead])` | Per-player unique-win / split / lose frequencies. |
+| | `exactFourWayEquityKnownHands(hand0..hand3, board[, dead])` | Exact 4-way equity; known holes. |
+| | `exactMultiwayEquityKnownHands(holeHands, board[, dead])` | Exact n-way (n = 3–6) known-hand equity; enumerates remaining boards. |
+| | `exactMultiwayEquityWithDeadCards(holeHands, board, dead)` | Same with required dead/muck cards. |
+| | `exactMultiwaySidePotChipEv(committed, holeHands, board[, dead])` | Side-pot chip EV from exact eligible-player equities per layer. |
+| | `exactMultiwayAheadFrequency(holeHands, flopOrTurn[, dead])` | P(hero best now) vs showdown equity; board length 3 or 4. |
+| | `exactMultiwayTieFrequency(holeHands, board[, dead])` | P(hero split) and P(any split) at showdown. |
+| | `exactMultiwayRunoutCount(holeHands, board[, dead])` | Remaining board count (river → 1). |
+| | `exactMultiwayBestWorstRunout(holeHands, flopOrTurn[, dead])` | Best/worst next-street card for hero by exact equity; else `{ supported: false }`. |
 | | `equityDeltaIfCardRemoved(heroHoleCards, boardCards, range, removedDeckIndex)` | Change in exact range equity when one deck id is dead. |
 | **Monte Carlo equity** | `simulateHandOutcome(holeCards, board, numSimulations, seed, villains?)` | Estimated equity vs one or more random villain hands (default `villains = 1`). |
 | | `simulateHandOutcomeAsync(â€¦, options?)` | Same as sync; Promise on libuv thread pool; optional `AbortSignal`. |
@@ -162,10 +172,37 @@ Implemented in C++ and registered in [`native/binding_register.cpp`](native/bind
 | | `exactInformationRegretVsClairvoyant` | Clairvoyant vs realistic call/fold EV gap. |
 | | `multiwayEquityIndependenceGap` | MC multiway vs independence approximation gap. |
 | | `solveSymmetricPushFoldThreshold` | Symmetric push/fold equity threshold with blinds/antes. |
+| **Nash push/fold** | `nashHeadsUpJamRange` | HU Nash jam frequencies (169). Fictitious play, default 50 iters (cap 80). |
+| | `nashHeadsUpCallRange` | HU Nash call frequencies vs jam (169), same order as `buildPreflopEquityMatrix`. |
+| | `nashHeadsUpJamCallSolve` | Joint HU jam/call solve plus hero/villain EV and iteration count. |
+| | `nashBlindVsBlindSolve` | SB jam/fold vs BB call/fold; SB blind is dead in the pot (no complete-or-jam). |
+| | `nashFirstInJamRange` | First-in jam vs N remaining; sequential first-caller (HU call vs jam). |
+| | `nashJamFoldChart169` | Per-hand max stack in BB that still jams at Nash. |
+| | `nashCallChart169` | Per-hand max stack in BB that still calls a jam at Nash. |
+| | `nashIndifferenceStackBb` | Single-hand stack in BB where jam EV ≈ fold EV vs a Nash caller. |
+| | `nashIcmHeadsUpJamCallSolve` | HU Nash with Harville ICM $EV (`otherStacks`, `payouts`). |
+| | `nashMultiwayShoveCall` | One shover, N callers (chip EV or ICM); sequential first-caller approximation. |
 
-### Alphabetical export index (300)
+### CFR and best-response subgames (10 functions)
 
-See [API reference](https://poker-calculations.devomb.com/docs/reference/api) for grouped tables with when-to-use notes. Maintainer check: `node scripts/list-native-exports.mjs` (expect count **300**).
+HU river check/bet tree: **bettor Check or Bet**; vs Check the defender checks back to showdown; vs Bet the defender **Fold or Call**. Showdown uses exact 7-card compare. Push-fold is jam/fold vs call/fold with stacks in BB (blinds 0.5/1). Not closed-form MDF/alpha toys.
+
+| Group | Export | Role |
+| --- | --- | --- |
+| **CFR primitives** | `regretMatchingStrategy` | `max(r,0)/sum`; uniform if all regrets ≤ 0. |
+| | `cfrNodeReachUpdate` | One info-set CFR step: `regret += reach * instantaneous`, then regret-match. |
+| | `strategySupportSize` | Mixed combo count in `(eps, 1-eps)` plus pure jam/bet mass. |
+| **River tree** | `cfrRiverBetCallFoldSolve` | Vanilla CFR on the HU river check/bet tree. Returns range-weighted bet/call freq, EV, 1326 mixes. |
+| | `fictitiousPlayRiver` | Fictitious play on the same river tree. |
+| | `evOfStrategyProfile` | Chip EV of a fixed bet/call mix. No solving. |
+| | `bestResponseRiver` | Defender BR vs a fixed villain bet/check mix (scalar or per-combo). |
+| | `exploitabilityRiver` | NashConv `0.5 * (BR0 + BR1 − EV0 − EV1)` of a river profile. |
+| | `solveHuRiverCheckBetTree` | Full river CFR plus air/draw/made/strong freqs and top-k bet combos. |
+| **Push-fold** | `cfrHeadsUpPushFoldSolve` | Regret-matching jam/fold vs call/fold. Called equity via hole-vs-hole Monte Carlo. |
+
+### Alphabetical export index (350)
+
+See [API reference](https://poker-calculations.devomb.com/docs/reference/api) for grouped tables with when-to-use notes. Maintainer check: `node scripts/list-native-exports.mjs` (expect count **350**).
 
 ## Card strings
 
@@ -263,6 +300,11 @@ To print every N-API export at runtime (maintainers): `node scripts/list-native-
 | Strategy | [`include/poker/strategy.hpp`](include/poker/strategy.hpp) | `decide_action` with `BotConfig`, optional `OpponentModel*`. |
 | ICM | [`include/poker/icm.hpp`](include/poker/icm.hpp) | Harville full placement matrix, win probs, topâ€‘k finish sums, last-place probabilities, $EV, bubble factor. |
 | Side pots | [`include/poker/side_pot.hpp`](include/poker/side_pot.hpp) | Side-pot ladder, layered EV, `side_pot_layers_total_chips`. |
+| Nash push/fold | [`include/poker/nash_push_fold.hpp`](include/poker/nash_push_fold.hpp) | Two-player fictitious-play jam/call Nash (169), first-in / multiway first-caller, ICM $EV, indifference stacks. |
+| PKO / bounty | [`include/poker/pko.hpp`](include/poker/pko.hpp) | Covering knockout matrix, ICMBU, mystery/progressive bounty $EV. |
+| FGS / ICM decisions | [`include/poker/fgs.hpp`](include/poker/fgs.hpp) | Average-position FGS, jam/call $EV, stalling, pay-jump survival. |
+| Exact multiway | [`include/poker/exact_multiway.hpp`](include/poker/exact_multiway.hpp) | Exact 3–6 way known-hand equity, side-pot chip EV, runout extremes. |
+| CFR subgame | [`include/poker/cfr_subgame.hpp`](include/poker/cfr_subgame.hpp) | River check/bet CFR, fictitious play, exploitability, HU push-fold CFR. |
 | Engine | [`include/poker/game_engine.hpp`](include/poker/game_engine.hpp), [`game_state.hpp`](include/poker/game_state.hpp), [`deck.hpp`](include/poker/deck.hpp) | Full hand lifecycle (not exported to Node). |
 | Bot integration | [`include/poker/bot_config.hpp`](include/poker/bot_config.hpp), [`opponent_model.hpp`](include/poker/opponent_model.hpp), [`poker_bot_interface.hpp`](include/poker/poker_bot_interface.hpp) | Config file I/O, opponent model, bot interface hook. |
 
@@ -285,5 +327,45 @@ Not separate Node exports; available when linking **`poker_lib`** in C++ or via 
 
 ---
 
-*Last verified: **300** native functions in `binding_register.cpp` / `index.d.ts`. Re-run `node scripts/list-native-exports.mjs` after adding bindings.*
+---
+
+## PKO / bounty
+
+Progressive knockout and mystery-bounty $EV. Covering model: P(j busts) is Harville last-place among players with chips (`icmLastPlaceProbabilitiesHarville` on the alive subset); P(i knocks j | j busts) = `stack_i / (total − stack_j)` when i covers j (`stack_i >= stack_j`), else 0. Diagonal 0. Zero bounties match freezeout ICM. n in 2..31.
+
+| Group | Export | Role |
+| --- | --- | --- |
+| **PKO / bounty** | `pkoKnockoutProbabilityMatrix(stacks[])` | Flat n×n `Float64Array` + `n`; P(i collects j's bounty). |
+| | `pkoExpectedBountyCollection(stacks[], bountyValues[])` | E[bounty $] per seat. |
+| | `pkoIcmbuPayouts(stacks[], payouts[], bountyValues[])` | Freezeout ICM + expected bounty collection. |
+| | `pkoBountyRiskPremium(stacks[], payouts[], bountyValues[])` | Freezeout vs ICMBU; chip-share of bounty pool vs expected collection. |
+| | `pkoCallEvVsShove(stacks[], payouts[], bountyValues[], hero, villain, pot, equity)` | $EV(call all-in) vs $EV(fold) with KO bounty. |
+| | `pkoJamEvVsFold(..., foldEquity, equityWhenCalled)` | $EV(jam) vs $EV(fold) including bounties. |
+| | `mysteryBountyExpectedValue(values[], weights?, k?)` | Weighted mean of one prize; leftover-pool sum; optional k-draw EV. |
+| | `progressiveKoPostedBounty(baseBounties[], knockouts, carryFraction)` | Posted bounty-on-head after progressive carry. |
+| | `pkoCoveringHuntEv(..., hunter, prey, pot, equity?)` | Isolate vs a covered short stack vs check-down. |
+| | `pkoWinnerTakeRemainingBounties(stacks[], payouts[], remainingBountyPool)` | Leftover bounty pool added to the winner's first prize. |
+
+---
+
+## Future Game Simulation and ICM decisions
+
+Average-position FGS and $EV decision helpers. They call existing Harville `icmExpectedPayouts` (and `orbitCostChips`) — they do not wrap or replace pairwise bubble factor, Shapley, Jacobian, or chop exports. Busted seats get $0; remaining seats take the top-k prizes. Paid blinds in FGS leave the table (dead pool), not a specific seat.
+
+| Export | Role |
+| --- | --- |
+| `futureGameSimulationPayouts(stacks, payouts, orbits, sb, bb, ante?)` | Charge every alive seat `min(stack, sb+bb+ante)` each orbit, then ICM. `orbits=0` or zero cost matches `icmExpectedPayouts` when all stacks stay positive. |
+| `futureGrowthShare(stacks, orbits, sb, bb, ante?)` | Net chip growth + survivor share of blinds received. Short stacks bust and stop paying; leftover pool splits among survivors. |
+| `icmPayoutsAfterBlindPost(stacks, payouts, hero, heroPost, posts)` | Subtract posts (hero uses `heroPost`), pot is dead, ICM on remaining stacks. |
+| `icmJamVsFoldEv(...)` | `{foldEv, jamEv, delta}`. Fold = ICM now. Jam mixes fold-equity collect-pot vs stack-off. |
+| `icmCallVsFoldEv(...)` | `{foldEv, callEv, delta}` facing a shove. |
+| `icmCallingBubbleFactor(...)` | `(EV_now − EV_lose) / (EV_win − EV_now)` for one all-in; distinct from `icmPairwiseBubbleFactor`. |
+| `fgsPayoutsBlindSchedule(stacks, payouts, sb[], bb[], ante[], orbitsAtLevel[])` | Walk a blind schedule, then ICM. |
+| `icmStallingEv(...)` | Stalling premium = FGS(1 orbit) − ICM now; optional two-shortest 50/50 collision. |
+| `icmPayJumpSurvivalEv(...)` | $EV if the shortest other stack busts (`vanish` or `chipLeader`). |
+| `icmDeadPotDollarEv(...)` | Two-point $EV of winning a dead pot (hero stack += dead chips). |
+
+---
+
+*Last verified: **350** native functions in `binding_register.cpp` / `index.d.ts`. Re-run `node scripts/list-native-exports.mjs` after adding bindings.*
 

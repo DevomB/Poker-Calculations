@@ -1,6 +1,6 @@
 /**
  * Prints every **callable** name on the loaded N-API addon. This list must stay in sync with
- * `native/binding_register.cpp` (and `index.d.ts`). Expected count: 300.
+ * `native/binding_register.cpp` (and `index.d.ts`). Expected count: 350.
  *
  * Run from NPM/: `node scripts/list-native-exports.mjs`
  *

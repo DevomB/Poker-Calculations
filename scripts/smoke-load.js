@@ -10,7 +10,7 @@ const target = process.argv[2] ? path.resolve(process.argv[2]) : path.join(__dir
 
 function check(poker) {
   const count = Object.keys(poker).filter((name) => typeof poker[name] === 'function').length;
-  assert.equal(count, 300, 'native export count');
+  assert.equal(count, 350, 'native export count');
   const royal = poker.evaluateBestHand(['Ah', 'Kh', 'Qh', 'Jh', 'Th', '2c', '3d']);
   assert.equal(royal.rank, 'royalFlush');
   assert.equal(poker.evaluateHandCategory(['9h', '9d'], ['9c', '5s', '5h']), 'fullHouse');

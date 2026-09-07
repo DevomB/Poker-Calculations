@@ -33,7 +33,12 @@ add_library(poker_lib STATIC
     src/tournament_duel.cpp
     src/range_inference.cpp
     src/subgame_solvers.cpp
+    src/cfr_subgame.cpp
     src/side_pot_icm.cpp
+    src/pko.cpp
+    src/fgs.cpp
+    src/exact_multiway.cpp
+    src/nash_push_fold.cpp
 )
 target_include_directories(poker_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -65,7 +70,12 @@ if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
         native/binding_combinatorics.cpp
         native/binding_cooperative_icm.cpp
         native/binding_subgame.cpp
+        native/binding_cfr_subgame.cpp
         native/binding_strategy_tools.cpp
+        native/binding_pko.cpp
+        native/binding_fgs.cpp
+        native/binding_exact_multiway.cpp
+        native/binding_nash_push_fold.cpp
         native/async_workers.cpp
         ${CMAKE_JS_SRC}
     )
