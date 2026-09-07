@@ -1,7 +1,12 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const path = require('node:path');
 const { Worker, isMainThread } = require('node:worker_threads');
+
+// Default: this checkout's entry point. Pass a directory to smoke an installed copy instead, e.g.
+//   node scripts/smoke-load.js some-empty-dir/node_modules/poker-calculations
+const target = process.argv[2] ? path.resolve(process.argv[2]) : path.join(__dirname, '..');
 
 function check(poker) {
   const count = Object.keys(poker).filter((name) => typeof poker[name] === 'function').length;
@@ -21,11 +26,11 @@ function check(poker) {
 
 async function main() {
   // Use the same entry point and node-gyp-build resolution as an installed package.
-  const poker = require('../index.js');
+  const poker = require(target);
   check(poker);
   if (isMainThread) {
     await Promise.all([0, 1].map(() => new Promise((resolve, reject) => {
-      const worker = new Worker(__filename);
+      const worker = new Worker(__filename, { argv: process.argv.slice(2) });
       worker.once('error', reject);
       worker.once('exit', (code) => {
         if (code === 0) resolve();
@@ -33,7 +38,7 @@ async function main() {
       });
     })));
     // Worker initialization and teardown must not invalidate the main environment's cache.
-    console.log(`OK: smoke-load - ${check(poker)}; batch and workers passed`);
+    console.log(`OK: smoke-load - ${check(poker)}; batch and workers passed (${target})`);
   }
 }
 
