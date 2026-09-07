@@ -166,9 +166,10 @@ Clone installs without local prebuilds need CMake 3.16+ and a C++ toolchain (MSV
 npm ci
 npm run build:native
 node scripts/stage-prebuild.js <platform-arch>
+npm run smoke
 ```
 
-Use tuples like `win32-x64`, `linux-x64`, `darwin-arm64`. For Alpine/musl: `node scripts/stage-prebuild.js linux-x64 musl`.
+Use tuples like `win32-x64`, `linux-x64`, `darwin-arm64`. For Alpine/musl: `node scripts/stage-prebuild.js linux-x64 musl`. `npm run smoke` loads the staged addon through `index.js` exactly as an installed package does and exercises a few calls; CI runs it on every prebuild and on the assembled package before publishing.
 
 </details>
 

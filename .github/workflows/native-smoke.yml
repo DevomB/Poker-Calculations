@@ -1,0 +1,64 @@
+# Pre-release guard: build the addon and load it through the public entry point (index.js via
+# node-gyp-build) on every push / PR, so an addon that compiles but throws inside Init is caught
+# before a release, not at publish time.
+#
+# The addon is compiled with the same Node the release workflow uses (cmake-js 8 needs Node
+# >=20.17), then loaded under each Node in the matrix: the binary declares N-API 8, so it must
+# load unchanged on every Node that engines (>=18) promises.
+
+name: Native smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUILD_NODE_VERSION: '22.14'
+  PREBUILDS_ONLY: '1'
+
+jobs:
+  smoke:
+    name: Build and load (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.BUILD_NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile native addon (cmake-js)
+        run: npm run build:native
+
+      - name: Stage prebuild
+        run: node scripts/stage-prebuild.js ${{ runner.os == 'Windows' && 'win32-x64' || 'linux-x64' }}
+        shell: bash
+
+      - name: Switch to Node ${{ matrix.node }} for loading
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Smoke staged prebuild
+        run: |
+          node --version
+          npm run smoke
+        shell: bash
