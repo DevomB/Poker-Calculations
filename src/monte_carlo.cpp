@@ -45,24 +45,19 @@ double hero_showdown_equity_strengths(const std::vector<std::uint64_t>& strength
 void collect_known(const std::vector<Card>& hero, const std::vector<Card>& board,
                    std::vector<bool>& used) {
     for (const auto& c : hero) {
-        const int id = static_cast<int>(c.suit()) * 13 + static_cast<int>(c.rank());
-        used[static_cast<std::size_t>(id)] = true;
+        used[static_cast<std::size_t>(deck_index_from_card(c))] = true;
     }
     for (const auto& c : board) {
-        const int id = static_cast<int>(c.suit()) * 13 + static_cast<int>(c.rank());
-        used[static_cast<std::size_t>(id)] = true;
+        used[static_cast<std::size_t>(deck_index_from_card(c))] = true;
     }
 }
 
 std::vector<Card> remaining_deck(const std::vector<bool>& used) {
     std::vector<Card> d;
     d.reserve(52);
-    for (int s = 0; s < 4; ++s) {
-        for (int r = 0; r < 13; ++r) {
-            const int id = s * 13 + r;
-            if (!used[static_cast<std::size_t>(id)]) {
-                d.emplace_back(static_cast<std::uint8_t>(r), static_cast<std::uint8_t>(s));
-            }
+    for (int i = 0; i < 52; ++i) {
+        if (!used[static_cast<std::size_t>(i)]) {
+            d.push_back(card_from_deck_index(i));
         }
     }
     return d;

@@ -178,8 +178,10 @@ Napi::Value SimulateEquityVsRange(const Napi::CallbackInfo& info) {
     const int sims = info[3].As<Napi::Number>().Int32Value();
     const std::uint32_t seed = static_cast<std::uint32_t>(info[4].As<Napi::Number>().Uint32Value());
     std::mt19937 rng(seed);
-    const float eq = poker::simulate_equity_vs_range(hero, board, range, sims, rng);
-    return Napi::Number::New(env, eq);
+    POKER_TRY(env, {
+        const float eq = poker::simulate_equity_vs_range(hero, board, range, sims, rng);
+        return Napi::Number::New(env, eq);
+    });
 }
 
 Napi::Value SimulateHandOutcomeDetailed(const Napi::CallbackInfo& info) {
