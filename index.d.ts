@@ -126,6 +126,42 @@ export interface SparseRangeSpec {
   weights: F64VectorInput;
 }
 
+/**
+ * Sparse PLO range. `packed` is 4 deck ids (0..51) per combo (`length === 4 * n`).
+ * Full C(52,4)=270725 is not accepted as a dense vector — pass only live combos.
+ * Omitted `weights` default to 1 per combo.
+ */
+export interface OmahaRangeSpec {
+  packed: Uint8Array | number[];
+  weights?: F64VectorInput;
+}
+
+/** Flop wrap/OESD outs: next cards that make a straight under Omaha 2+3. */
+export interface OmahaWrapDrawResult {
+  /** Distinct remaining cards that make a straight, straight flush, or royal. */
+  outs: number;
+  /** Subset of `outs` that is the nut Omaha hand on the 4-card board. */
+  nutOuts: number;
+}
+
+/** One-pass HS / PPot / NPot / EHS / EHS2 vs a villain range. `n*` are weighted combo masses. */
+export interface HandPotentialBreakdown {
+  hs: number;
+  ppot: number;
+  npot: number;
+  ehs: number;
+  ehs2: number;
+  nBehind: number;
+  nAhead: number;
+  nTied: number;
+}
+
+/** `comboEhsTableVsRange` options. `trials: 0` / omitted = exact next-street enumeration. */
+export interface ComboEhsTableOptions {
+  trials?: number;
+  seed?: number;
+}
+
 export interface McEquityDetailedResult {
   estimate: number;
   se: number;
@@ -417,6 +453,20 @@ export interface NashPushFoldOptions {
   callerStacks?: F64VectorInput;
 }
 
+/** 81-class 6+ range: notations, notation-weight map, or Float64Array 81 / 169 (2–5 weights must be 0). */
+export type ShortDeckRangeInput = string[] | Record<string, number> | Float64Array;
+
+export interface ShortDeckNashOptions {
+  stackBb?: number;
+  smallBlind?: number;
+  bigBlind?: number;
+  ante?: number;
+  maxIterations?: number;
+  tolerance?: number;
+  equityIterations?: number;
+  equitySeed?: number;
+}
+
 export interface NashJamCallSolveResult {
   jam: Float64Array;
   call: Float64Array;
@@ -429,6 +479,61 @@ export interface NashMultiwayShoveCallResult {
   jam: Float64Array;
   calls: Float64Array[];
   iterations: number;
+}
+
+/**
+ * Joint suit-canonical holes + board. `suitPerm[oldSuit] = newSuit` (0=c … 3=s).
+ * Leftover flop symmetry is broken by later streets, then by the sorted holes.
+ */
+export interface CanonicalHolesAndBoardResult {
+  holes: string[];
+  board: string[];
+  suitPerm: number[];
+}
+
+export interface SpinGoNashJamCallResult {
+  jam: Float64Array;
+  sbCall: Float64Array;
+  bbCall: Float64Array;
+  iterations: number;
+}
+
+export interface LateRegOverlayResult {
+  overlayRatio: number;
+  registerEv: number;
+  icmShare: number;
+}
+
+export interface SatelliteTicketEvResult {
+  advanceProb: number;
+  ticketEv: number;
+  chipEvIfDouble: number;
+  dollarEvIfDouble: number;
+}
+
+export interface SqueezeEvResult {
+  squeezeEv: number;
+  foldEv: number;
+  delta: number;
+}
+
+export interface FourBetJamEvResult {
+  jamEv: number;
+  foldEv: number;
+  delta: number;
+}
+
+export interface IsoRaiseEvResult {
+  isoEv: number;
+  checkEv: number;
+  foldEv: number;
+}
+
+export interface ThreeBetCommitEvResult {
+  spr: number;
+  stackOff: boolean;
+  continueEv: number;
+  foldEv: number;
 }
 
 export interface TournamentDuelAbsorptionResult {
@@ -617,7 +722,7 @@ export interface CandidateAction {
   amount: number;
 }
 
-/** N-API addon (350 native function exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, tournament/exact-runout/subgame helpers, board texture, range tools, opponent modeling, PKO/FGS/Nash/CFR/exact-multiway, and related utilities (all implemented in C++). */
+/** N-API addon (400 native function exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, tournament/exact-runout/subgame helpers, board texture, suit isomorphism, range tools, opponent modeling, PKO/FGS/Nash/CFR/exact-multiway, Omaha Hi, MTT spots, short deck (6+), hand potential (HS/PPot/NPot/EHS), and related utilities (all implemented in C++). */
 export interface PokerCalculations {
   evaluateBestHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult;
   evaluateBestHand(
@@ -1096,6 +1201,69 @@ export interface PokerCalculations {
     boardCards: CardInput,
     range: Float64Array | SparseRangeSpec
   ): number;
+  /**
+   * Hand strength vs a villain range on this flop/turn: P(ahead) + 0.5 P(tie) if the hand
+   * ended now. Ties follow the HU chop (half). Blocked combos are removed.
+   */
+  handStrengthVsRange(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec
+  ): number;
+  /** One-card PPot (flop→turn or turn→river). `P(behind now and ahead later) / P(behind now)` with half-chop ties. */
+  positivePotentialVsRange(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec
+  ): number;
+  /** One-card NPot. `P(ahead now and behind later) / P(ahead now)` with half-chop ties. */
+  negativePotentialVsRange(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec
+  ): number;
+  /** EHS = HS × (1 − NPot) + (1 − HS) × PPot. */
+  effectiveHandStrength(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec
+  ): number;
+  /** EHS2 = HS × (1 − NPot)² + (1 − HS) × PPot². */
+  effectiveHandStrengthSquared(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec
+  ): number;
+  /** HS, PPot, NPot, EHS, EHS2, and weighted ahead/tied/behind masses in one pass. */
+  handPotentialBreakdown(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec
+  ): HandPotentialBreakdown;
+  /** Flop→river (two-card) PPot. Board must be 3 cards. */
+  twoStreetPositivePotential(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec
+  ): number;
+  /** Flop→river (two-card) NPot. Board must be 3 cards. */
+  twoStreetNegativePotential(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec
+  ): number;
+  /** Map EHS in `[0, 1]` to `k` equal-width buckets `[0, k)`. */
+  equityBucketFromEhs(ehs: number, k: number): number;
+  /**
+   * EHS for all 1326 hero combos vs `range` on this flop/turn (`0` if blocked by the board).
+   * Exact when `trials` is omitted/0 (cheap on the turn; flop enumerates ~45 turn cards per combo).
+   * Pass `{ trials, seed }` to Monte Carlo next-street cards on a flop.
+   */
+  comboEhsTableVsRange(
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec,
+    options?: ComboEhsTableOptions
+  ): Float64Array;
   /** Monte Carlo equity vs weighted villain range. */
   simulateEquityVsRange(
     heroHoleCards: CardInput,
@@ -2380,6 +2548,312 @@ export interface PokerCalculations {
    * ICM when `payouts` is set.
    */
   nashMultiwayShoveCall(options: NashPushFoldOptions): NashMultiwayShoveCallResult;
+
+  /**
+   * Suit-canonical 3-card flop. Rainbow / two-tone / monotone collapse under S4.
+   * Returns 3 canonical card strings, sorted by deck id (`rank*4+suit`).
+   */
+  canonicalFlopBoard(flop: CardInput): string[];
+
+  /**
+   * Canonical 3–5 card board. First 3 cards are the flop (set); 4th is turn; 5th is river.
+   * Re-solves the 24 suit perms on the street tuple (flop iso first; turn/river break leftover
+   * symmetry). Not a board-texture score.
+   */
+  canonicalBoard(board: CardInput): string[];
+
+  /**
+   * Remap hero holes + board by one suit permutation. `suitPerm` is the map to apply to ranges.
+   */
+  canonicalHolesAndBoard(holes: CardInput, board: CardInput): CanonicalHolesAndBoardResult;
+
+  /** Length-4 perm: `perm[oldSuit] = newSuit` (0=c, 1=d, 2=h, 3=s). Flop-only; leftover suits lex-smallest. */
+  suitPermFromCanonicalFlop(flop: CardInput): number[];
+
+  /** Apply a 4-suit perm to any card list; input order is preserved. */
+  applySuitPermToCards(cards: CardInput, perm: number[]): string[];
+
+  /** Permute a dense 1326 range through the suit map. Total mass is preserved. */
+  applySuitPermToRange1326(range: Float64Array, perm: number[]): Float64Array;
+
+  /**
+   * Orbit size: how many raw unordered flops map to this class (1–24).
+   * Unpaired rainbow=24, two-tone=12, monotone=4. Pair/trips shrink further (12 or 4).
+   */
+  isomorphicFlopOrbitSize(flop: CardInput): number;
+
+  /** Always 1755. */
+  countCanonicalFlops(): number;
+
+  /** Stable index 0..1754 of the canonical flop (sorted packed deck-id order). */
+  isomorphicFlopIndex(flop: CardInput): number;
+
+  /** Inverse of `isomorphicFlopIndex`. */
+  flopIndexToCanonical(index: number): string[];
+
+  /**
+   * Best 5-card Omaha Hi hand: exactly 2 hole + exactly 3 board.
+   * `holeCards` must be 4 cards; `boardCards` must be 3–5 (flop C(4,2)=6, river C(4,2)*C(5,3)=60).
+   * Same `HandEvalResult` shape as `evaluateBestHand`.
+   */
+  evaluateOmahaBestHand(
+    holeCards: CardInput,
+    boardCards: CardInput,
+    options?: EvaluateBestHandOptions
+  ): HandEvalResult;
+  evaluateOmahaBestHand(
+    holeCards: CardInput,
+    boardCards: CardInput,
+    options: { format: 'slim' }
+  ): HandEvalResultSlim;
+
+  /**
+   * Omaha Hi strength using the same `pack_hand_strength` encoding as `evaluateHandStrength`
+   * (5-card rank + kickers). Not a 7-card best-of-9.
+   */
+  evaluateOmahaHandStrength(holeCards: CardInput, boardCards: CardInput): number;
+
+  /**
+   * Exact HU Omaha Hi equity vs a known 4-card hand. Board 0–5; remaining runouts enumerated.
+   * Ties count as 0.5.
+   */
+  exactHuOmahaEquityVsKnown(
+    heroHoleCards: CardInput,
+    villainHoleCards: CardInput,
+    boardCards: CardInput
+  ): number;
+
+  /** Monte Carlo Omaha Hi equity vs a uniform random 4-card villain. */
+  simulateOmahaEquityVsRandom(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    trials: number,
+    seed: number
+  ): number;
+
+  /** Monte Carlo Omaha Hi equity vs a sparse weighted 4-card range (`OmahaRangeSpec`). */
+  simulateOmahaEquityVsRange(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: OmahaRangeSpec,
+    trials: number,
+    seed: number
+  ): number;
+
+  /** Remaining 4-card combo count: `C(52 − |unique dead|, 4)`. Throws on duplicate dead cards. */
+  omahaComboCount(deadCards: CardInput): number;
+
+  /**
+   * True iff hero’s Omaha Hi hand is unbeaten by every other 4-card combo that avoids
+   * `boardCards` and optional `extraDead`.
+   */
+  omahaNutsOnBoard(heroHoleCards: CardInput, boardCards: CardInput, extraDead?: CardInput): boolean;
+
+  /**
+   * Flop wrap/OESD outs. Counts remaining cards that, as the turn, make a straight
+   * (or SF/royal) using exactly 2 hole + 3 of the 4 board cards. `nutOuts` are those
+   * that are also the nut Omaha holding on that 4-card board.
+   */
+  omahaWrapDrawOuts(heroHoleCards: CardInput, flopCards: CardInput): OmahaWrapDrawResult;
+
+  /**
+   * 0–1 closeness to the nuts: `1 − (strictly better 4-card holdings) / (n − 1)`
+   * among legal Omaha holdings on this board. Unique nuts → 1; unique worst → 0.
+   */
+  omahaNuttednessScore(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    extraDead?: CardInput
+  ): number;
+
+  /**
+   * Monte Carlo pot-share equity for 3–4 known 4-card hands. Returned array sums to ~1.
+   */
+  omahaMultiwayEquityMc(
+    holeHands: CardInput[],
+    boardCards: CardInput,
+    trials: number,
+    seed: number
+  ): number[];
+
+  /**
+   * 3-max Spin & Go prize vector: `multiplier * buyin`.
+   * Default 50/30/20 of the pool. `winnerTakeAll` → 100/0/0. Always length 3.
+   */
+  spinGoPayouts(
+    multiplier: number,
+    buyin: number,
+    winnerTakeAll?: boolean,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+
+  /** Harville ICM $EV for three stacks and a length-3 Spin & Go prize vector. */
+  spinGoIcmEv(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    returnFormat?: F64ReturnFormat
+  ): number[] | Float64Array;
+
+  /**
+   * 3-handed first-in Nash jam/call with ICM utility (not chip EV).
+   * Approximation: BTN open-jams; SB then BB call sequentially. Blinds are dead in the pot.
+   */
+  spinGoNashJamCall(
+    btnStack: number,
+    sbStack: number,
+    bbStack: number,
+    payouts: F64VectorInput,
+    smallBlind?: number,
+    bigBlind?: number,
+    ante?: number
+  ): SpinGoNashJamCallResult;
+
+  /**
+   * Average-position FGS orbits, then ICMBU on surviving stacks.
+   * `orbits === 0` matches `pkoIcmbuPayouts` on the original stacks.
+   */
+  pkoFgsPayouts(
+    stacks: F64VectorInput,
+    payouts: F64VectorInput,
+    bountyValues: F64VectorInput,
+    orbits: number,
+    smallBlind: number,
+    bigBlind: number,
+    ante?: number,
+    returnFormat?: F64ReturnFormat
+  ): PkoIcmbuResult;
+
+  /**
+   * Overlay = `(prizePool / fieldRemaining) / lateRegFee`.
+   * $EV of registering now: Harville on you / one average stack / rest of field,
+   * pool after you pay is `prizePool + lateRegFee`, then subtract the fee.
+   */
+  lateRegOverlayEv(
+    fieldRemaining: number,
+    prizePool: number,
+    lateRegFee: number,
+    startingStack: number,
+    averageStack: number
+  ): LateRegOverlayResult;
+
+  /**
+   * WTA satellite: P(top-K ticket) via Harville. `ticketEv = P * ticketValue`.
+   * Doubling hero's stack: chip-share of the ticket pool vs Harville $EV after the double.
+   */
+  winnerTakeAllSatelliteEv(
+    stacks: F64VectorInput,
+    heroIndex: number,
+    ticketCount: number,
+    ticketValue: number
+  ): SatelliteTicketEvResult;
+
+  /**
+   * Squeeze vs fold (chip EV). Fold = 0 (hero has not put chips in).
+   * Independent folds vs opener and caller; continue pots add `heroPut` plus matching calls.
+   */
+  squeezeEv(
+    pot: number,
+    heroPut: number,
+    openerCall: number,
+    callerCall: number,
+    foldEquityOpener: number,
+    foldEquityCaller: number,
+    equityVsOpener: number,
+    equityVsCaller: number,
+    equityVsBoth: number
+  ): SqueezeEvResult;
+
+  /**
+   * 4-bet jam pot geometry (not ICM). Fold = 0. `foldEquity === 1` wins `deadPot`.
+   * Called: `equity * (deadPot + jam + call) − jam`.
+   */
+  fourBetJamEv(
+    deadPot: number,
+    jam: number,
+    call: number,
+    foldEquity: number,
+    equityWhenCalled: number
+  ): FourBetJamEvResult;
+
+  /**
+   * Isolate vs `nLimpers`. Each folds independently with `pFold`.
+   * Vs `k` callers: `equities[k-1]` if given, else `1/(k+1)`.
+   * Check-behind is `1/(n+1)` of the current pot.
+   */
+  isoRaiseVsLimpersEv(
+    pot: number,
+    isoSize: number,
+    limpCall: number,
+    nLimpers: number,
+    pFold: number,
+    equities?: F64VectorInput
+  ): IsoRaiseEvResult;
+
+  /**
+   * SPR after the 3-bet. Realized equity = `equity * realization` (default 1).
+   * Stack-off when realized equity covers `remaining / (pot + 2*remaining)`.
+   */
+  threeBetPotCommitEv(
+    potAfterThreeBet: number,
+    effectiveRemaining: number,
+    equity: number,
+    realization?: number
+  ): ThreeBetCommitEvResult;
+
+  /**
+   * Short Deck / 6+ Hold'em. 36-card deck (ranks 6–A). Ranks 2–5 are rejected.
+   * Flush beats full house. Wheel is A6789 (not A2345). `rankCategory` uses 6+ order
+   * (fullHouse=5, flush=6), not NLHE order.
+   */
+  evaluateShortDeckBestHand(cards: CardInput): HandEvalResult;
+  /** Encoded 6+ strength (flush ordinal above boat). Hole + board, 1–7 cards total. */
+  evaluateShortDeckHandStrength(holeCards: CardInput, board: CardInput): number;
+  /** 6+ category label (`highCard` … `royalFlush`); flush still named `flush`. */
+  evaluateShortDeckCategory(holeCards: CardInput, board: CardInput): string;
+  /** Exact HU equity on the 36-card deck. 2-card holes, board 0–5. Ties count 0.5. */
+  exactHuShortDeckEquityVsKnown(
+    heroHoleCards: CardInput,
+    villainHoleCards: CardInput,
+    boardCards: CardInput
+  ): number;
+  simulateShortDeckEquityVsRandom(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    numSimulations: number,
+    seed: number
+  ): number;
+  /**
+   * MC vs a 6+ range. Valid classes are **81** (9 pairs + 36 suited + 36 offsuit), not 169
+   * and not 91. Accepts `string[]` notations (`AKs`, `QQ`), `{ AKs: 1, QQ: 0.5 }`,
+   * `Float64Array(81)`, or `Float64Array(169)` with 2–5 class weights required to be 0.
+   */
+  simulateShortDeckEquityVsRange(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: ShortDeckRangeInput,
+    numSimulations: number,
+    seed: number
+  ): number;
+  /** True when five cards are the A6789 wheel (straight or wheel straight flush). */
+  shortDeckStraightIsWheel(cards: CardInput): boolean;
+  /** `C(n,2)` remaining hole combos on the 36-card deck after dead cards. */
+  shortDeckRemainingComboCount(deadCards: CardInput): number;
+  /**
+   * HU jam/fold Nash frequencies, length 81, stacks in BB. Same fictitious-play idea as
+   * `nashHeadsUpJamRange` but 6+ equities.
+   */
+  shortDeckNashHuJamRange(
+    stackBbOrOptions: number | ShortDeckNashOptions,
+    smallBlind?: number,
+    bigBlind?: number,
+    ante?: number
+  ): Float64Array;
+  /**
+   * True when NLHE vs 6+ **category labels** differ for the same 5–7 cards (all 6+).
+   * Wheel A6789 is the usual flip (`highCard`/`flush` vs `straight`/`straightFlush`).
+   * Flush vs boat does not rename a single hand; it only swaps which wins at showdown.
+   */
+  shortDeckVsHoldemCategoryFlip(cards: CardInput): boolean;
 }
 
 

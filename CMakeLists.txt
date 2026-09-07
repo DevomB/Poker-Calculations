@@ -39,6 +39,11 @@ add_library(poker_lib STATIC
     src/fgs.cpp
     src/exact_multiway.cpp
     src/nash_push_fold.cpp
+    src/suit_isomorphism.cpp
+    src/omaha.cpp
+    src/mtt_spots.cpp
+    src/short_deck.cpp
+    src/hand_potential.cpp
 )
 target_include_directories(poker_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -76,6 +81,11 @@ if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
         native/binding_fgs.cpp
         native/binding_exact_multiway.cpp
         native/binding_nash_push_fold.cpp
+        native/binding_suit_isomorphism.cpp
+        native/binding_omaha.cpp
+        native/binding_mtt_spots.cpp
+        native/binding_short_deck.cpp
+        native/binding_hand_potential.cpp
         native/async_workers.cpp
         ${CMAKE_JS_SRC}
     )

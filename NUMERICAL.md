@@ -14,6 +14,9 @@ Cards use `deckIndex = rank * 4 + suit` with rank `0..12` (2..A) and suit `0..3`
 
 - Multi-way: hero receives `1 / tiedAtBest` when tied for best strength; otherwise `0`.
 - Heads-up exact enumeration: win `1`, chop `0.5`, loss `0`.
+- Hand potential (HS / PPot / NPot): same chop. HS = P(ahead) + 0.5 P(tie) on this board.
+  PPot / NPot use the Billings half-tie transitions:
+  `PPot = [P(behind→ahead) + 0.5 P(behind→tied) + 0.5 P(tied→ahead)] / [P(behind) + 0.5 P(tied)]`.
 
 ## Complexity (exact HU)
 
