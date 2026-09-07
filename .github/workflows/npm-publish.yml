@@ -22,6 +22,7 @@ on:
 
 env:
   NODE_VERSION: '22.14'
+  PREBUILDS_ONLY: '1'
 
 concurrency:
   group: npm-publish-${{ github.workflow }}
@@ -96,6 +97,9 @@ jobs:
         run: node scripts/stage-prebuild.js ${{ matrix.tuple }}
         shell: bash
 
+      - name: Smoke staged prebuild
+        run: npm run smoke
+
       - name: Flatten artifact name for merge job
         run: cp "prebuilds/${{ matrix.tuple }}/node.napi.node" "${{ matrix.tuple }}.napi.node"
         shell: bash
@@ -126,6 +130,7 @@ jobs:
               npm ci
               node scripts/build-native.js compile
               node scripts/stage-prebuild.js linux-x64
+              PREBUILDS_ONLY=1 npm run smoke
             '
 
           cp prebuilds/linux-x64/node.napi.node linux-x64.napi.node
@@ -158,6 +163,7 @@ jobs:
               npm ci
               node scripts/build-native.js compile
               node scripts/stage-prebuild.js linux-arm
+              PREBUILDS_ONLY=1 npm run smoke
             '
           cp prebuilds/linux-arm/node.napi.node linux-arm.napi.node
 
@@ -195,6 +201,9 @@ jobs:
       - name: Stage prebuild (node.napi.musl.node)
         run: node scripts/stage-prebuild.js linux-x64 musl
 
+      - name: Smoke staged prebuild
+        run: npm run smoke
+
       - name: Flatten artifact name for merge job
         run: cp prebuilds/linux-x64/node.napi.musl.node linux-x64-musl.napi.node
 
@@ -223,6 +232,7 @@ jobs:
               npm ci
               node scripts/build-native.js compile
               node scripts/stage-prebuild.js linux-arm64 musl
+              PREBUILDS_ONLY=1 npm run smoke
             '
           cp prebuilds/linux-arm64/node.napi.musl.node linux-arm64-musl.napi.node
 
@@ -256,8 +266,14 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
+      - name: Install dependencies
+        run: npm ci
+
       - name: Assemble prebuilds/
         run: node scripts/assemble-prebuilds.js _native_bins
+
+      - name: Smoke assembled package
+        run: npm run smoke
 
       - name: Ensure npm CLI for OIDC (≥11.5.1)
         run: npm install -g npm@^11.5.1
