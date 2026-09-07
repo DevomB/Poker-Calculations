@@ -1,5 +1,8 @@
 #include <napi.h>
 
+#include <initializer_list>
+#include <vector>
+
 #include "binding_batch.hpp"
 #include "binding_combinatorics.hpp"
 #include "binding_cooperative_icm.hpp"
@@ -205,9 +208,27 @@ Napi::Value NormalizedRangeWeightSum(const Napi::CallbackInfo& info);
 Napi::Value LayeredPotChipEvFromEquitiesWithRake(const Napi::CallbackInfo& info);
 Napi::Value IcmExpectedPayoutsDeltaFromChipChop(const Napi::CallbackInfo& info);
 
+namespace {
+
+// Node-API's default property attributes (napi_default) would make every export non-enumerable and
+// read-only, so Object.keys(require('poker-calculations')) would be empty. Publish each function as an
+// ordinary module export - enumerable, writable, configurable - exactly as exports.Set did through 1.1.2.
+void define_exports(Napi::Object exports, std::initializer_list<Napi::PropertyDescriptor> functions) {
+    std::vector<Napi::PropertyDescriptor> descriptors;
+    descriptors.reserve(functions.size());
+    for (const Napi::PropertyDescriptor& fn : functions) {
+        napi_property_descriptor raw = static_cast<const napi_property_descriptor&>(fn);
+        raw.attributes = static_cast<napi_property_attributes>(napi_writable | napi_enumerable | napi_configurable);
+        descriptors.emplace_back(raw);
+    }
+    exports.DefineProperties(descriptors);
+}
+
+}  // namespace
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     poker_bind::init_binding(env);
-    exports.DefineProperties({
+    define_exports(exports, {
         Napi::PropertyDescriptor::Function("evaluateBestHand", EvaluateBestHand),
         Napi::PropertyDescriptor::Function("evaluateHandStrength", EvaluateHandStrength),
         Napi::PropertyDescriptor::Function("evaluateHandStrengthFast", EvaluateHandStrengthFast),
