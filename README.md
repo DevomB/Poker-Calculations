@@ -38,7 +38,7 @@
 | **Tournament & runouts** | Shapley ICM, runout equity spread, range materialization, subgame bet toys — [guide](https://poker-calculations.devomb.com/docs/guides/tournament-runouts-and-bots) |
 | **Ranges & boards** | Range algebra, range distances, notation buckets, board texture, scare cards, and range-board coverage |
 | **Opponent modeling** | Fold-to-c-bet posteriors, aggression/showdown tendency estimates, range elasticity, and exploit adjustments |
-| **Developer experience** | **[`index.d.ts`](index.d.ts)** typings, **300** native exports, docs at [poker-calculations.devomb.com](https://poker-calculations.devomb.com) |
+| **Developer experience** | **[`index.d.ts`](index.d.ts)** typings, **350** native exports, docs at [poker-calculations.devomb.com](https://poker-calculations.devomb.com) |
 
 Published releases include **N-API prebuilds** for Linux (glibc and musl), macOS, and Windows via [`node-gyp-build`](https://github.com/prebuild/node-gyp-build). Linux glibc builds use static libstdc++/libgcc where needed so older server and serverless images avoid `GLIBCXX_*` mismatches.
 
