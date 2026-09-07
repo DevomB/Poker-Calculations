@@ -6,12 +6,14 @@ let native;
 try {
   native = require('node-gyp-build')(path.join(__dirname));
 } catch (err) {
+  const originalStack = err.stack || err.message;
   const msg =
     '[poker-calculations] Native addon failed to load.\n' +
     '  Published installs ship prebuilt binaries (no compiler needed).\n' +
     '  From a git clone: npm ci && npm run build:native && node scripts/stage-prebuild.js <platform-arch>\n' +
     '  (CMake + C++20 toolchain required; see README.)\n';
   err.message = msg + '\nOriginal error: ' + err.message;
+  err.stack = msg + '\nOriginal error: ' + originalStack;
   throw err;
 }
 
