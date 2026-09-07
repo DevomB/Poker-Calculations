@@ -1,6 +1,6 @@
 ﻿# Shipped feature inventory â€” `poker-calculations`
 
-Complete inventory of what the **npm package** ships: **350** native JavaScript functions, TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
+Complete inventory of what the **npm package** ships: **400** native JavaScript functions, TypeScript result/state types, card conventions, and C++ engine primitives that are not re-exported to Node.
 
 **Authoritative sources:** [`index.d.ts`](index.d.ts) (types + JSDoc), [`README.md`](README.md) (overview tables), [`native/binding_register.cpp`](native/binding_register.cpp) (export registration), [documentation site](https://poker-calculations.devomb.com/docs/reference/api) (examples + when-to-use), [`scripts/list-native-exports.mjs`](scripts/list-native-exports.mjs) (runtime export list).
 
@@ -12,7 +12,7 @@ Complete inventory of what the **npm package** ships: **350** native JavaScript 
 
 ---
 
-## JavaScript / N-API exports (350 functions)
+## JavaScript / N-API exports (400 functions)
 
 Includes batch Monte Carlo, `*Async` Promise exports, Float64 ICM paths, and PKST packed state (`encodePokerState` / `decodePokerState`). ICM/stack helpers accept `Float64Array` and optional `returnFormat: 'float64'`. PKST byte layout: magic `PKST`, layout version byte, players, phase, pot fields, per-player hole bytes, community cards, `actedThisStreet` â€” see `include/poker/state_codec.hpp`.
 
@@ -182,6 +182,16 @@ Implemented in C++ and registered in [`native/binding_register.cpp`](native/bind
 | | `nashIndifferenceStackBb` | Single-hand stack in BB where jam EV ≈ fold EV vs a Nash caller. |
 | | `nashIcmHeadsUpJamCallSolve` | HU Nash with Harville ICM $EV (`otherStacks`, `payouts`). |
 | | `nashMultiwayShoveCall` | One shover, N callers (chip EV or ICM); sequential first-caller approximation. |
+| **Suit isomorphism** | `canonicalFlopBoard` | Map any 3-card flop to its suit-canonical representative (1755 classes). |
+| | `canonicalBoard` | Canonical 3–5 card board; flop set first, then turn/river. Re-solves S4. |
+| | `canonicalHolesAndBoard` | Remap hero 2 + board; returns `suitPerm` for range relabel. |
+| | `suitPermFromCanonicalFlop` | Length-4 suit map `perm[old]=new` (0=c … 3=s). |
+| | `applySuitPermToCards` | Apply a suit perm to any card list (order preserved). |
+| | `applySuitPermToRange1326` | Permute a dense 1326 range; total mass preserved. |
+| | `isomorphicFlopOrbitSize` | Raw flops in this class (rainbow 24 / two-tone 12 / monotone 4; pairs smaller). |
+| | `countCanonicalFlops` | Constant 1755. |
+| | `isomorphicFlopIndex` | Canonical flop → stable index 0..1754. |
+| | `flopIndexToCanonical` | Inverse of `isomorphicFlopIndex`. |
 
 ### CFR and best-response subgames (10 functions)
 
@@ -200,9 +210,9 @@ HU river check/bet tree: **bettor Check or Bet**; vs Check the defender checks b
 | | `solveHuRiverCheckBetTree` | Full river CFR plus air/draw/made/strong freqs and top-k bet combos. |
 | **Push-fold** | `cfrHeadsUpPushFoldSolve` | Regret-matching jam/fold vs call/fold. Called equity via hole-vs-hole Monte Carlo. |
 
-### Alphabetical export index (350)
+### Alphabetical export index (400)
 
-See [API reference](https://poker-calculations.devomb.com/docs/reference/api) for grouped tables with when-to-use notes. Maintainer check: `node scripts/list-native-exports.mjs` (expect count **350**).
+See [API reference](https://poker-calculations.devomb.com/docs/reference/api) for grouped tables with when-to-use notes. Maintainer check: `node scripts/list-native-exports.mjs` (expect count **400**).
 
 ## Card strings
 
@@ -367,5 +377,81 @@ Average-position FGS and $EV decision helpers. They call existing Harville `icmE
 
 ---
 
-*Last verified: **350** native functions in `binding_register.cpp` / `index.d.ts`. Re-run `node scripts/list-native-exports.mjs` after adding bindings.*
+## Omaha Hi (PLO)
+
+Native 4-card Omaha Hi. A made hand is **exactly 2 hole + exactly 3 board** (flop `C(4,2)×C(3,3)=6`, river `C(4,2)×C(5,3)=60`). Hold'em 5-card evaluation runs only on that chosen five — not a 7-card best-of-9 from nine cards. C++: [`include/poker/omaha.hpp`](include/poker/omaha.hpp), [`src/omaha.cpp`](src/omaha.cpp), [`native/binding_omaha.cpp`](native/binding_omaha.cpp). Smoke: `node scripts/verify-omaha.mjs`.
+
+| Export | Role |
+| --- | --- |
+| `evaluateOmahaBestHand(hole, board, options?)` | Best Omaha 5-card hand. Hole 4, board 3–5. Same `HandEvalResult` as `evaluateBestHand`. |
+| `evaluateOmahaHandStrength(hole, board)` | Same `pack_hand_strength` uint64 layout as Hold'em 5-card strength. |
+| `exactHuOmahaEquityVsKnown(hero, villain, board)` | Exact HU vs known 4-card hand. Board 0–5; remaining runouts enumerated. |
+| `simulateOmahaEquityVsRandom(hero, board, trials, seed)` | MC vs uniform random 4-card villain. |
+| `simulateOmahaEquityVsRange(hero, board, range, trials, seed)` | MC vs sparse `{ packed, weights? }`. `packed`: 4 deck ids (0..51) per combo. Not a dense 270725 vector. |
+| `omahaComboCount(dead)` | `C(52 − \|unique dead\|, 4)`. Throws on duplicate dead cards. |
+| `omahaNutsOnBoard(hero, board, extraDead?)` | True if no other 4-card combo beats hero on this board. |
+| `omahaWrapDrawOuts(hero, flop)` | `{ outs, nutOuts }`. Next cards that make a straight (or SF/royal) via 2+3. `nutOuts` = those that are the nuts on the 4-card board. Flop only. |
+| `omahaNuttednessScore(hero, board, extraDead?)` | `1 − (better holdings) / (n − 1)` among legal 4-card Omaha holdings. Unique nuts → 1. |
+| `omahaMultiwayEquityMc(holes, board, trials, seed)` | MC pot-share equity for 3–4 known 4-card hands. |
+
+**Range spec:** `{ packed: Uint8Array \| number[], weights?: number[] \| Float64Array }`. Length of `packed` is `4n`; each group of four bytes is one combo. Omitted weights are 1. Combos that collide with hero/board are skipped at sample time.
+
+**Wrap model:** a flop out is a remaining card that, added as the turn, makes hero’s best Omaha hand a straight, straight flush, or royal (not a made flush/boat that is not a straight).
+
+## MTT / table spots
+
+Spin & Go, late-reg overlay, satellite tickets, and pot-geometry spots that reuse Harville / FGS / PKO / Nash. They do not re-export the 3.1.1 PKO, FGS, Nash, or CFR names.
+
+| Export | Role |
+| --- | --- |
+| `spinGoPayouts(multiplier, buyin, winnerTakeAll?)` | Length-3 prize vector. Default 50/30/20 of `multiplier * buyin`; WTA is 100/0/0. |
+| `spinGoIcmEv(stacks, payouts)` | Harville ICM $EV for three stacks (`icmExpectedPayouts`). Equal stacks + 50/30/20 → equal $EV. |
+| `spinGoNashJamCall(btn, sb, bb, payouts, sbBlind?, bbBlind?, ante?)` | 3-handed first-in Nash with ICM utility. Approximation: BTN open-jam vs SB then BB calling. |
+| `pkoFgsPayouts(stacks, payouts, bounties, orbits, sb, bb, ante?)` | FGS orbits on stacks, then ICMBU on survivors. `orbits=0` matches `pkoIcmbuPayouts`. |
+| `lateRegOverlayEv(field, prizePool, fee, startingStack, averageStack)` | Overlay = `(prizePool / field) / fee`. $EV of sitting now on a compressed you / average / rest table. |
+| `winnerTakeAllSatelliteEv(stacks, hero, tickets, ticketValue)` | Harville top-K advance + ticket $EV, plus chip-share vs Harville $EV after doubling hero. |
+| `squeezeEv(pot, heroPut, openerCall, callerCall, feOpener, feCaller, eqOp, eqCaller, eqBoth)` | Chip EV of squeeze vs fold (fold = 0). Independent folds; continue pots add matching calls. |
+| `fourBetJamEv(deadPot, jam, call, foldEquity, equityWhenCalled)` | 4-bet jam pot geometry (not ICM). `FE=1` wins dead money. |
+| `isoRaiseVsLimpersEv(pot, isoSize, limpCall, nLimpers, pFold, equities?)` | Isolate vs n limpers. Missing equities fall back to `1/(k+1)`. Check-behind = `1/(n+1)` of pot. |
+| `threeBetPotCommitEv(pot, remaining, equity, realization?)` | SPR after 3-bet, stack-off vs realized equity, continue EV vs fold 0. |
+
+## Short Deck (6+ Hold'em)
+
+36-card deck, ranks **6–A**. Card ids keep the NLHE layout (`rank * 4 + suit`); ranks 2–5 are rejected. Flush **beats** full house. Wheel is **A6789** (nine-high); A2345 does not exist. Broadway T-J-Q-K-A and royal flushes are unchanged. Preflop classes: **81** (9 pairs + 36 suited + 36 offsuit), not 169 and not 91. `Float64Array(169)` is accepted only when 2–5 class weights are 0.
+
+`rank` strings match NLHE labels (`flush`, `fullHouse`). `rankCategory` / packed strength use 6+ order: `straight=4`, **`fullHouse=5`, `flush=6`**, `fourOfAKind=7`. A single hand that is a flush is still called `flush` in both games; the swap only changes which hand wins at showdown. Category *labels* differ on the wheel (NLHE high card or flush vs 6+ straight / straight flush).
+
+| Export | Role |
+| --- | --- |
+| `evaluateShortDeckBestHand(cards)` | Best five of 1–7 short-deck cards. |
+| `evaluateShortDeckHandStrength(hole, board)` | Packed 6+ strength (flush > boat). |
+| `evaluateShortDeckCategory(hole, board)` | Category label under 6+ ranking. |
+| `exactHuShortDeckEquityVsKnown(hero, villain, board)` | Exact HU on remaining 36-card runouts; board 0–5. |
+| `simulateShortDeckEquityVsRandom(hero, board, n, seed)` | Monte Carlo vs a random 6+ hand. |
+| `simulateShortDeckEquityVsRange(hero, board, range, n, seed)` | Monte Carlo vs an 81-class (or zero-padded 169) range. |
+| `shortDeckStraightIsWheel(cards)` | Five-card A6789 wheel (straight or steel wheel). |
+| `shortDeckRemainingComboCount(dead)` | `C(n,2)` hole combos left on the 36-card deck. |
+| `shortDeckNashHuJamRange(stackBb \| options)` | HU jam/fold Nash frequencies, length 81, stacks in BB. |
+| `shortDeckVsHoldemCategoryFlip(cards)` | True when NLHE vs 6+ category labels differ for the same 5–7 cards. |
+
+## Hand potential (HS / PPot / NPot / EHS / EHS2)
+
+Classic Billings / poker-eval / Casinostates primitives vs a villain range (sparse or dense 1326). Board is flop or turn. Ties follow NUMERICAL.md HU chop (half). Blocked combos are removed.
+
+| Export | Role |
+| --- | --- |
+| `handStrengthVsRange(heroHole, board, range)` | HS = P(ahead now) + 0.5 P(tie) if the hand ended on this board. |
+| `positivePotentialVsRange(heroHole, board, range)` | One-card PPot (flop→turn or turn→river). |
+| `negativePotentialVsRange(heroHole, board, range)` | One-card NPot. |
+| `effectiveHandStrength(heroHole, board, range)` | EHS = HS×(1−NPot) + (1−HS)×PPot. |
+| `effectiveHandStrengthSquared(heroHole, board, range)` | EHS2 = HS×(1−NPot)² + (1−HS)×PPot². |
+| `handPotentialBreakdown(heroHole, board, range)` | `{hs, ppot, npot, ehs, ehs2, nBehind, nAhead, nTied}` in one pass. |
+| `twoStreetPositivePotential(heroHole, flop, range)` | Flop→river PPot (two cards). |
+| `twoStreetNegativePotential(heroHole, flop, range)` | Flop→river NPot. |
+| `equityBucketFromEhs(ehs, k)` | Equal-width bucket in `[0, k)` for EHS in `[0, 1]`. |
+| `comboEhsTableVsRange(board, range[, { trials, seed }])` | EHS for all 1326 hero combos (0 if blocked). Turn is exact when `trials` is omitted/0. Flop exact is allowed but heavy; pass `trials` to Monte Carlo next-street cards. |
+
+---
+
+*Last verified: **400** native functions in `binding_register.cpp` / `index.d.ts`. Re-run `node scripts/list-native-exports.mjs` after adding bindings.*
 

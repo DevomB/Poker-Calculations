@@ -15,6 +15,11 @@
 #include "binding_pko.hpp"
 #include "binding_fgs.hpp"
 #include "binding_nash_push_fold.hpp"
+#include "binding_suit_isomorphism.hpp"
+#include "binding_omaha.hpp"
+#include "binding_mtt_spots.hpp"
+#include "binding_short_deck.hpp"
+#include "binding_hand_potential.hpp"
 
 Napi::Value EvaluateBestHand(const Napi::CallbackInfo& info);
 Napi::Value EvaluateHandStrength(const Napi::CallbackInfo& info);
@@ -599,6 +604,56 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("nashIndifferenceStackBb", NashIndifferenceStackBb),
         Napi::PropertyDescriptor::Function("nashIcmHeadsUpJamCallSolve", NashIcmHeadsUpJamCallSolve),
         Napi::PropertyDescriptor::Function("nashMultiwayShoveCall", NashMultiwayShoveCall),
+        Napi::PropertyDescriptor::Function("canonicalFlopBoard", CanonicalFlopBoard),
+        Napi::PropertyDescriptor::Function("canonicalBoard", CanonicalBoard),
+        Napi::PropertyDescriptor::Function("canonicalHolesAndBoard", CanonicalHolesAndBoard),
+        Napi::PropertyDescriptor::Function("suitPermFromCanonicalFlop", SuitPermFromCanonicalFlop),
+        Napi::PropertyDescriptor::Function("applySuitPermToCards", ApplySuitPermToCards),
+        Napi::PropertyDescriptor::Function("applySuitPermToRange1326", ApplySuitPermToRange1326),
+        Napi::PropertyDescriptor::Function("isomorphicFlopOrbitSize", IsomorphicFlopOrbitSize),
+        Napi::PropertyDescriptor::Function("countCanonicalFlops", CountCanonicalFlops),
+        Napi::PropertyDescriptor::Function("isomorphicFlopIndex", IsomorphicFlopIndex),
+        Napi::PropertyDescriptor::Function("flopIndexToCanonical", FlopIndexToCanonical),
+        Napi::PropertyDescriptor::Function("evaluateOmahaBestHand", EvaluateOmahaBestHand),
+        Napi::PropertyDescriptor::Function("evaluateOmahaHandStrength", EvaluateOmahaHandStrength),
+        Napi::PropertyDescriptor::Function("exactHuOmahaEquityVsKnown", ExactHuOmahaEquityVsKnown),
+        Napi::PropertyDescriptor::Function("simulateOmahaEquityVsRandom", SimulateOmahaEquityVsRandom),
+        Napi::PropertyDescriptor::Function("simulateOmahaEquityVsRange", SimulateOmahaEquityVsRange),
+        Napi::PropertyDescriptor::Function("omahaComboCount", OmahaComboCount),
+        Napi::PropertyDescriptor::Function("omahaNutsOnBoard", OmahaNutsOnBoard),
+        Napi::PropertyDescriptor::Function("omahaWrapDrawOuts", OmahaWrapDrawOuts),
+        Napi::PropertyDescriptor::Function("omahaNuttednessScore", OmahaNuttednessScore),
+        Napi::PropertyDescriptor::Function("omahaMultiwayEquityMc", OmahaMultiwayEquityMc),
+        Napi::PropertyDescriptor::Function("spinGoPayouts", SpinGoPayouts),
+        Napi::PropertyDescriptor::Function("spinGoIcmEv", SpinGoIcmEv),
+        Napi::PropertyDescriptor::Function("spinGoNashJamCall", SpinGoNashJamCall),
+        Napi::PropertyDescriptor::Function("pkoFgsPayouts", PkoFgsPayouts),
+        Napi::PropertyDescriptor::Function("lateRegOverlayEv", LateRegOverlayEv),
+        Napi::PropertyDescriptor::Function("winnerTakeAllSatelliteEv", WinnerTakeAllSatelliteEv),
+        Napi::PropertyDescriptor::Function("squeezeEv", SqueezeEv),
+        Napi::PropertyDescriptor::Function("fourBetJamEv", FourBetJamEv),
+        Napi::PropertyDescriptor::Function("isoRaiseVsLimpersEv", IsoRaiseVsLimpersEv),
+        Napi::PropertyDescriptor::Function("threeBetPotCommitEv", ThreeBetPotCommitEv),
+        Napi::PropertyDescriptor::Function("evaluateShortDeckBestHand", EvaluateShortDeckBestHand),
+        Napi::PropertyDescriptor::Function("evaluateShortDeckHandStrength", EvaluateShortDeckHandStrength),
+        Napi::PropertyDescriptor::Function("evaluateShortDeckCategory", EvaluateShortDeckCategory),
+        Napi::PropertyDescriptor::Function("exactHuShortDeckEquityVsKnown", ExactHuShortDeckEquityVsKnown),
+        Napi::PropertyDescriptor::Function("simulateShortDeckEquityVsRandom", SimulateShortDeckEquityVsRandom),
+        Napi::PropertyDescriptor::Function("simulateShortDeckEquityVsRange", SimulateShortDeckEquityVsRange),
+        Napi::PropertyDescriptor::Function("shortDeckStraightIsWheel", ShortDeckStraightIsWheel),
+        Napi::PropertyDescriptor::Function("shortDeckRemainingComboCount", ShortDeckRemainingComboCount),
+        Napi::PropertyDescriptor::Function("shortDeckNashHuJamRange", ShortDeckNashHuJamRange),
+        Napi::PropertyDescriptor::Function("shortDeckVsHoldemCategoryFlip", ShortDeckVsHoldemCategoryFlip),
+        Napi::PropertyDescriptor::Function("handStrengthVsRange", HandStrengthVsRange),
+        Napi::PropertyDescriptor::Function("positivePotentialVsRange", PositivePotentialVsRange),
+        Napi::PropertyDescriptor::Function("negativePotentialVsRange", NegativePotentialVsRange),
+        Napi::PropertyDescriptor::Function("effectiveHandStrength", EffectiveHandStrength),
+        Napi::PropertyDescriptor::Function("effectiveHandStrengthSquared", EffectiveHandStrengthSquared),
+        Napi::PropertyDescriptor::Function("handPotentialBreakdown", HandPotentialBreakdown),
+        Napi::PropertyDescriptor::Function("twoStreetPositivePotential", TwoStreetPositivePotential),
+        Napi::PropertyDescriptor::Function("twoStreetNegativePotential", TwoStreetNegativePotential),
+        Napi::PropertyDescriptor::Function("equityBucketFromEhs", EquityBucketFromEhs),
+        Napi::PropertyDescriptor::Function("comboEhsTableVsRange", ComboEhsTableVsRange),
     });
     return exports;
 }

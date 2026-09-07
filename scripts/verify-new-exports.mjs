@@ -288,8 +288,8 @@ assertTrue('legalActionSummary', typeof poker.legalActionSummary(state).toCall =
 // --- export count ---
 const reg = readFileSync(join(root, 'native', 'binding_register.cpp'), 'utf8');
 const regCount = (reg.match(/PropertyDescriptor::Function/g) || []).length;
-assertTrue('binding_register count 350', regCount === 350);
+assertTrue('binding_register count 400', regCount === 400);
 const exportCount = Object.keys(poker).filter((k) => typeof poker[k] === 'function').length;
-assertTrue('runtime export count 350', exportCount === 350);
+assertTrue('runtime export count 400', exportCount === 400);
 
 console.log('OK: verify-new-exports.mjs - all checks passed.');
