@@ -301,30 +301,6 @@ MultiwaySidePotChipEv exact_multiway_side_pot_chip_ev(const std::vector<double>&
     return out;
 }
 
-MultiwayAheadFrequency exact_multiway_ahead_frequency(const std::vector<std::vector<Card>>& hole_hands,
-                                                      const std::vector<Card>& board_cards,
-                                                      const std::vector<Card>& dead_cards) {
-    if (board_cards.size() != 3 && board_cards.size() != 4) {
-        throw std::invalid_argument("exactMultiwayAheadFrequency requires a flop or turn board");
-    }
-    const std::vector<double> eq =
-        exact_multiway_equity_known_hands(hole_hands, board_cards, dead_cards);
-    MultiwayAheadFrequency out;
-    out.p_win_showdown = eq[0];
-
-    std::uint64_t now[kMaxPlayers]{};
-    const int n = static_cast<int>(hole_hands.size());
-    for (int i = 0; i < n; ++i) {
-        now[i] = evaluate_hand_strength_fast(hole_hands[static_cast<std::size_t>(i)], board_cards);
-    }
-    bool eligible[kMaxPlayers]{};
-    all_eligible(n, eligible);
-    double shares[kMaxPlayers]{};
-    pot_shares_from_strengths(now, n, eligible, shares);
-    out.p_ahead_now = shares[0];
-    return out;
-}
-
 MultiwayTieFrequency exact_multiway_tie_frequency(const std::vector<std::vector<Card>>& hole_hands,
                                                   const std::vector<Card>& board_cards,
                                                   const std::vector<Card>& dead_cards) {
@@ -373,10 +349,11 @@ MultiwayBestWorstRunout exact_multiway_best_worst_runout(
     const std::vector<std::vector<Card>>& hole_hands, const std::vector<Card>& board_cards,
     const std::vector<Card>& dead_cards) {
     MultiwayBestWorstRunout out;
+    // Validate first so bad input throws like the sibling exports; only the street is "unsupported".
+    const MultiwaySpot spot = prepare_multiway_spot(hole_hands, board_cards, dead_cards);
     if (board_cards.size() != 3 && board_cards.size() != 4) {
         return out;
     }
-    const MultiwaySpot spot = prepare_multiway_spot(hole_hands, board_cards, dead_cards);
     if (spot.remaining.empty()) {
         return out;
     }

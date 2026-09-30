@@ -118,7 +118,7 @@ double exact_hu_equity_vs_known_hand(const std::vector<Card>& hero_hole_cards,
 
 double exact_hu_equity_vs_range(const std::vector<Card>& hero_hole_cards,
                                 const std::vector<Card>& board_cards, const SparseRange& villain_range,
-                                const CancelPredicate* should_cancel) {
+                                const CancelPredicate* should_cancel, std::uint64_t extra_dead_mask) {
     validate_hero_board(hero_hole_cards, board_cards);
     if (villain_range.combos.empty() || villain_range.weight_sum <= 0.0) {
         throw std::invalid_argument("villain range must have positive weight");
@@ -126,6 +126,7 @@ double exact_hu_equity_vs_range(const std::vector<Card>& hero_hole_cards,
     DeckBitset used;
     used.mark_cards(hero_hole_cards);
     used.mark_cards(board_cards);
+    used.mask |= extra_dead_mask;
     const int need_board = 5 - static_cast<int>(board_cards.size());
     double win_weight = 0.0;
     double total = 0.0;
@@ -208,8 +209,9 @@ double equity_delta_if_card_removed(const std::vector<Card>& hero_hole_cards,
     if (filtered.combos.empty()) {
         throw std::invalid_argument("equityDeltaIfCardRemoved: no range combos after removal");
     }
-    const double after =
-        exact_hu_equity_vs_range(hero_hole_cards, board_cards, filtered, should_cancel);
+    // The removed card is dead for the runout too, not only for villain's holdings.
+    const double after = exact_hu_equity_vs_range(hero_hole_cards, board_cards, filtered, should_cancel,
+                                                  std::uint64_t{1} << removed_deck_index);
     return after - base;
 }
 

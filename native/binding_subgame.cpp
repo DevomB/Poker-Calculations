@@ -31,7 +31,7 @@ bool parse_sparse_range(const Napi::Env env, const Napi::Value& v, const poker::
             return false;
         }
         std::vector<double> w(1326);
-        std::memcpy(w.data(), ta.ArrayBuffer().Data(), 1326 * sizeof(double));
+        std::memcpy(w.data(), poker_bind::typed_array_data(ta), 1326 * sizeof(double));
         out = poker::sparse_range_from_dense1326(w.data(), 1326, dead.mask);
         return true;
     }
@@ -50,7 +50,7 @@ bool parse_sparse_range(const Napi::Env env, const Napi::Value& v, const poker::
         const std::size_t n = ta.ElementLength();
         indices.resize(n);
         if (ta.TypedArrayType() == napi_int32_array) {
-            std::memcpy(indices.data(), ta.ArrayBuffer().Data(), n * sizeof(int32_t));
+            std::memcpy(indices.data(), poker_bind::typed_array_data(ta), n * sizeof(int32_t));
         } else {
             if (err) {
                 *err = "indices must be Int32Array";
@@ -108,7 +108,10 @@ Napi::Value MaterializeVillainRangeAfterBlockers(const Napi::CallbackInfo& info)
     POKER_TRY(env, {
         if (info[0].IsTypedArray()) {
             const Napi::TypedArray ta = info[0].As<Napi::TypedArray>();
-            const double* data = static_cast<const double*>(ta.ArrayBuffer().Data());
+            if (ta.TypedArrayType() != napi_float64_array || ta.ElementLength() != 1326) {
+                POKER_FAIL_TYPE(env, "range must be Float64Array(1326) or a sparse range");
+            }
+            const double* data = static_cast<const double*>(poker_bind::typed_array_data(ta));
             return materialized_to_js(
                 env, poker::materialize_villain_range_after_blockers(data, 1326, hero, board, dead_extra));
         }
@@ -124,40 +127,6 @@ Napi::Value MaterializeVillainRangeAfterBlockers(const Napi::CallbackInfo& info)
                                             prior, hero, board, dead_extra));
     });
 }
-
-Napi::Value BayesianRangeUpdateFromAction(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    POKER_REQUIRE(env, info.Length() >= 4,
-                  "bayesianRangeUpdateFromAction(range, heroHoleCards, boardCards, action, alpha)");
-    std::string err;
-    const std::vector<poker::Card> hero = parse_cards_from_js(env, info[1], &err);
-    const std::vector<poker::Card> board = parse_cards_from_js(env, info[2], &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    const std::string action = info[3].As<Napi::String>().Utf8Value();
-    const double alpha = info[4].As<Napi::Number>().DoubleValue();
-    poker::BayesianActionKind kind = poker::BayesianActionKind::Call;
-    if (action == "fold") {
-        kind = poker::BayesianActionKind::Fold;
-    } else if (action == "raise") {
-        kind = poker::BayesianActionKind::Raise;
-    } else if (action != "call") {
-        POKER_FAIL_TYPE(env, "action must be fold, call, or raise");
-    }
-    poker::SparseRange prior;
-    poker::DeckBitset dead;
-    dead.mark_cards(hero);
-    dead.mark_cards(board);
-    if (!parse_sparse_range(env, info[0], dead, prior, &err)) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    POKER_TRY(env, {
-        return materialized_to_js(env,
-                                  poker::bayesian_range_update_from_action(prior, hero, board, kind, alpha));
-    });
-}
-
 Napi::Value SolveRiverPolarizedIndifferenceBet(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     POKER_REQUIRE(env, info.Length() >= 3,
@@ -176,31 +145,6 @@ Napi::Value SolveRiverPolarizedIndifferenceBet(const Napi::CallbackInfo& info) {
         return out;
     });
 }
-
-Napi::Value SolveStageMinimaxRegretBet(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    POKER_REQUIRE(env, info.Length() >= 5,
-                  "solveStageMinimaxRegretBet(potBeforeBet, betSizes[], villainFoldFreq, villainCallFreq, heroEquityWhenCalled)");
-    const double pot = info[0].As<Napi::Number>().DoubleValue();
-    std::string err;
-    std::vector<double> bets;
-    if (!read_f64_vector(info[1], "betSizes", bets, &err)) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    const double fold_f = info[2].As<Napi::Number>().DoubleValue();
-    const double call_f = info[3].As<Napi::Number>().DoubleValue();
-    const double eq = info[4].As<Napi::Number>().DoubleValue();
-    POKER_TRY(env, {
-        const auto r =
-            poker::solve_stage_minimax_regret_bet(pot, bets, fold_f, call_f, eq);
-        Napi::Object out = Napi::Object::New(env);
-        out.Set("bestBet", Napi::Number::New(env, r.best_bet));
-        out.Set("minimaxRegret", Napi::Number::New(env, r.minimax_regret));
-        out.Set("evByAction", write_f64_vector(env, r.ev_by_action, poker_bind::F64ReturnFormat::Array));
-        return out;
-    });
-}
-
 Napi::Value ExactInformationRegretVsClairvoyant(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     POKER_REQUIRE(env, info.Length() >= 5,
@@ -225,31 +169,6 @@ Napi::Value ExactInformationRegretVsClairvoyant(const Napi::CallbackInfo& info) 
                                                                                      to_call));
     });
 }
-
-Napi::Value MultiwayEquityIndependenceGap(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    POKER_REQUIRE(env, info.Length() >= 5,
-                  "multiwayEquityIndependenceGap(heroHoleCards, boardCards, numSimulations, seed, villains)");
-    std::string err;
-    const std::vector<poker::Card> hero = parse_cards_from_js(env, info[0], &err);
-    const std::vector<poker::Card> board = parse_cards_from_js(env, info[1], &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    const int sims = info[2].As<Napi::Number>().Int32Value();
-    const int seed = info[3].As<Napi::Number>().Int32Value();
-    const int villains = info[4].As<Napi::Number>().Int32Value();
-    POKER_TRY(env, {
-        const auto r = poker::multiway_equity_independence_gap(hero, board, sims, seed, villains);
-        Napi::Object out = Napi::Object::New(env);
-        out.Set("exact", Napi::Number::New(env, r.exact));
-        out.Set("independentApprox", Napi::Number::New(env, r.independent_approx));
-        out.Set("gap", Napi::Number::New(env, r.gap));
-        out.Set("villains", Napi::Number::New(env, r.villains));
-        return out;
-    });
-}
-
 Napi::Value SolveSymmetricPushFoldThreshold(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     POKER_REQUIRE(env, info.Length() >= 4,

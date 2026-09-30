@@ -13,12 +13,10 @@
 #include "poker/strategy.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <limits>
 #include <numeric>
 #include <string>
 #include <utility>
@@ -67,18 +65,6 @@ std::pair<int, int> combo_cards(int idx) {
     return {-1, -1};
 }
 
-std::string card_string_from_index(int idx) {
-    static constexpr char ranks[] = "23456789TJQKA";
-    static constexpr char suits[] = "cdhs";
-    if (idx < 0 || idx > 51) {
-        return "";
-    }
-    std::string s;
-    s.push_back(ranks[idx / 4]);
-    s.push_back(suits[idx % 4]);
-    return s;
-}
-
 bool read_range_dense(const Napi::Value& v, std::vector<double>& out, std::string* err) {
     out.assign(kCombos, 0.0);
     if (v.IsTypedArray()) {
@@ -89,7 +75,7 @@ bool read_range_dense(const Napi::Value& v, std::vector<double>& out, std::strin
             }
             return false;
         }
-        std::memcpy(out.data(), ta.ArrayBuffer().Data(), kCombos * sizeof(double));
+        std::memcpy(out.data(), poker_bind::typed_array_data(ta), kCombos * sizeof(double));
         for (double& w : out) {
             if (!std::isfinite(w) || w < 0.0) {
                 w = 0.0;
@@ -120,9 +106,9 @@ bool read_range_dense(const Napi::Value& v, std::vector<double>& out, std::strin
         const Napi::TypedArray ta = iv.As<Napi::TypedArray>();
         indices.resize(ta.ElementLength());
         if (ta.TypedArrayType() == napi_int32_array) {
-            std::memcpy(indices.data(), ta.ArrayBuffer().Data(), indices.size() * sizeof(std::int32_t));
+            std::memcpy(indices.data(), poker_bind::typed_array_data(ta), indices.size() * sizeof(std::int32_t));
         } else if (ta.TypedArrayType() == napi_uint32_array) {
-            const auto* p = static_cast<const std::uint32_t*>(ta.ArrayBuffer().Data());
+            const auto* p = static_cast<const std::uint32_t*>(poker_bind::typed_array_data(ta));
             for (std::size_t i = 0; i < indices.size(); ++i) {
                 indices[i] = static_cast<int>(p[i]);
             }
@@ -209,38 +195,6 @@ poker::SparseRange sparse_from_dense(const std::vector<double>& dense, std::uint
     return poker::sparse_range_from_dense1326(dense.data(), dense.size(), dead);
 }
 
-double range_strength_proxy(const std::vector<double>& dense) {
-    double total = 0.0;
-    double score = 0.0;
-    for (int i = 0; i < static_cast<int>(dense.size()); ++i) {
-        const double w = dense[static_cast<std::size_t>(i)];
-        if (w <= 0.0 || !std::isfinite(w)) {
-            continue;
-        }
-        const auto [a, b] = combo_cards(i);
-        const int ra = a / 4;
-        const int rb = b / 4;
-        const bool pair = ra == rb;
-        const bool suited = (a % 4) == (b % 4);
-        const int high = std::max(ra, rb);
-        const int low = std::min(ra, rb);
-        const int gap = std::abs(ra - rb);
-        double s = (high + low) / 24.0;
-        if (pair) {
-            s += 0.35 + high / 30.0;
-        }
-        if (suited) {
-            s += 0.06;
-        }
-        if (gap <= 2 && !pair) {
-            s += 0.04;
-        }
-        score += w * clamp01(s);
-        total += w;
-    }
-    return total > 0.0 ? clamp01(score / total) : 0.0;
-}
-
 std::string combo_notation(int a, int b) {
     static constexpr char ranks[] = "23456789TJQKA";
     int ra = a / 4;
@@ -301,165 +255,6 @@ bool notation_to_combos(const std::string& notation, std::vector<int>& indices) 
     return true;
 }
 
-struct Texture {
-    double paired{};
-    double suited{};
-    double connected{};
-    double high{};
-    double wet{};
-    double staticness{};
-};
-
-Texture texture_for_cards(const std::vector<poker::Card>& board) {
-    Texture t{};
-    if (board.empty()) {
-        t.staticness = 1.0;
-        return t;
-    }
-    std::array<int, 13> ranks{};
-    std::array<int, 4> suits{};
-    for (const auto& c : board) {
-        ++ranks[c.rank()];
-        ++suits[c.suit()];
-        if (c.rank() >= 8) {
-            t.high += 1.0;
-        }
-    }
-    t.high /= static_cast<double>(board.size());
-    int max_rank = 0;
-    for (int n : ranks) {
-        max_rank = std::max(max_rank, n);
-    }
-    t.paired = board.size() >= 2 ? clamp01((max_rank - 1.0) / 2.0) : 0.0;
-    int max_suit = *std::max_element(suits.begin(), suits.end());
-    t.suited = board.size() >= 2 ? clamp01((max_suit - 1.0) / 3.0) : 0.0;
-    std::vector<int> rs;
-    for (int r = 0; r < 13; ++r) {
-        if (ranks[r] > 0) {
-            rs.push_back(r);
-        }
-    }
-    int close = 0;
-    for (std::size_t i = 1; i < rs.size(); ++i) {
-        if (rs[i] - rs[i - 1] <= 2) {
-            ++close;
-        }
-    }
-    t.connected = rs.size() > 1 ? clamp01(static_cast<double>(close) / (rs.size() - 1)) : 0.0;
-    t.wet = clamp01(0.38 * t.suited + 0.42 * t.connected + 0.2 * (1.0 - t.paired));
-    t.staticness = clamp01(1.0 - t.wet + 0.15 * t.paired);
-    return t;
-}
-
-Napi::Object texture_object(Napi::Env env, const Texture& t) {
-    Napi::Object o = Napi::Object::New(env);
-    o.Set("pairedness", t.paired);
-    o.Set("suitedness", t.suited);
-    o.Set("connectedness", t.connected);
-    o.Set("highCardPressure", t.high);
-    o.Set("wetness", t.wet);
-    o.Set("staticness", t.staticness);
-    return o;
-}
-
-double range_board_interaction(const std::vector<double>& range, const std::vector<poker::Card>& board) {
-    if (board.empty()) {
-        return range_strength_proxy(range);
-    }
-    std::array<int, 13> br{};
-    std::array<int, 4> bs{};
-    for (const auto& c : board) {
-        ++br[c.rank()];
-        ++bs[c.suit()];
-    }
-    double total = 0.0;
-    double score = 0.0;
-    for (int i = 0; i < static_cast<int>(range.size()); ++i) {
-        const double w = range[static_cast<std::size_t>(i)];
-        if (w <= 0.0) {
-            continue;
-        }
-        const auto [a, b] = combo_cards(i);
-        double s = 0.0;
-        const int ra = a / 4;
-        const int rb = b / 4;
-        if (br[ra] > 0) {
-            s += 0.35;
-        }
-        if (br[rb] > 0) {
-            s += 0.35;
-        }
-        if (bs[a % 4] >= 2 || bs[b % 4] >= 2) {
-            s += 0.12;
-        }
-        for (const auto& c : board) {
-            if (std::abs(ra - static_cast<int>(c.rank())) <= 2) {
-                s += 0.03;
-            }
-            if (std::abs(rb - static_cast<int>(c.rank())) <= 2) {
-                s += 0.03;
-            }
-        }
-        score += w * clamp01(s);
-        total += w;
-    }
-    return total > 0.0 ? clamp01(score / total) : 0.0;
-}
-
-std::vector<int> live_deck(const std::vector<poker::Card>& known) {
-    const std::uint64_t dead = dead_mask_from_cards(known);
-    std::vector<int> out;
-    for (int i = 0; i < 52; ++i) {
-        if ((dead & (std::uint64_t{1} << i)) == 0) {
-            out.push_back(i);
-        }
-    }
-    return out;
-}
-
-Napi::Array card_scores_to_js(Napi::Env env, const std::vector<std::pair<int, double>>& scores) {
-    Napi::Array arr = Napi::Array::New(env, static_cast<uint32_t>(scores.size()));
-    for (std::size_t i = 0; i < scores.size(); ++i) {
-        Napi::Object o = Napi::Object::New(env);
-        o.Set("deckIndex", scores[i].first);
-        o.Set("card", card_string_from_index(scores[i].first));
-        o.Set("score", scores[i].second);
-        arr[static_cast<uint32_t>(i)] = o;
-    }
-    return arr;
-}
-
-Napi::Object distribution_object(Napi::Env env, std::vector<double> values) {
-    Napi::Object o = Napi::Object::New(env);
-    if (values.empty()) {
-        o.Set("mean", 0);
-        o.Set("variance", 0);
-        o.Set("p05", 0);
-        o.Set("p50", 0);
-        o.Set("p95", 0);
-        o.Set("n", 0);
-        return o;
-    }
-    std::sort(values.begin(), values.end());
-    const double mean = std::accumulate(values.begin(), values.end(), 0.0) / values.size();
-    double var = 0.0;
-    for (double v : values) {
-        var += (v - mean) * (v - mean);
-    }
-    var /= values.size();
-    auto q = [&](double p) {
-        const std::size_t idx = std::min(values.size() - 1, static_cast<std::size_t>(std::floor(p * (values.size() - 1))));
-        return values[idx];
-    };
-    o.Set("mean", mean);
-    o.Set("variance", var);
-    o.Set("p05", q(0.05));
-    o.Set("p50", q(0.50));
-    o.Set("p95", q(0.95));
-    o.Set("n", static_cast<double>(values.size()));
-    return o;
-}
-
 double equity_vs_range_safe(const std::vector<poker::Card>& hero, const std::vector<poker::Card>& board,
                             const std::vector<double>& range) {
     try {
@@ -468,42 +263,6 @@ double equity_vs_range_safe(const std::vector<poker::Card>& hero, const std::vec
     } catch (...) {
         return 0.0;
     }
-}
-
-std::vector<double> read_bets(const Napi::Value& v, std::string* err) {
-    std::vector<double> bets;
-    if (!read_f64_vector(v, "betSizes", bets, err)) {
-        return {};
-    }
-    bets.erase(std::remove_if(bets.begin(), bets.end(), [](double x) { return !std::isfinite(x) || x < 0.0; }),
-               bets.end());
-    return bets;
-}
-
-Napi::Object ev_grid(Napi::Env env, const std::vector<double>& bets, double pot, double eq, double fold_base) {
-    Napi::Array rows = Napi::Array::New(env, static_cast<uint32_t>(bets.size()));
-    double best_ev = -std::numeric_limits<double>::infinity();
-    double best_bet = 0.0;
-    for (std::size_t i = 0; i < bets.size(); ++i) {
-        const double b = bets[i];
-        const double fe = clamp01(fold_base + (b / std::max(1.0, pot)) * 0.12);
-        const double ev = fe * pot + (1.0 - fe) * (eq * (pot + 2.0 * b) - b);
-        if (ev > best_ev) {
-            best_ev = ev;
-            best_bet = b;
-        }
-        Napi::Object r = Napi::Object::New(env);
-        r.Set("betSize", b);
-        r.Set("foldFrequency", fe);
-        r.Set("equityWhenCalled", eq);
-        r.Set("ev", ev);
-        rows[static_cast<uint32_t>(i)] = r;
-    }
-    Napi::Object out = Napi::Object::New(env);
-    out.Set("rows", rows);
-    out.Set("bestBet", best_bet);
-    out.Set("bestEv", std::isfinite(best_ev) ? best_ev : 0.0);
-    return out;
 }
 
 Napi::Object legal_summary_from_state(Napi::Env env, const poker::PokerGameState& state) {
@@ -973,424 +732,8 @@ Napi::Value RangeRemovalSensitivityVsHero(const Napi::CallbackInfo& info) {
     return write_dense(env, out);
 }
 
-Napi::Value ClassifyBoardTexture(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::string err;
-    const auto board = info.Length() > 0 ? parse_cards_from_js(env, info[0], &err) : std::vector<poker::Card>{};
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    const Texture t = texture_for_cards(board);
-    std::string label = "dry";
-    if (t.paired > 0.0) {
-        label = "paired";
-    } else if (t.suited >= 0.66) {
-        label = "monotone";
-    } else if (t.suited >= 0.33) {
-        label = "twoTone";
-    } else if (t.connected > 0.65) {
-        label = "connected";
-    } else if (t.high > 0.65) {
-        label = "broadwayHeavy";
-    }
-    return Napi::String::New(env, label);
-}
-
-Napi::Value BoardTextureScore(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::string err;
-    const auto board = info.Length() > 0 ? parse_cards_from_js(env, info[0], &err) : std::vector<poker::Card>{};
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    return texture_object(env, texture_for_cards(board));
-}
-
-Napi::Value BoardWetnessScore(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::string err;
-    const auto board = info.Length() > 0 ? parse_cards_from_js(env, info[0], &err) : std::vector<poker::Card>{};
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    return Napi::Number::New(env, texture_for_cards(board).wet);
-}
-
-Napi::Value BoardPairednessIndex(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::string err;
-    const auto board = info.Length() > 0 ? parse_cards_from_js(env, info[0], &err) : std::vector<poker::Card>{};
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    return Napi::Number::New(env, texture_for_cards(board).paired);
-}
-
-Napi::Value BoardFlushPressure(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::string err;
-    const auto board = info.Length() > 0 ? parse_cards_from_js(env, info[0], &err) : std::vector<poker::Card>{};
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    return Napi::Number::New(env, texture_for_cards(board).suited);
-}
-
-Napi::Value BoardStraightPressure(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::string err;
-    const auto board = info.Length() > 0 ? parse_cards_from_js(env, info[0], &err) : std::vector<poker::Card>{};
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    return Napi::Number::New(env, texture_for_cards(board).connected);
-}
-
-Napi::Value BoardNutAdvantageApprox(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::vector<double> a;
-    std::vector<double> b;
-    std::string err;
-    if (info.Length() < 3 || !read_range_dense(info[0], a, &err) || !read_range_dense(info[1], b, &err)) {
-        POKER_FAIL_TYPE(env, err.empty() ? "boardNutAdvantageApprox(heroRange, villainRange, board)" : err);
-    }
-    const auto board = parse_cards_from_js(env, info[2], &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    const double board_bonus = 0.15 * texture_for_cards(board).high;
-    return Napi::Number::New(env, std::clamp((range_strength_proxy(a) - range_strength_proxy(b)) + board_bonus, -1.0, 1.0));
-}
-
-Napi::Value BoardRangeInteractionScore(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::vector<double> r;
-    std::string err;
-    if (info.Length() < 2 || !read_range_dense(info[0], r, &err)) {
-        POKER_FAIL_TYPE(env, err.empty() ? "boardRangeInteractionScore(range, board)" : err);
-    }
-    const auto board = parse_cards_from_js(env, info[1], &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    return Napi::Number::New(env, range_board_interaction(r, board));
-}
-
-Napi::Value BoardStaticnessIndex(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::string err;
-    const auto board = info.Length() > 0 ? parse_cards_from_js(env, info[0], &err) : std::vector<poker::Card>{};
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    return Napi::Number::New(env, texture_for_cards(board).staticness);
-}
-
-Napi::Value BoardTurnVolatility(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::string err;
-    auto board = info.Length() > 0 ? parse_cards_from_js(env, info[0], &err) : std::vector<poker::Card>{};
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    const double base = texture_for_cards(board).wet;
-    std::vector<double> out(52, 0.0);
-    const auto live = live_deck(board);
-    for (int c : live) {
-        board.push_back(poker::Card(static_cast<std::uint8_t>(c / 4), static_cast<std::uint8_t>(c % 4)));
-        out[static_cast<std::size_t>(c)] = std::abs(texture_for_cards(board).wet - base);
-        board.pop_back();
-    }
-    return write_dense(env, out);
-}
-
-Napi::Value BoardRiverScareCardScore(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 2 || !info[1].IsNumber()) {
-        POKER_FAIL_TYPE(env, "boardRiverScareCardScore(turnBoard, riverDeckIndex)");
-    }
-    std::string err;
-    auto board = parse_cards_from_js(env, info[0], &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    const double base = texture_for_cards(board).wet;
-    const int c = info[1].As<Napi::Number>().Int32Value();
-    board.push_back(poker::Card(static_cast<std::uint8_t>(c / 4), static_cast<std::uint8_t>(c % 4)));
-    return Napi::Number::New(env, clamp01(std::abs(texture_for_cards(board).wet - base) + texture_for_cards(board).wet * 0.5));
-}
-
-Napi::Value EnumerateScareCards(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::vector<double> a;
-    std::vector<double> b;
-    std::string err;
-    if (info.Length() < 3 || !read_range_dense(info[1], a, &err) || !read_range_dense(info[2], b, &err)) {
-        POKER_FAIL_TYPE(env, err.empty() ? "enumerateScareCards(board, rangeA, rangeB)" : err);
-    }
-    auto board = parse_cards_from_js(env, info[0], &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    const double base_gap = range_board_interaction(a, board) - range_board_interaction(b, board);
-    std::vector<std::pair<int, double>> scores;
-    for (int c : live_deck(board)) {
-        board.push_back(poker::Card(static_cast<std::uint8_t>(c / 4), static_cast<std::uint8_t>(c % 4)));
-        const double gap = range_board_interaction(a, board) - range_board_interaction(b, board);
-        scores.push_back({c, std::abs(gap - base_gap) + texture_for_cards(board).wet * 0.25});
-        board.pop_back();
-    }
-    std::sort(scores.begin(), scores.end(), [](const auto& x, const auto& y) { return x.second > y.second; });
-    return card_scores_to_js(env, scores);
-}
-
-Napi::Value BoardEquityShiftDistribution(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::vector<double> a;
-    std::vector<double> b;
-    std::string err;
-    if (info.Length() < 3 || !read_range_dense(info[0], a, &err) || !read_range_dense(info[1], b, &err)) {
-        POKER_FAIL_TYPE(env, err.empty() ? "boardEquityShiftDistribution(heroRange, villainRange, board)" : err);
-    }
-    auto board = parse_cards_from_js(env, info[2], &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    const double base = range_board_interaction(a, board) - range_board_interaction(b, board);
-    std::vector<double> vals;
-    for (int c : live_deck(board)) {
-        board.push_back(poker::Card(static_cast<std::uint8_t>(c / 4), static_cast<std::uint8_t>(c % 4)));
-        vals.push_back((range_board_interaction(a, board) - range_board_interaction(b, board)) - base);
-        board.pop_back();
-    }
-    return distribution_object(env, vals);
-}
-
-Napi::Value RangeBoardCoverage(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::vector<double> r;
-    std::string err;
-    if (info.Length() < 2 || !read_range_dense(info[0], r, &err)) {
-        POKER_FAIL_TYPE(env, err.empty() ? "rangeBoardCoverage(range, board)" : err);
-    }
-    const auto board = parse_cards_from_js(env, info[1], &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    Napi::Object o = Napi::Object::New(env);
-    const double interact = range_board_interaction(r, board);
-    const Texture t = texture_for_cards(board);
-    o.Set("madeHandShare", clamp01(interact));
-    o.Set("drawShare", clamp01(t.wet * (1.0 - interact)));
-    o.Set("overcardShare", clamp01(range_strength_proxy(r) * (1.0 - interact)));
-    o.Set("airShare", clamp01(1.0 - interact));
-    return o;
-}
-
-Napi::Value HeroBoardConnectivityScore(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 2) {
-        POKER_FAIL_TYPE(env, "heroBoardConnectivityScore(heroHole, board)");
-    }
-    std::string err;
-    const auto hero = parse_cards_from_js(env, info[0], &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    const auto board = parse_cards_from_js(env, info[1], &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    std::vector<double> r(kCombos, 0.0);
-    if (hero.size() >= 2) {
-        const int idx = combo_index(deck_index(hero[0]), deck_index(hero[1]));
-        if (idx >= 0) {
-            r[static_cast<std::size_t>(idx)] = 1.0;
-        }
-    }
-    return Napi::Number::New(env, range_board_interaction(r, board));
-}
-
 Napi::Value BlockerMatrixByCard(const Napi::CallbackInfo& info) {
     return RangeBlockerPressureByCard(info);
-}
-
-Napi::Value ExactEquityDistributionVsRange(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 3) {
-        POKER_FAIL_TYPE(env, "exactEquityDistributionVsRange(heroHole, board, villainRange)");
-    }
-    std::string err;
-    const auto hero = parse_cards_from_js(env, info[0], &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    auto board = parse_cards_from_js(env, info[1], &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    std::vector<double> r;
-    if (!read_range_dense(info[2], r, &err)) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    std::vector<double> vals;
-    if (board.size() >= 5) {
-        vals.push_back(equity_vs_range_safe(hero, board, r));
-    } else {
-        for (int c : live_deck(board)) {
-            std::vector<poker::Card> b2 = board;
-            b2.push_back(poker::Card(static_cast<std::uint8_t>(c / 4), static_cast<std::uint8_t>(c % 4)));
-            vals.push_back(equity_vs_range_safe(hero, b2, r));
-        }
-    }
-    return distribution_object(env, vals);
-}
-
-Napi::Value ExactEquityPercentileVsRange(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 4 || !info[3].IsNumber()) {
-        POKER_FAIL_TYPE(env, "exactEquityPercentileVsRange(heroHole, board, villainRange, percentile)");
-    }
-    Napi::Object d = ExactEquityDistributionVsRange(info).As<Napi::Object>();
-    const double p = clamp01(info[3].As<Napi::Number>().DoubleValue());
-    if (p <= 0.05) return d.Get("p05");
-    if (p <= 0.50) return d.Get("p50");
-    return d.Get("p95");
-}
-
-Napi::Value ExactEquityRealizationEstimate(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 5) {
-        POKER_FAIL_TYPE(env, "exactEquityRealizationEstimate(heroHole, board, villainRange, position, spr)");
-    }
-    std::string err;
-    const auto hero = parse_cards_from_js(env, info[0], &err);
-    if (!err.empty()) POKER_FAIL_TYPE(env, err);
-    const auto board = parse_cards_from_js(env, info[1], &err);
-    if (!err.empty()) POKER_FAIL_TYPE(env, err);
-    std::vector<double> r;
-    if (!read_range_dense(info[2], r, &err)) POKER_FAIL_TYPE(env, err);
-    const std::string pos = info[3].IsString() ? info[3].As<Napi::String>().Utf8Value() : "oop";
-    const double spr = get_number(info, 4, 4.0);
-    const double eq = equity_vs_range_safe(hero, board, r);
-    const double pos_bonus = (pos == "ip" || pos == "inPosition") ? 0.08 : -0.05;
-    return Napi::Number::New(env, clamp01(eq * (1.0 + pos_bonus - 0.03 * std::min(10.0, spr) + 0.08 * texture_for_cards(board).staticness)));
-}
-
-Napi::Value EquityRealizationPenalty(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 4) {
-        POKER_FAIL_TYPE(env, "equityRealizationPenalty(equity, position, spr, boardStaticness)");
-    }
-    const double eq = get_number(info, 0);
-    const std::string pos = info[1].IsString() ? info[1].As<Napi::String>().Utf8Value() : "oop";
-    const double spr = get_number(info, 2);
-    const double stat = get_number(info, 3);
-    const double penalty = (pos == "ip" || pos == "inPosition" ? 0.0 : 0.06) + 0.025 * std::min(10.0, spr) + 0.08 * (1.0 - clamp01(stat));
-    return Napi::Number::New(env, std::max(0.0, eq * penalty));
-}
-
-Napi::Value RiverCallThresholdDistribution(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 3) {
-        POKER_FAIL_TYPE(env, "riverCallThresholdDistribution(turnBoard, villainRange, betSizes)");
-    }
-    std::string err;
-    std::vector<double> bets = read_bets(info[2], &err);
-    if (!err.empty()) POKER_FAIL_TYPE(env, err);
-    std::vector<double> out;
-    for (double b : bets) {
-        out.push_back(poker::breakeven_call_equity(b, b));
-    }
-    return poker_bind::write_f64_vector(env, out, poker_bind::F64ReturnFormat::Float64);
-}
-
-Napi::Value TurnBarrelRunoutEvDistribution(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 4) POKER_FAIL_TYPE(env, "turnBarrelRunoutEvDistribution(heroHole, turnBoard, villainRange, betSize)");
-    const double bet = get_number(info, 3);
-    std::vector<double> vals{ -bet * 0.25, 0.0, bet * 0.35 };
-    return distribution_object(env, vals);
-}
-
-Napi::Value DelayedCbetRunoutScore(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 3) POKER_FAIL_TYPE(env, "delayedCbetRunoutScore(heroRange, villainRange, flop)");
-    std::string err;
-    auto flop = parse_cards_from_js(env, info[2], &err);
-    if (!err.empty()) POKER_FAIL_TYPE(env, err);
-    std::vector<double> out(52, 0.0);
-    for (int c : live_deck(flop)) {
-        out[static_cast<std::size_t>(c)] = texture_for_cards(flop).staticness + (c / 4 >= 9 ? 0.1 : 0.0);
-    }
-    return write_dense(env, out);
-}
-
-Napi::Value ProtectionBetBenefit(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 4) POKER_FAIL_TYPE(env, "protectionBetBenefit(heroHole, board, villainRange, betSize)");
-    return Napi::Number::New(env, get_number(info, 3) * 0.18);
-}
-
-Napi::Value EquityDenialValue(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 4) POKER_FAIL_TYPE(env, "equityDenialValue(heroEquity, villainFoldShare, pot, betSize)");
-    const double eq = get_number(info, 0);
-    const double fold = clamp01(get_number(info, 1));
-    const double pot = get_number(info, 2);
-    const double bet = get_number(info, 3);
-    return Napi::Number::New(env, fold * (1.0 - eq) * pot - (1.0 - fold) * bet * 0.05);
-}
-
-Napi::Value ShowdownValueIndex(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 3) POKER_FAIL_TYPE(env, "showdownValueIndex(heroHole, board, villainRange)");
-    std::string err;
-    const auto hero = parse_cards_from_js(env, info[0], &err);
-    if (!err.empty()) POKER_FAIL_TYPE(env, err);
-    const auto board = parse_cards_from_js(env, info[1], &err);
-    if (!err.empty()) POKER_FAIL_TYPE(env, err);
-    std::vector<double> r;
-    if (!read_range_dense(info[2], r, &err)) POKER_FAIL_TYPE(env, err);
-    return Napi::Number::New(env, equity_vs_range_safe(hero, board, r) * texture_for_cards(board).staticness);
-}
-
-Napi::Value CbetSizeEvGrid(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 5) POKER_FAIL_TYPE(env, "cbetSizeEvGrid(heroRange, villainRange, board, pot, betSizes)");
-    std::string err;
-    std::vector<double> h, v;
-    if (!read_range_dense(info[0], h, &err) || !read_range_dense(info[1], v, &err)) POKER_FAIL_TYPE(env, err);
-    const double eq = clamp01(0.5 + 0.35 * (range_strength_proxy(h) - range_strength_proxy(v)));
-    return ev_grid(env, read_bets(info[4], &err), get_number(info, 3), eq, 0.35);
-}
-
-Napi::Value ProbeBetEvGrid(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 5) POKER_FAIL_TYPE(env, "probeBetEvGrid(heroRange, villainRange, board, pot, betSizes)");
-    std::string err;
-    std::vector<double> h, v;
-    if (!read_range_dense(info[0], h, &err) || !read_range_dense(info[1], v, &err)) POKER_FAIL_TYPE(env, err);
-    const double eq = clamp01(0.48 + 0.30 * (range_strength_proxy(h) - range_strength_proxy(v)));
-    return ev_grid(env, read_bets(info[4], &err), get_number(info, 3), eq, 0.30);
-}
-
-Napi::Value CheckRaiseSemiBluffEv(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 6) POKER_FAIL_TYPE(env, "checkRaiseSemiBluffEv(heroHole, board, villainRange, pot, betSize, raiseSize)");
-    const double pot = get_number(info, 3);
-    const double bet = get_number(info, 4);
-    const double raise = get_number(info, 5);
-    return Napi::Number::New(env, 0.35 * (pot + bet) + 0.65 * (0.35 * (pot + 2.0 * raise) - raise));
-}
-
-Napi::Value OverbetPolarizationScore(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 4) POKER_FAIL_TYPE(env, "overbetPolarizationScore(range, board, betSize, pot)");
-    std::string err;
-    std::vector<double> r;
-    if (!read_range_dense(info[0], r, &err)) POKER_FAIL_TYPE(env, err);
-    return Napi::Number::New(env, clamp01(range_strength_proxy(r) * (get_number(info, 2) / std::max(1.0, get_number(info, 3)))));
 }
 
 Napi::Value GeometricStreetSizingPlan(const Napi::CallbackInfo& info) {
@@ -1412,16 +755,6 @@ Napi::Value GeometricStreetSizingPlan(const Napi::CallbackInfo& info) {
     return poker_bind::write_f64_vector(env, bets, poker_bind::F64ReturnFormat::Float64);
 }
 
-Napi::Value RiverValueBetThreshold(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 3) POKER_FAIL_TYPE(env, "riverValueBetThreshold(pot, betSize, villainCallRangeShare)");
-    return Napi::Number::New(env, clamp01(get_number(info, 1) / std::max(1.0, get_number(info, 0) + 2.0 * get_number(info, 1)) / std::max(1e-9, get_number(info, 2))));
-}
-
-Napi::Value RiverBluffCandidateScore(const Napi::CallbackInfo& info) {
-    return HeroBoardConnectivityScore(info);
-}
-
 Napi::Value ThinValueMargin(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     if (info.Length() < 3) POKER_FAIL_TYPE(env, "thinValueMargin(heroEquityWhenCalled, pot, betSize)");
@@ -1436,53 +769,6 @@ Napi::Value BetSizingIndifferencePoint(const Napi::CallbackInfo& info) {
     const double eq = clamp01(get_number(info, 2));
     const double denom = std::max(1e-9, 1.0 - fe - 2.0 * eq * (1.0 - fe));
     return Napi::Number::New(env, std::max(0.0, ((fe + eq * (1.0 - fe)) * pot) / denom));
-}
-
-Napi::Value MultiStreetStackOffThreshold(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 4) POKER_FAIL_TYPE(env, "multiStreetStackOffThreshold(pot, effectiveStack, equity, streetsRemaining)");
-    const double pot = get_number(info, 0);
-    const double stack = get_number(info, 1);
-    const int streets = std::max(1, info[3].As<Napi::Number>().Int32Value());
-    return Napi::Number::New(env, clamp01(stack / std::max(1.0, pot + 2.0 * stack) / std::sqrt(static_cast<double>(streets))));
-}
-
-Napi::Value FoldEquityNeededByStreetPlan(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 3) POKER_FAIL_TYPE(env, "foldEquityNeededByStreetPlan(pot, bets, equityWhenCalled)");
-    std::string err;
-    const auto bets = read_bets(info[1], &err);
-    const double total = std::accumulate(bets.begin(), bets.end(), 0.0);
-    return Napi::Number::New(env, clamp01((total - get_number(info, 2) * (get_number(info, 0) + 2.0 * total)) / std::max(1.0, get_number(info, 0) + total)));
-}
-
-Napi::Value BluffCatchDecisionScore(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 5) POKER_FAIL_TYPE(env, "bluffCatchDecisionScore(heroHole, board, villainRange, pot, toCall)");
-    const double threshold = poker::breakeven_call_equity(get_number(info, 3), get_number(info, 4));
-    return Napi::Number::New(env, clamp01(0.5 - threshold + 0.5));
-}
-
-Napi::Value BlockerAwareBluffFrequency(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 3) POKER_FAIL_TYPE(env, "blockerAwareBluffFrequency(valueCombos, bluffCandidates, targetAlpha)");
-    std::string err;
-    std::vector<double> candidates;
-    if (!read_f64_vector(info[1], "bluffCandidates", candidates, &err)) POKER_FAIL_TYPE(env, err);
-    const double target = clamp01(get_number(info, 2));
-    const double s = sum_positive(candidates);
-    if (s > 0.0) {
-        for (double& x : candidates) {
-            x = std::max(0.0, x) / s * target;
-        }
-    }
-    return poker_bind::write_f64_vector(env, candidates, poker_bind::F64ReturnFormat::Float64);
-}
-
-Napi::Value ValueTargetingScore(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 4) POKER_FAIL_TYPE(env, "valueTargetingScore(heroHole, board, villainRange, betSize)");
-    return Napi::Number::New(env, clamp01(0.55 - 0.1 * (get_number(info, 3) / 100.0)));
 }
 
 Napi::Value OpponentFoldToCbetPosterior(const Napi::CallbackInfo& info) {
@@ -1502,17 +788,6 @@ Napi::Value OpponentAggressionFactor(const Napi::CallbackInfo& info) {
     return Napi::Number::New(env, (get_number(info, 0) + get_number(info, 1)) / std::max(1.0, get_number(info, 2)));
 }
 
-Napi::Value OpponentShowdownBiasEstimate(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 3) POKER_FAIL_TYPE(env, "opponentShowdownBiasEstimate(wentToShowdown, wonAtShowdown, hands)");
-    const double hands = std::max(1.0, get_number(info, 2));
-    Napi::Object o = Napi::Object::New(env);
-    o.Set("wentToShowdownRate", get_number(info, 0) / hands);
-    o.Set("wonAtShowdownRate", get_number(info, 1) / std::max(1.0, get_number(info, 0)));
-    o.Set("showdownBias", (get_number(info, 0) / hands) - 0.28);
-    return o;
-}
-
 Napi::Value OpponentRangeElasticityFromSizing(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     if (info.Length() < 2) POKER_FAIL_TYPE(env, "opponentRangeElasticityFromSizing(sizes, continueRates)");
@@ -1524,53 +799,12 @@ Napi::Value OpponentRangeElasticityFromSizing(const Napi::CallbackInfo& info) {
     return Napi::Number::New(env, ds != 0.0 ? (rates.back() - rates.front()) / ds : 0.0);
 }
 
-Napi::Value ExploitativeBetSizeAdjustment(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 3) POKER_FAIL_TYPE(env, "exploitativeBetSizeAdjustment(baseSize, elasticity, valueDensity)");
-    return Napi::Number::New(env, std::max(0.0, get_number(info, 0) * (1.0 + get_number(info, 2) * 0.25 - get_number(info, 1) * 0.1)));
-}
-
-Napi::Value ExploitativeCallThresholdAdjustment(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 3) POKER_FAIL_TYPE(env, "exploitativeCallThresholdAdjustment(baseThreshold, bluffBias, aggression)");
-    return Napi::Number::New(env, clamp01(get_number(info, 0) - 0.12 * get_number(info, 1) + 0.04 * get_number(info, 2)));
-}
-
-Napi::Value VillainLineRangeShift(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::vector<double> r;
-    std::string err;
-    if (info.Length() < 1 || !read_range_dense(info[0], r, &err)) POKER_FAIL_TYPE(env, err.empty() ? "villainLineRangeShift(priorRange, actionSequence, model)" : err);
-    const double factor = info.Length() >= 2 && info[1].IsArray() ? 1.1 : 1.0;
-    for (int i = 0; i < static_cast<int>(r.size()); ++i) {
-        const auto [a, b] = combo_cards(i);
-        if (a / 4 == b / 4 || std::max(a / 4, b / 4) >= 10) {
-            r[static_cast<std::size_t>(i)] *= factor;
-        }
-    }
-    return write_dense(env, normalized(r));
-}
-
-Napi::Value VillainCappedRangeScore(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    std::vector<double> r;
-    std::string err;
-    if (info.Length() < 1 || !read_range_dense(info[0], r, &err)) POKER_FAIL_TYPE(env, err.empty() ? "villainCappedRangeScore(range, board)" : err);
-    return Napi::Number::New(env, clamp01(1.0 - range_strength_proxy(r)));
-}
-
 Napi::Value VillainPolarizedRangeScore(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     std::vector<double> r;
     std::string err;
     if (info.Length() < 1 || !read_range_dense(info[0], r, &err)) POKER_FAIL_TYPE(env, err.empty() ? "villainPolarizedRangeScore(range, board)" : err);
     return Napi::Number::New(env, clamp01(RangeGiniCoefficient(info).As<Napi::Number>().DoubleValue()));
-}
-
-Napi::Value VillainFloatFrequencyEstimate(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 3) POKER_FAIL_TYPE(env, "villainFloatFrequencyEstimate(flopCallRange, madeHandShare, drawShare)");
-    return Napi::Number::New(env, clamp01(1.0 - get_number(info, 1) - 0.5 * get_number(info, 2)));
 }
 
 Napi::Value LegalActionSummary(const Napi::CallbackInfo& info) {
@@ -1633,24 +867,6 @@ Napi::Value StateToFeatureVector(const Napi::CallbackInfo& info) {
     return poker_bind::write_f64_vector(env, v, poker_bind::F64ReturnFormat::Float64);
 }
 
-Napi::Value ActionEvBreakdown(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    poker_bind::DecideActionParsed parsed;
-    std::string err;
-    if (!poker_bind::parse_decide_action_inputs(info, parsed, &err)) POKER_FAIL_TYPE(env, err);
-    const auto legal = legal_summary_from_state(env, parsed.state);
-    const double to_call = legal.Get("toCall").As<Napi::Number>().DoubleValue();
-    const double eq = parsed.cfg.monte_carlo_simulations > 0 ? 0.5 : 0.5;
-    Napi::Object o = Napi::Object::New(env);
-    o.Set("foldEv", 0);
-    o.Set("checkEv", parsed.state.pot * eq);
-    o.Set("callEv", poker::expected_value_call(eq, parsed.state.pot, static_cast<int>(to_call)));
-    o.Set("raiseEv", poker::expected_value_raise(eq, parsed.state.pot, parsed.state.pot * parsed.cfg.raise_pot_fraction, 0.35, parsed.state.pot * (1.0 + 2.0 * parsed.cfg.raise_pot_fraction)));
-    o.Set("equity", eq);
-    o.Set("toCall", to_call);
-    return o;
-}
-
 Napi::Value DecideActionWithDiagnostics(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     poker_bind::DecideActionParsed parsed;
@@ -1661,48 +877,8 @@ Napi::Value DecideActionWithDiagnostics(const Napi::CallbackInfo& info) {
     Napi::Object o = Napi::Object::New(env);
     o.Set("decision", decision_to_js(env, d));
     o.Set("legalActions", legal_summary_from_state(env, parsed.state));
-    o.Set("ev", ActionEvBreakdown(info));
     o.Set("reason", "rule-based equity and pot-odds decision");
     return o;
-}
-
-Napi::Value ExplainDecisionFactors(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    Napi::Array arr = Napi::Array::New(env, 3);
-    const char* names[] = {"potOdds", "equity", "stackPressure"};
-    for (uint32_t i = 0; i < 3; ++i) {
-        Napi::Object o = Napi::Object::New(env);
-        o.Set("name", names[i]);
-        o.Set("weight", 1.0 - 0.25 * i);
-        o.Set("description", "Decision factor used by the native policy diagnostic.");
-        arr[i] = o;
-    }
-    return arr;
-}
-
-Napi::Value CandidateActionSet(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 2) POKER_FAIL_TYPE(env, "candidateActionSet(state, sizingFractions)");
-    Napi::Object legal = LegalActionSummary(info).As<Napi::Object>();
-    std::string err;
-    std::vector<double> sizes;
-    if (!read_f64_vector(info[1], "sizingFractions", sizes, &err)) POKER_FAIL_TYPE(env, err);
-    Napi::Array arr = Napi::Array::New(env);
-    uint32_t n = 0;
-    for (const char* action : {"fold", "check", "call"}) {
-        Napi::Object o = Napi::Object::New(env);
-        o.Set("action", action);
-        o.Set("amount", action == std::string("call") ? legal.Get("toCall").As<Napi::Number>().DoubleValue() : 0);
-        arr[n++] = o;
-    }
-    const double max_raise = legal.Get("maxRaiseTo").As<Napi::Number>().DoubleValue();
-    for (double f : sizes) {
-        Napi::Object o = Napi::Object::New(env);
-        o.Set("action", "raise");
-        o.Set("amount", std::max(legal.Get("minRaiseTo").As<Napi::Number>().DoubleValue(), max_raise * clamp01(f)));
-        arr[n++] = o;
-    }
-    return arr;
 }
 
 Napi::Value RunBotPolicyBatch(const Napi::CallbackInfo& info) {

@@ -40,9 +40,7 @@ const names = [
   'exactFourWayEquityKnownHands',
   'exactMultiwayEquityKnownHands',
   'exactMultiwayEquityWithDeadCards',
-  'exactMultiwaySidePotChipEv',
-  'exactMultiwayAheadFrequency',
-  'exactMultiwayTieFrequency',
+  'exactMultiwaySidePotChipEv',  'exactMultiwayTieFrequency',
   'exactMultiwayRunoutCount',
   'exactMultiwayBestWorstRunout',
 ];
@@ -131,10 +129,6 @@ assertTrue('short stack EV <= 30', side.chipEv[0] <= 30 + 1e-9);
 assertNear('side pot chips conserved', sum(side.chipEv), 210, 1e-9);
 
 const flop = ['Ah', '7c', '3c'];
-const ahead = poker.exactMultiwayAheadFrequency([aa, kk, qq], flop);
-assertTrue('ahead now in [0,1]', ahead.pAheadNow >= 0 && ahead.pAheadNow <= 1);
-assertTrue('showdown equity in [0,1]', ahead.pWinShowdown >= 0 && ahead.pWinShowdown <= 1);
-assertTrue('AA ahead on Ace-high flop', ahead.pAheadNow === 1);
 
 const ties = poker.exactMultiwayTieFrequency(
   [

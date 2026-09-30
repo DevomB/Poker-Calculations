@@ -21,6 +21,10 @@ struct OmahaWrapDrawOuts {
     int nut_outs{0};
 };
 
+/// Best 5-card using exactly 2 of `hole_n` hole cards + exactly 3 board. `hole_n` is 4 (PLO) or 5 (Big O).
+[[nodiscard]] HandEvaluation plo_best_two_plus_three(const int* hole, int hole_n, const int* board,
+                                                     int board_n);
+
 /// Best 5-card Omaha hand: exactly 2 hole + exactly 3 board. `hole` is 4 cards; `board` is 3–5.
 [[nodiscard]] HandEvaluation evaluate_omaha_best_hand(const std::vector<Card>& hole,
                                                       const std::vector<Card>& board);

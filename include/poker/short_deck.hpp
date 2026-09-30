@@ -33,7 +33,7 @@ inline constexpr int kShortDeckMinRank = 4;  // 6
 inline constexpr int kShortDeckHandClasses = 81;  // 9 pairs + 36 suited + 36 offsuit (not 169, not 91)
 inline constexpr int kShortDeckNashDefaultIterations = 50;
 inline constexpr int kShortDeckNashMaxIterations = 80;
-inline constexpr int kShortDeckNashDefaultEquityIterations = 24;
+inline constexpr int kShortDeckNashDefaultEquityIterations = 80;
 
 enum class ShortDeckRank {
     HighCard = 0,

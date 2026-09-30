@@ -17,9 +17,14 @@
 #include "binding_nash_push_fold.hpp"
 #include "binding_suit_isomorphism.hpp"
 #include "binding_omaha.hpp"
+#include "binding_omaha_hi_lo.hpp"
+#include "binding_big_o.hpp"
 #include "binding_mtt_spots.hpp"
 #include "binding_short_deck.hpp"
 #include "binding_hand_potential.hpp"
+#include "binding_deuce_seven.hpp"
+#include "binding_flop_cfr_buckets.hpp"
+#include "binding_stud_razz.hpp"
 
 Napi::Value EvaluateBestHand(const Napi::CallbackInfo& info);
 Napi::Value EvaluateHandStrength(const Napi::CallbackInfo& info);
@@ -75,7 +80,6 @@ Napi::Value FlopToRiverAtLeastOneHitUnionThreeCategories(const Napi::CallbackInf
 Napi::Value FlopToRiverAtLeastOneHitUnionFourCategories(const Napi::CallbackInfo& info);
 Napi::Value FlopToRiverAtLeastOneHitDisjointOutsSum(const Napi::CallbackInfo& info);
 Napi::Value RunnerRunnerStraightDrawHitProbability(const Napi::CallbackInfo& info);
-Napi::Value ReverseImpliedOddsMaxFutureLoss(const Napi::CallbackInfo& info);
 Napi::Value GeometricPotAfterMatchedPotFractions(const Napi::CallbackInfo& info);
 Napi::Value HarringtonM(const Napi::CallbackInfo& info);
 Napi::Value HarringtonMEffective(const Napi::CallbackInfo& info);
@@ -90,7 +94,6 @@ Napi::Value KellyCriterionBinary(const Napi::CallbackInfo& info);
 Napi::Value MonteCarloStandardError(const Napi::CallbackInfo& info);
 Napi::Value MonteCarloTrialsForStandardErrorBound(const Napi::CallbackInfo& info);
 Napi::Value BetaBinomialFoldPosterior(const Napi::CallbackInfo& info);
-Napi::Value DuplicationAdjustedOuts(const Napi::CallbackInfo& info);
 Napi::Value RiskOfRuinDiffusionApprox(const Napi::CallbackInfo& info);
 Napi::Value BankrollForTargetRorDiffusion(const Napi::CallbackInfo& info);
 Napi::Value WilsonScoreInterval(const Napi::CallbackInfo& info);
@@ -153,8 +156,6 @@ Napi::Value BlockerAdjustedOuts(const Napi::CallbackInfo& info);
 Napi::Value SuitBlockerFraction(const Napi::CallbackInfo& info);
 Napi::Value NetPotAfterRake(const Napi::CallbackInfo& info);
 Napi::Value NetPotAfterCallAndRake(const Napi::CallbackInfo& info);
-Napi::Value EffectivePotOddsDisplayAfterRake(const Napi::CallbackInfo& info);
-Napi::Value ImpliedBreakevenTotalPot(const Napi::CallbackInfo& info);
 Napi::Value ImpliedOddsRequiredEquityFromFutureWin(const Napi::CallbackInfo& info);
 Napi::Value ExpectedValueRaise(const Napi::CallbackInfo& info);
 Napi::Value ExpectedValueRaiseWithRake(const Napi::CallbackInfo& info);
@@ -220,9 +221,9 @@ Napi::Value ExactThreeWayEquityKnownHands(const Napi::CallbackInfo& info);
 Napi::Value ExactThreeWayWinTieLoseKnownHands(const Napi::CallbackInfo& info);
 Napi::Value ExactFourWayEquityKnownHands(const Napi::CallbackInfo& info);
 Napi::Value ExactMultiwayEquityKnownHands(const Napi::CallbackInfo& info);
+Napi::Value ExactMultiwayWinTieLoseKnownHands(const Napi::CallbackInfo& info);
 Napi::Value ExactMultiwayEquityWithDeadCards(const Napi::CallbackInfo& info);
 Napi::Value ExactMultiwaySidePotChipEv(const Napi::CallbackInfo& info);
-Napi::Value ExactMultiwayAheadFrequency(const Napi::CallbackInfo& info);
 Napi::Value ExactMultiwayTieFrequency(const Napi::CallbackInfo& info);
 Napi::Value ExactMultiwayRunoutCount(const Napi::CallbackInfo& info);
 Napi::Value ExactMultiwayBestWorstRunout(const Napi::CallbackInfo& info);
@@ -302,7 +303,6 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("flopToRiverAtLeastOneHitUnionFourCategories", FlopToRiverAtLeastOneHitUnionFourCategories),
         Napi::PropertyDescriptor::Function("flopToRiverAtLeastOneHitDisjointOutsSum", FlopToRiverAtLeastOneHitDisjointOutsSum),
         Napi::PropertyDescriptor::Function("runnerRunnerStraightDrawHitProbability", RunnerRunnerStraightDrawHitProbability),
-        Napi::PropertyDescriptor::Function("reverseImpliedOddsMaxFutureLoss", ReverseImpliedOddsMaxFutureLoss),
         Napi::PropertyDescriptor::Function("geometricPotAfterMatchedPotFractions", GeometricPotAfterMatchedPotFractions),
         Napi::PropertyDescriptor::Function("harringtonM", HarringtonM),
         Napi::PropertyDescriptor::Function("harringtonMEffective", HarringtonMEffective),
@@ -317,7 +317,6 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("monteCarloStandardError", MonteCarloStandardError),
         Napi::PropertyDescriptor::Function("monteCarloTrialsForStandardErrorBound", MonteCarloTrialsForStandardErrorBound),
         Napi::PropertyDescriptor::Function("betaBinomialFoldPosterior", BetaBinomialFoldPosterior),
-        Napi::PropertyDescriptor::Function("duplicationAdjustedOuts", DuplicationAdjustedOuts),
         Napi::PropertyDescriptor::Function("riskOfRuinDiffusionApprox", RiskOfRuinDiffusionApprox),
         Napi::PropertyDescriptor::Function("bankrollForTargetRorDiffusion", BankrollForTargetRorDiffusion),
         Napi::PropertyDescriptor::Function("wilsonScoreInterval", WilsonScoreInterval),
@@ -365,22 +364,16 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("icmExpectedPayoutsWeitzman", IcmExpectedPayoutsWeitzman),
         Napi::PropertyDescriptor::Function("encodePokerState", poker_bind::EncodePokerState),
         Napi::PropertyDescriptor::Function("decodePokerState", poker_bind::DecodePokerState),
-        Napi::PropertyDescriptor::Function("icmShapleyValues", IcmShapleyValues),
         Napi::PropertyDescriptor::Function("icmHarvilleStackJacobian", IcmHarvilleStackJacobian),
         Napi::PropertyDescriptor::Function("icmHarvilleSkillAdjustedPayouts", IcmHarvilleSkillAdjustedPayouts),
-        Napi::PropertyDescriptor::Function("icmFieldPressureIndex", IcmFieldPressureIndex),
         Napi::PropertyDescriptor::Function("icmChopNegotiationAnalysis", IcmChopNegotiationAnalysis),
         Napi::PropertyDescriptor::Function("tournamentDuelAbsorptionProbabilities",
                                           TournamentDuelAbsorptionProbabilities),
-        Napi::PropertyDescriptor::Function("sidePotLayerTournamentEvDelta", SidePotLayerTournamentEvDelta),
         Napi::PropertyDescriptor::Function("materializeVillainRangeAfterBlockers",
                                           MaterializeVillainRangeAfterBlockers),
-        Napi::PropertyDescriptor::Function("bayesianRangeUpdateFromAction", BayesianRangeUpdateFromAction),
         Napi::PropertyDescriptor::Function("solveRiverPolarizedIndifferenceBet", SolveRiverPolarizedIndifferenceBet),
-        Napi::PropertyDescriptor::Function("solveStageMinimaxRegretBet", SolveStageMinimaxRegretBet),
         Napi::PropertyDescriptor::Function("exactInformationRegretVsClairvoyant",
                                           ExactInformationRegretVsClairvoyant),
-        Napi::PropertyDescriptor::Function("multiwayEquityIndependenceGap", MultiwayEquityIndependenceGap),
         Napi::PropertyDescriptor::Function("solveSymmetricPushFoldThreshold", SolveSymmetricPushFoldThreshold),
         Napi::PropertyDescriptor::Function("exactHeroRunoutVulnerability", ExactHeroRunoutVulnerability),
         Napi::PropertyDescriptor::Function("exactHeroRunoutVulnerabilityAsync", ExactHeroRunoutVulnerabilityAsync),
@@ -411,8 +404,6 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("suitBlockerFraction", SuitBlockerFraction),
         Napi::PropertyDescriptor::Function("netPotAfterRake", NetPotAfterRake),
         Napi::PropertyDescriptor::Function("netPotAfterCallAndRake", NetPotAfterCallAndRake),
-        Napi::PropertyDescriptor::Function("effectivePotOddsDisplayAfterRake", EffectivePotOddsDisplayAfterRake),
-        Napi::PropertyDescriptor::Function("impliedBreakevenTotalPot", ImpliedBreakevenTotalPot),
         Napi::PropertyDescriptor::Function("impliedOddsRequiredEquityFromFutureWin", ImpliedOddsRequiredEquityFromFutureWin),
         Napi::PropertyDescriptor::Function("expectedValueRaise", ExpectedValueRaise),
         Napi::PropertyDescriptor::Function("expectedValueRaiseWithRake", ExpectedValueRaiseWithRake),
@@ -494,65 +485,20 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("rangeFromNotationWeights", RangeFromNotationWeights),
         Napi::PropertyDescriptor::Function("rangeBlockerPressureByCard", RangeBlockerPressureByCard),
         Napi::PropertyDescriptor::Function("rangeRemovalSensitivityVsHero", RangeRemovalSensitivityVsHero),
-        Napi::PropertyDescriptor::Function("classifyBoardTexture", ClassifyBoardTexture),
-        Napi::PropertyDescriptor::Function("boardTextureScore", BoardTextureScore),
-        Napi::PropertyDescriptor::Function("boardWetnessScore", BoardWetnessScore),
-        Napi::PropertyDescriptor::Function("boardPairednessIndex", BoardPairednessIndex),
-        Napi::PropertyDescriptor::Function("boardFlushPressure", BoardFlushPressure),
-        Napi::PropertyDescriptor::Function("boardStraightPressure", BoardStraightPressure),
-        Napi::PropertyDescriptor::Function("boardNutAdvantageApprox", BoardNutAdvantageApprox),
-        Napi::PropertyDescriptor::Function("boardRangeInteractionScore", BoardRangeInteractionScore),
-        Napi::PropertyDescriptor::Function("boardStaticnessIndex", BoardStaticnessIndex),
-        Napi::PropertyDescriptor::Function("boardTurnVolatility", BoardTurnVolatility),
-        Napi::PropertyDescriptor::Function("boardRiverScareCardScore", BoardRiverScareCardScore),
-        Napi::PropertyDescriptor::Function("enumerateScareCards", EnumerateScareCards),
-        Napi::PropertyDescriptor::Function("boardEquityShiftDistribution", BoardEquityShiftDistribution),
-        Napi::PropertyDescriptor::Function("rangeBoardCoverage", RangeBoardCoverage),
-        Napi::PropertyDescriptor::Function("heroBoardConnectivityScore", HeroBoardConnectivityScore),
         Napi::PropertyDescriptor::Function("blockerMatrixByCard", BlockerMatrixByCard),
-        Napi::PropertyDescriptor::Function("exactEquityDistributionVsRange", ExactEquityDistributionVsRange),
-        Napi::PropertyDescriptor::Function("exactEquityPercentileVsRange", ExactEquityPercentileVsRange),
-        Napi::PropertyDescriptor::Function("exactEquityRealizationEstimate", ExactEquityRealizationEstimate),
-        Napi::PropertyDescriptor::Function("equityRealizationPenalty", EquityRealizationPenalty),
-        Napi::PropertyDescriptor::Function("riverCallThresholdDistribution", RiverCallThresholdDistribution),
-        Napi::PropertyDescriptor::Function("turnBarrelRunoutEvDistribution", TurnBarrelRunoutEvDistribution),
-        Napi::PropertyDescriptor::Function("delayedCbetRunoutScore", DelayedCbetRunoutScore),
-        Napi::PropertyDescriptor::Function("protectionBetBenefit", ProtectionBetBenefit),
-        Napi::PropertyDescriptor::Function("equityDenialValue", EquityDenialValue),
-        Napi::PropertyDescriptor::Function("showdownValueIndex", ShowdownValueIndex),
-        Napi::PropertyDescriptor::Function("cbetSizeEvGrid", CbetSizeEvGrid),
-        Napi::PropertyDescriptor::Function("probeBetEvGrid", ProbeBetEvGrid),
-        Napi::PropertyDescriptor::Function("checkRaiseSemiBluffEv", CheckRaiseSemiBluffEv),
-        Napi::PropertyDescriptor::Function("overbetPolarizationScore", OverbetPolarizationScore),
         Napi::PropertyDescriptor::Function("geometricStreetSizingPlan", GeometricStreetSizingPlan),
-        Napi::PropertyDescriptor::Function("riverValueBetThreshold", RiverValueBetThreshold),
-        Napi::PropertyDescriptor::Function("riverBluffCandidateScore", RiverBluffCandidateScore),
         Napi::PropertyDescriptor::Function("thinValueMargin", ThinValueMargin),
         Napi::PropertyDescriptor::Function("betSizingIndifferencePoint", BetSizingIndifferencePoint),
-        Napi::PropertyDescriptor::Function("multiStreetStackOffThreshold", MultiStreetStackOffThreshold),
-        Napi::PropertyDescriptor::Function("foldEquityNeededByStreetPlan", FoldEquityNeededByStreetPlan),
-        Napi::PropertyDescriptor::Function("bluffCatchDecisionScore", BluffCatchDecisionScore),
-        Napi::PropertyDescriptor::Function("blockerAwareBluffFrequency", BlockerAwareBluffFrequency),
-        Napi::PropertyDescriptor::Function("valueTargetingScore", ValueTargetingScore),
         Napi::PropertyDescriptor::Function("opponentFoldToCbetPosterior", OpponentFoldToCbetPosterior),
         Napi::PropertyDescriptor::Function("opponentAggressionFactor", OpponentAggressionFactor),
-        Napi::PropertyDescriptor::Function("opponentShowdownBiasEstimate", OpponentShowdownBiasEstimate),
         Napi::PropertyDescriptor::Function("opponentRangeElasticityFromSizing", OpponentRangeElasticityFromSizing),
-        Napi::PropertyDescriptor::Function("exploitativeBetSizeAdjustment", ExploitativeBetSizeAdjustment),
-        Napi::PropertyDescriptor::Function("exploitativeCallThresholdAdjustment", ExploitativeCallThresholdAdjustment),
-        Napi::PropertyDescriptor::Function("villainLineRangeShift", VillainLineRangeShift),
-        Napi::PropertyDescriptor::Function("villainCappedRangeScore", VillainCappedRangeScore),
         Napi::PropertyDescriptor::Function("villainPolarizedRangeScore", VillainPolarizedRangeScore),
-        Napi::PropertyDescriptor::Function("villainFloatFrequencyEstimate", VillainFloatFrequencyEstimate),
         Napi::PropertyDescriptor::Function("legalActionSummary", LegalActionSummary),
         Napi::PropertyDescriptor::Function("actionMaskFromState", ActionMaskFromState),
         Napi::PropertyDescriptor::Function("normalizeBotConfig", NormalizeBotConfig),
         Napi::PropertyDescriptor::Function("validatePokerState", ValidatePokerState),
         Napi::PropertyDescriptor::Function("stateToFeatureVector", StateToFeatureVector),
-        Napi::PropertyDescriptor::Function("actionEvBreakdown", ActionEvBreakdown),
         Napi::PropertyDescriptor::Function("decideActionWithDiagnostics", DecideActionWithDiagnostics),
-        Napi::PropertyDescriptor::Function("explainDecisionFactors", ExplainDecisionFactors),
-        Napi::PropertyDescriptor::Function("candidateActionSet", CandidateActionSet),
         Napi::PropertyDescriptor::Function("runBotPolicyBatch", RunBotPolicyBatch),
         Napi::PropertyDescriptor::Function("pkoKnockoutProbabilityMatrix", PkoKnockoutProbabilityMatrix),
         Napi::PropertyDescriptor::Function("pkoExpectedBountyCollection", PkoExpectedBountyCollection),
@@ -564,23 +510,17 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("progressiveKoPostedBounty", ProgressiveKoPostedBounty),
         Napi::PropertyDescriptor::Function("pkoCoveringHuntEv", PkoCoveringHuntEv),
         Napi::PropertyDescriptor::Function("pkoWinnerTakeRemainingBounties", PkoWinnerTakeRemainingBounties),
-        Napi::PropertyDescriptor::Function("futureGameSimulationPayouts", FutureGameSimulationPayouts),
-        Napi::PropertyDescriptor::Function("futureGrowthShare", FutureGrowthShare),
         Napi::PropertyDescriptor::Function("icmPayoutsAfterBlindPost", IcmPayoutsAfterBlindPost),
-        Napi::PropertyDescriptor::Function("icmJamVsFoldEv", IcmJamVsFoldEv),
-        Napi::PropertyDescriptor::Function("icmCallVsFoldEv", IcmCallVsFoldEv),
         Napi::PropertyDescriptor::Function("icmCallingBubbleFactor", IcmCallingBubbleFactor),
         Napi::PropertyDescriptor::Function("fgsPayoutsBlindSchedule", FgsPayoutsBlindSchedule),
-        Napi::PropertyDescriptor::Function("icmStallingEv", IcmStallingEv),
-        Napi::PropertyDescriptor::Function("icmPayJumpSurvivalEv", IcmPayJumpSurvivalEv),
         Napi::PropertyDescriptor::Function("icmDeadPotDollarEv", IcmDeadPotDollarEv),
         Napi::PropertyDescriptor::Function("exactThreeWayEquityKnownHands", ExactThreeWayEquityKnownHands),
         Napi::PropertyDescriptor::Function("exactThreeWayWinTieLoseKnownHands", ExactThreeWayWinTieLoseKnownHands),
         Napi::PropertyDescriptor::Function("exactFourWayEquityKnownHands", ExactFourWayEquityKnownHands),
         Napi::PropertyDescriptor::Function("exactMultiwayEquityKnownHands", ExactMultiwayEquityKnownHands),
+        Napi::PropertyDescriptor::Function("exactMultiwayWinTieLoseKnownHands", ExactMultiwayWinTieLoseKnownHands),
         Napi::PropertyDescriptor::Function("exactMultiwayEquityWithDeadCards", ExactMultiwayEquityWithDeadCards),
         Napi::PropertyDescriptor::Function("exactMultiwaySidePotChipEv", ExactMultiwaySidePotChipEv),
-        Napi::PropertyDescriptor::Function("exactMultiwayAheadFrequency", ExactMultiwayAheadFrequency),
         Napi::PropertyDescriptor::Function("exactMultiwayTieFrequency", ExactMultiwayTieFrequency),
         Napi::PropertyDescriptor::Function("exactMultiwayRunoutCount", ExactMultiwayRunoutCount),
         Napi::PropertyDescriptor::Function("exactMultiwayBestWorstRunout", ExactMultiwayBestWorstRunout),
@@ -588,7 +528,6 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("cfrRiverBetCallFoldSolve", CfrRiverBetCallFoldSolve),
         Napi::PropertyDescriptor::Function("bestResponseRiver", BestResponseRiver),
         Napi::PropertyDescriptor::Function("exploitabilityRiver", ExploitabilityRiver),
-        Napi::PropertyDescriptor::Function("cfrHeadsUpPushFoldSolve", CfrHeadsUpPushFoldSolve),
         Napi::PropertyDescriptor::Function("fictitiousPlayRiver", FictitiousPlayRiver),
         Napi::PropertyDescriptor::Function("evOfStrategyProfile", EvOfStrategyProfile),
         Napi::PropertyDescriptor::Function("strategySupportSize", StrategySupportSize),
@@ -598,12 +537,10 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("nashHeadsUpCallRange", NashHeadsUpCallRange),
         Napi::PropertyDescriptor::Function("nashHeadsUpJamCallSolve", NashHeadsUpJamCallSolve),
         Napi::PropertyDescriptor::Function("nashBlindVsBlindSolve", NashBlindVsBlindSolve),
-        Napi::PropertyDescriptor::Function("nashFirstInJamRange", NashFirstInJamRange),
         Napi::PropertyDescriptor::Function("nashJamFoldChart169", NashJamFoldChart169),
         Napi::PropertyDescriptor::Function("nashCallChart169", NashCallChart169),
         Napi::PropertyDescriptor::Function("nashIndifferenceStackBb", NashIndifferenceStackBb),
         Napi::PropertyDescriptor::Function("nashIcmHeadsUpJamCallSolve", NashIcmHeadsUpJamCallSolve),
-        Napi::PropertyDescriptor::Function("nashMultiwayShoveCall", NashMultiwayShoveCall),
         Napi::PropertyDescriptor::Function("canonicalFlopBoard", CanonicalFlopBoard),
         Napi::PropertyDescriptor::Function("canonicalBoard", CanonicalBoard),
         Napi::PropertyDescriptor::Function("canonicalHolesAndBoard", CanonicalHolesAndBoard),
@@ -624,15 +561,29 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("omahaWrapDrawOuts", OmahaWrapDrawOuts),
         Napi::PropertyDescriptor::Function("omahaNuttednessScore", OmahaNuttednessScore),
         Napi::PropertyDescriptor::Function("omahaMultiwayEquityMc", OmahaMultiwayEquityMc),
+        Napi::PropertyDescriptor::Function("evaluateOmahaLoHand", EvaluateOmahaLoHand),
+        Napi::PropertyDescriptor::Function("omahaLoQualifies", OmahaLoQualifies),
+        Napi::PropertyDescriptor::Function("evaluateOmahaHiLo", EvaluateOmahaHiLo),
+        Napi::PropertyDescriptor::Function("exactHuOmahaHiLoEquity", ExactHuOmahaHiLoEquity),
+        Napi::PropertyDescriptor::Function("simulateOmahaHiLoEquity", SimulateOmahaHiLoEquity),
+        Napi::PropertyDescriptor::Function("omahaScoopProbabilityMc", OmahaScoopProbabilityMc),
+        Napi::PropertyDescriptor::Function("omahaQuarterProbabilityMc", OmahaQuarterProbabilityMc),
+        Napi::PropertyDescriptor::Function("omahaLoNutsOnBoard", OmahaLoNutsOnBoard),
+        Napi::PropertyDescriptor::Function("omahaHiLoNuttedness", OmahaHiLoNuttedness),
+        Napi::PropertyDescriptor::Function("omahaHiLoMultiwayMc", OmahaHiLoMultiwayMc),
+        Napi::PropertyDescriptor::Function("evaluateBigOBestHand", EvaluateBigOBestHand),
+        Napi::PropertyDescriptor::Function("evaluateBigOHandStrength", EvaluateBigOHandStrength),
+        Napi::PropertyDescriptor::Function("exactHuBigOEquityVsKnown", ExactHuBigOEquityVsKnown),
+        Napi::PropertyDescriptor::Function("simulateBigOEquityVsRandom", SimulateBigOEquityVsRandom),
+        Napi::PropertyDescriptor::Function("simulateBigOEquityVsRange", SimulateBigOEquityVsRange),
+        Napi::PropertyDescriptor::Function("bigOComboCount", BigOComboCount),
+        Napi::PropertyDescriptor::Function("bigONutsOnBoard", BigONutsOnBoard),
+        Napi::PropertyDescriptor::Function("bigOMultiwayEquityMc", BigOMultiwayEquityMc),
         Napi::PropertyDescriptor::Function("spinGoPayouts", SpinGoPayouts),
         Napi::PropertyDescriptor::Function("spinGoIcmEv", SpinGoIcmEv),
-        Napi::PropertyDescriptor::Function("spinGoNashJamCall", SpinGoNashJamCall),
         Napi::PropertyDescriptor::Function("pkoFgsPayouts", PkoFgsPayouts),
-        Napi::PropertyDescriptor::Function("lateRegOverlayEv", LateRegOverlayEv),
-        Napi::PropertyDescriptor::Function("winnerTakeAllSatelliteEv", WinnerTakeAllSatelliteEv),
         Napi::PropertyDescriptor::Function("squeezeEv", SqueezeEv),
         Napi::PropertyDescriptor::Function("fourBetJamEv", FourBetJamEv),
-        Napi::PropertyDescriptor::Function("isoRaiseVsLimpersEv", IsoRaiseVsLimpersEv),
         Napi::PropertyDescriptor::Function("threeBetPotCommitEv", ThreeBetPotCommitEv),
         Napi::PropertyDescriptor::Function("evaluateShortDeckBestHand", EvaluateShortDeckBestHand),
         Napi::PropertyDescriptor::Function("evaluateShortDeckHandStrength", EvaluateShortDeckHandStrength),
@@ -654,6 +605,26 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("twoStreetNegativePotential", TwoStreetNegativePotential),
         Napi::PropertyDescriptor::Function("equityBucketFromEhs", EquityBucketFromEhs),
         Napi::PropertyDescriptor::Function("comboEhsTableVsRange", ComboEhsTableVsRange),
+        Napi::PropertyDescriptor::Function("evaluateDeuceSevenHand", EvaluateDeuceSevenHand),
+        Napi::PropertyDescriptor::Function("evaluateDeuceSevenCategory", EvaluateDeuceSevenCategory),
+        Napi::PropertyDescriptor::Function("deuceSevenIsPat", DeuceSevenIsPat),
+        Napi::PropertyDescriptor::Function("deuceSevenDrawEquityVsKnown", DeuceSevenDrawEquityVsKnown),
+        Napi::PropertyDescriptor::Function("deuceSevenNutsPat", DeuceSevenNutsPat),
+        Napi::PropertyDescriptor::Function("deuceSevenRoughVsSmooth", DeuceSevenRoughVsSmooth),
+        Napi::PropertyDescriptor::Function("deuceSevenMultiwayShowdown", DeuceSevenMultiwayShowdown),
+        Napi::PropertyDescriptor::Function("ehs2BucketsVsRange", Ehs2BucketsVsRange),
+        Napi::PropertyDescriptor::Function("bucketMassFromRange", BucketMassFromRange),
+        Napi::PropertyDescriptor::Function("flopBucketStrategyTo1326", FlopBucketStrategyTo1326),
+        Napi::PropertyDescriptor::Function("canonicalFlopCfrKey", CanonicalFlopCfrKey),
+        Napi::PropertyDescriptor::Function("flopBucketCountDefault", FlopBucketCountDefault),
+        Napi::PropertyDescriptor::Function("evaluateStudBestHand", EvaluateStudBestHand),
+        Napi::PropertyDescriptor::Function("evaluateRazzHand", EvaluateRazzHand),
+        Napi::PropertyDescriptor::Function("razzWheelIsNuts", RazzWheelIsNuts),
+        Napi::PropertyDescriptor::Function("exactHuStudEquityVsKnown", ExactHuStudEquityVsKnown),
+        Napi::PropertyDescriptor::Function("exactHuRazzEquityVsKnown", ExactHuRazzEquityVsKnown),
+        Napi::PropertyDescriptor::Function("studDeadCardDeck", StudDeadCardDeck),
+        Napi::PropertyDescriptor::Function("simulateStudEquityVsRandom", SimulateStudEquityVsRandom),
+        Napi::PropertyDescriptor::Function("simulateRazzEquityVsRandom", SimulateRazzEquityVsRandom),
     });
     return exports;
 }

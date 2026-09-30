@@ -133,16 +133,12 @@ const trash = sparseHoles([
   ['7d', '2c'],
   ['7h', '2s'],
 ]);
-const pf = poker.cfrHeadsUpPushFoldSolve(aa, trash, 10, 200);
-assertTrue(`AA jam mass high (${pf.jamFreq})`, pf.jamFreq > 0.8);
 
 const names = [
   'regretMatchingStrategy',
   'cfrRiverBetCallFoldSolve',
   'bestResponseRiver',
-  'exploitabilityRiver',
-  'cfrHeadsUpPushFoldSolve',
-  'fictitiousPlayRiver',
+  'exploitabilityRiver',  'fictitiousPlayRiver',
   'evOfStrategyProfile',
   'strategySupportSize',
   'cfrNodeReachUpdate',

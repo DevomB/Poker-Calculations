@@ -27,7 +27,7 @@ bool parse_sparse_range(const Napi::Env, const Napi::Value& v, const poker::Deck
             }
             return false;
         }
-        const double* data = static_cast<const double*>(ta.ArrayBuffer().Data());
+        const double* data = static_cast<const double*>(poker_bind::typed_array_data(ta));
         out = poker::sparse_range_from_dense1326(data, 1326, dead.mask);
         return true;
     }
@@ -46,9 +46,9 @@ bool parse_sparse_range(const Napi::Env, const Napi::Value& v, const poker::Deck
         const std::size_t n = ta.ElementLength();
         indices.resize(n);
         if (ta.TypedArrayType() == napi_int32_array) {
-            std::memcpy(indices.data(), ta.ArrayBuffer().Data(), n * sizeof(int32_t));
+            std::memcpy(indices.data(), poker_bind::typed_array_data(ta), n * sizeof(int32_t));
         } else if (ta.TypedArrayType() == napi_uint32_array) {
-            const auto* src = static_cast<const std::uint32_t*>(ta.ArrayBuffer().Data());
+            const auto* src = static_cast<const std::uint32_t*>(poker_bind::typed_array_data(ta));
             for (std::size_t i = 0; i < n; ++i) {
                 indices[i] = static_cast<int>(src[i]);
             }
@@ -282,35 +282,6 @@ Napi::Value EvOfStrategyProfile(const Napi::CallbackInfo& info) {
         return out;
     });
 }
-
-Napi::Value CfrHeadsUpPushFoldSolve(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    POKER_REQUIRE(env, info.Length() >= 3,
-                  "cfrHeadsUpPushFoldSolve(jammerRange, callerRange, stackBb[, iterations])");
-    std::string err;
-    poker::DeckBitset dead;
-    poker::SparseRange jammer;
-    poker::SparseRange caller;
-    if (!parse_sparse_range(env, info[0], dead, jammer, &err) ||
-        !parse_sparse_range(env, info[1], dead, caller, &err)) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    const double stack = info[2].As<Napi::Number>().DoubleValue();
-    const int iterations = info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 400;
-    POKER_TRY(env, {
-        const auto r = poker::cfr_heads_up_push_fold_solve(jammer, caller, stack, iterations);
-        Napi::Object out = Napi::Object::New(env);
-        out.Set("jamFreq", Napi::Number::New(env, r.jam_freq));
-        out.Set("callFreq", Napi::Number::New(env, r.call_freq));
-        out.Set("evJammer", Napi::Number::New(env, r.ev_jammer));
-        out.Set("evCaller", Napi::Number::New(env, r.ev_caller));
-        out.Set("iterations", Napi::Number::New(env, r.iterations));
-        out.Set("jamMix", write_f64_vector(env, r.jam_mix_1326, poker_bind::F64ReturnFormat::Float64));
-        out.Set("callMix", write_f64_vector(env, r.call_mix_1326, poker_bind::F64ReturnFormat::Float64));
-        return out;
-    });
-}
-
 Napi::Value StrategySupportSize(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     POKER_REQUIRE(env, info.Length() >= 1, "strategySupportSize(actionProbs[, eps])");

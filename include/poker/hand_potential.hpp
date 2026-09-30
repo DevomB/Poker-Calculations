@@ -80,4 +80,9 @@ enum class PotentialStreets { One = 1, Two = 2 };
     const std::vector<Card>& board_cards, const SparseRange& villain_range,
     const ComboEhsTableOptions& options = {}, const CancelPredicate* should_cancel = nullptr);
 
+/// Same layout as `combo_ehs_table_vs_range`, but each live combo stores EHS2.
+[[nodiscard]] std::vector<double> combo_ehs2_table_vs_range(
+    const std::vector<Card>& board_cards, const SparseRange& villain_range,
+    const ComboEhsTableOptions& options = {}, const CancelPredicate* should_cancel = nullptr);
+
 }  // namespace poker

@@ -18,11 +18,6 @@ struct MultiwaySidePotChipEv {
     int layer_count{0};
 };
 
-struct MultiwayAheadFrequency {
-    double p_ahead_now{0.0};
-    double p_win_showdown{0.0};
-};
-
 struct MultiwayTieFrequency {
     double p_hero_split{0.0};
     double p_any_split{0.0};
@@ -65,11 +60,6 @@ struct MultiwayBestWorstRunout {
 [[nodiscard]] MultiwaySidePotChipEv exact_multiway_side_pot_chip_ev(
     const std::vector<double>& committed_chips, const std::vector<std::vector<Card>>& hole_hands,
     const std::vector<Card>& board_cards, const std::vector<Card>& dead_cards = {});
-
-/** Flop or turn only. Hero is player 0. */
-[[nodiscard]] MultiwayAheadFrequency exact_multiway_ahead_frequency(
-    const std::vector<std::vector<Card>>& hole_hands, const std::vector<Card>& board_cards,
-    const std::vector<Card>& dead_cards = {});
 
 [[nodiscard]] MultiwayTieFrequency exact_multiway_tie_frequency(
     const std::vector<std::vector<Card>>& hole_hands, const std::vector<Card>& board_cards,

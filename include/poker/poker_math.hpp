@@ -27,10 +27,10 @@ enum class Multiway_symmetric_pot_share_model {
 };
 
 /// `to_call / (pot + to_call)` when `to_call > 0` and `pot + to_call > 0`; else `0`.
-[[nodiscard]] double pot_odds_ratio(int pot, int to_call);
+[[nodiscard]] double pot_odds_ratio(double pot, double to_call);
 
 /// Chip EV of calling once vs folding (0); ignores future streets.
-[[nodiscard]] double expected_value_call(double equity, int pot, int to_call);
+[[nodiscard]] double expected_value_call(double equity, double pot, double to_call);
 
 // --- Chip / odds helpers (ported from former poker-math.js) ---
 
@@ -159,10 +159,6 @@ enum class Multiway_symmetric_pot_share_model {
 [[nodiscard]] double runner_runner_straight_draw_hit_probability(
     Runner_runner_straight_draw_kind kind, int dead_cards_among_pattern_outs, double unseen_after_flop);
 
-/// max extra chips lost on future streets when losing, keeping current call EV >= 0 (toy model).
-[[nodiscard]] double reverse_implied_odds_max_future_loss(double pot_before_call, double to_call,
-                                                         double equity);
-
 /// pot after `n_rounds` of matched pot-fraction `fraction` bets (both players), starting `pot0`.
 [[nodiscard]] double geometric_pot_after_matched_pot_fractions(double pot0, double fraction,
                                                                 int n_rounds);
@@ -238,10 +234,6 @@ struct Beta_binomial_fold_posterior {
 [[nodiscard]] Beta_binomial_fold_posterior beta_binomial_fold_update(double prior_alpha,
                                                                      double prior_beta, int folds,
                                                                      int calls);
-
-/// heuristic down-weighting of outs with multiple villains.
-[[nodiscard]] double duplication_adjusted_outs(double outs, int num_villains,
-                                                 double duplication_weight);
 
 // --- risk of ruin ---
 
@@ -438,9 +430,6 @@ struct Wilson_interval {
 [[nodiscard]] double net_pot_after_rake(double pot_chips, double rake_fraction, double rake_cap);
 [[nodiscard]] double net_pot_after_call_and_rake(double pot_before_call, double to_call,
                                                  double rake_fraction, double rake_cap);
-[[nodiscard]] double effective_pot_odds_display_after_rake(double pot_before_call, double to_call,
-                                                           double rake_fraction, double rake_cap);
-[[nodiscard]] double implied_breakeven_total_pot(double pot_before_call, double to_call, double equity);
 [[nodiscard]] double implied_odds_required_equity_from_future_win(double pot_before_call, double to_call,
                                                                   double future_win);
 [[nodiscard]] double expected_value_raise(double equity_when_called, double pot_before_raise,
@@ -525,8 +514,9 @@ struct Wilson_interval {
 [[nodiscard]] double variance_to_standard_deviation_per_hand(double variance_per_hand);
 
 // --- stacks ---
+/// Combos of `notation` (e.g. "AA", "AKs", "AKo") whose two cards are both outside `dead_cards`.
 [[nodiscard]] int preflop_combos_from_notation_minus_blockers(const std::string& notation,
-                                                              int dead_cards_among_combos);
+                                                              const std::vector<Card>& dead_cards);
 [[nodiscard]] double stack_to_pot_after_call(double pot_before_call, double to_call,
                                              double effective_stack_before_call);
 

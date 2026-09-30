@@ -28,22 +28,25 @@ add_library(poker_lib STATIC
     src/poker_bot_interface.cpp
     src/runout_enumerator.cpp
     src/combinatorics_exact.cpp
-    src/shapley_icm.cpp
     src/icm_sensitivity.cpp
     src/tournament_duel.cpp
     src/range_inference.cpp
     src/subgame_solvers.cpp
     src/cfr_subgame.cpp
-    src/side_pot_icm.cpp
     src/pko.cpp
     src/fgs.cpp
     src/exact_multiway.cpp
     src/nash_push_fold.cpp
     src/suit_isomorphism.cpp
     src/omaha.cpp
+    src/omaha_hi_lo.cpp
+    src/big_o.cpp
     src/mtt_spots.cpp
     src/short_deck.cpp
     src/hand_potential.cpp
+    src/deuce_seven.cpp
+    src/flop_cfr_buckets.cpp
+    src/stud_razz.cpp
 )
 target_include_directories(poker_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -83,9 +86,14 @@ if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
         native/binding_nash_push_fold.cpp
         native/binding_suit_isomorphism.cpp
         native/binding_omaha.cpp
+        native/binding_omaha_hi_lo.cpp
+        native/binding_big_o.cpp
         native/binding_mtt_spots.cpp
         native/binding_short_deck.cpp
         native/binding_hand_potential.cpp
+        native/binding_deuce_seven.cpp
+        native/binding_flop_cfr_buckets.cpp
+        native/binding_stud_razz.cpp
         native/async_workers.cpp
         ${CMAKE_JS_SRC}
     )
@@ -97,6 +105,9 @@ if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
     endif()
     target_compile_definitions(poker_calculations PRIVATE NAPI_VERSION=8)
     target_compile_definitions(poker_calculations PRIVATE $<$<BOOL:${WIN32}>:NOMINMAX>)
+    # Turn any std::exception escaping a binding into a JS Error. Without _ALL, node-addon-api only
+    # catches Napi::Error, and a std::invalid_argument from poker_lib aborts the Node process.
+    target_compile_definitions(poker_calculations PRIVATE NODE_ADDON_API_CPP_EXCEPTIONS NODE_ADDON_API_CPP_EXCEPTIONS_ALL)
     # Node-API on Windows: cmake-js skips full Node download; generate node.lib from node-api-headers .def (cmake-js README).
     if(MSVC AND CMAKE_JS_NODELIB_DEF AND CMAKE_JS_NODELIB_TARGET)
         execute_process(COMMAND ${CMAKE_AR} /def:${CMAKE_JS_NODELIB_DEF} /out:${CMAKE_JS_NODELIB_TARGET} ${CMAKE_STATIC_LINKER_FLAGS})

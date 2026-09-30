@@ -90,25 +90,6 @@ struct BestResponseRiverResult {
                                           const std::vector<double>& bettor_mix,
                                           const std::vector<double>& caller_mix);
 
-/**
- * HU preflop jam/fold vs call/fold. Chip EV relative to starting stack (BB units).
- * Blinds 0.5 / 1.0. Jammer first: Fold (−0.5) or Jam; caller Fold (−1 for jammer +1) or Call (all-in).
- * Called equity is Monte Carlo vs the opposing hole (`simulate_hand_outcome_vs_villain_holes`).
- */
-struct PushFoldCfrResult {
-    double jam_freq{0.0};
-    double call_freq{0.0};
-    double ev_jammer{0.0};
-    double ev_caller{0.0};
-    int iterations{0};
-    std::vector<double> jam_mix_1326;
-    std::vector<double> call_mix_1326;
-};
-
-[[nodiscard]] PushFoldCfrResult cfr_heads_up_push_fold_solve(const SparseRange& jammer_range,
-                                                             const SparseRange& caller_range,
-                                                             double stack_bb, int iterations = 400);
-
 struct RiverClassFreqs {
     double air_bet{0.0};
     double draw_bet{0.0};

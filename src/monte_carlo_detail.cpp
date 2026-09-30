@@ -56,6 +56,7 @@ McEquityDetailedResult simulate_hand_outcome_detailed(
     if (villains < 1) {
         villains = 1;
     }
+    validate_holdem_spot(player_hand, community_cards, villains);
     out.n = num_simulations;
     double mean = 0.0;
     double m2 = 0.0;

@@ -4,12 +4,10 @@
 #include "poker/deck_bitset.hpp"
 #include "poker/fast_evaluator.hpp"
 #include "poker/hand_evaluator.hpp"
-#include "poker/monte_carlo.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <random>
 #include <stdexcept>
 #include <utility>
 
@@ -20,7 +18,6 @@ namespace {
 constexpr int kComboCount = 1326;
 constexpr int kDefaultIters = 400;
 constexpr int kMaxIters = 20000;
-constexpr int kPreflopMcTrials = 600;
 
 [[nodiscard]] int combo_index_1326(int a, int b) {
     if (a > b) {
@@ -124,8 +121,6 @@ struct LiveCombo {
     }
     throw std::invalid_argument("mix must be a scalar or length-1326 weights");
 }
-
-[[nodiscard]] std::vector<double> empty_mix_1326() { return std::vector<double>(static_cast<std::size_t>(kComboCount), 0.0); }
 
 void write_mix_1326(std::vector<double>& dest, const std::vector<LiveCombo>& combos,
                     const std::vector<double>& local) {
@@ -554,135 +549,6 @@ double exploitability_river(double pot, double bet_size, const SparseRange& bett
     br_bettor_mix(ws, call_p, br_bet, br0);
     br_defender_mix(ws, bet_p, br_call, br1);
     return 0.5 * (br0 + br1 - ev.ev_bettor - ev.ev_defender);
-}
-
-namespace {
-
-[[nodiscard]] double preflop_equity(const LiveCombo& jammer, const LiveCombo& caller, std::mt19937& rng) {
-    const std::vector<Card> hole{card_from_deck_index(jammer.card_a), card_from_deck_index(jammer.card_b)};
-    return static_cast<double>(simulate_hand_outcome_vs_villain_holes(hole, {}, caller.card_a, caller.card_b,
-                                                                     kPreflopMcTrials, rng, nullptr));
-}
-
-}  // namespace
-
-PushFoldCfrResult cfr_heads_up_push_fold_solve(const SparseRange& jammer_range, const SparseRange& caller_range,
-                                               double stack_bb, int iterations) {
-    require_finite_positive(stack_bb, "stackBb");
-    if (stack_bb <= 1.0) {
-        throw std::invalid_argument("stackBb must be greater than 1");
-    }
-    const int T = clamp_iterations(iterations);
-    const std::vector<Card> empty;
-    const std::vector<LiveCombo> jammer = live_combos(jammer_range, empty, false);
-    const std::vector<LiveCombo> caller = live_combos(caller_range, empty, false);
-    const std::size_t nJ = jammer.size();
-    const std::size_t nC = caller.size();
-    std::vector<double> eq(nJ * nC, -1.0);
-    std::mt19937 rng(0xC0FFEE);
-    for (std::size_t i = 0; i < nJ; ++i) {
-        for (std::size_t j = 0; j < nC; ++j) {
-            if (overlap(jammer[i], caller[j])) {
-                continue;
-            }
-            eq[i * nC + j] = preflop_equity(jammer[i], caller[j], rng);
-        }
-    }
-
-    const double fold_sb = -0.5;
-    const double jam_fold = 1.0;
-    auto jam_call_ev = [&](double e) { return stack_bb * (2.0 * e - 1.0); };
-
-    std::vector<std::vector<double>> r_jam(nJ, std::vector<double>(2, 0.0));
-    std::vector<std::vector<double>> r_call(nC, std::vector<double>(2, 0.0));
-    std::vector<double> sum_jam(nJ, 0.0);
-    std::vector<double> sum_call(nC, 0.0);
-    std::vector<double> jam_p(nJ, 0.5);
-    std::vector<double> call_p(nC, 0.5);
-
-    for (int t = 0; t < T; ++t) {
-        for (std::size_t i = 0; i < nJ; ++i) {
-            jam_p[i] = regret_matching_strategy(r_jam[i])[1];
-        }
-        for (std::size_t j = 0; j < nC; ++j) {
-            call_p[j] = regret_matching_strategy(r_call[j])[1];
-        }
-        for (std::size_t i = 0; i < nJ; ++i) {
-            sum_jam[i] += jam_p[i];
-        }
-        for (std::size_t j = 0; j < nC; ++j) {
-            sum_call[j] += call_p[j];
-        }
-        for (std::size_t i = 0; i < nJ; ++i) {
-            double z = 0.0;
-            double v_jam = 0.0;
-            for (std::size_t j = 0; j < nC; ++j) {
-                const double e = eq[i * nC + j];
-                if (e < 0.0) {
-                    continue;
-                }
-                z += caller[j].weight;
-                v_jam += caller[j].weight * ((1.0 - call_p[j]) * jam_fold + call_p[j] * jam_call_ev(e));
-            }
-            const double vj = z > 0.0 ? v_jam / z : jam_fold;
-            const double v_sigma = (1.0 - jam_p[i]) * fold_sb + jam_p[i] * vj;
-            r_jam[i][0] += fold_sb - v_sigma;
-            r_jam[i][1] += vj - v_sigma;
-        }
-        for (std::size_t j = 0; j < nC; ++j) {
-            double z = 0.0;
-            double ev_call = 0.0;
-            for (std::size_t i = 0; i < nJ; ++i) {
-                const double e = eq[i * nC + j];
-                if (e < 0.0) {
-                    continue;
-                }
-                const double w = jammer[i].weight * jam_p[i];
-                if (w <= 0.0) {
-                    continue;
-                }
-                z += w;
-                ev_call += w * (-jam_call_ev(e));
-            }
-            const double v_fold = 1.0;
-            const double vc = z > 0.0 ? ev_call / z : v_fold;
-            const double v_sigma = (1.0 - call_p[j]) * v_fold + call_p[j] * vc;
-            r_call[j][0] += v_fold - v_sigma;
-            r_call[j][1] += vc - v_sigma;
-        }
-    }
-    for (std::size_t i = 0; i < nJ; ++i) {
-        jam_p[i] = sum_jam[i] / static_cast<double>(T);
-    }
-    for (std::size_t j = 0; j < nC; ++j) {
-        call_p[j] = sum_call[j] / static_cast<double>(T);
-    }
-
-    double z = 0.0;
-    double ev_j = 0.0;
-    for (std::size_t i = 0; i < nJ; ++i) {
-        for (std::size_t j = 0; j < nC; ++j) {
-            const double e = eq[i * nC + j];
-            if (e < 0.0) {
-                continue;
-            }
-            const double w = jammer[i].weight * caller[j].weight;
-            z += w;
-            const double leaf = (1.0 - jam_p[i]) * fold_sb +
-                                jam_p[i] * ((1.0 - call_p[j]) * jam_fold + call_p[j] * jam_call_ev(e));
-            ev_j += w * leaf;
-        }
-    }
-
-    PushFoldCfrResult out;
-    out.iterations = T;
-    out.jam_freq = range_weighted_freq(jammer, jam_p);
-    out.call_freq = range_weighted_freq(caller, call_p);
-    out.ev_jammer = z > 0.0 ? ev_j / z : 0.0;
-    out.ev_caller = -out.ev_jammer;
-    write_mix_1326(out.jam_mix_1326, jammer, jam_p);
-    write_mix_1326(out.call_mix_1326, caller, call_p);
-    return out;
 }
 
 HuRiverCheckBetTreeResult solve_hu_river_check_bet_tree(double pot, double bet_size,

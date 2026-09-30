@@ -53,10 +53,6 @@ int category_from_seven(const std::uint8_t ranks[7], const std::uint8_t suits[7]
     return static_cast<int>(hand_category(e));
 }
 
-std::uint64_t strength_from_seven(const std::uint8_t ranks[7], const std::uint8_t suits[7]) {
-    return evaluate_seven_strength_fast(ranks, suits);
-}
-
 std::uint64_t max_villain_strength_on_board(const std::vector<Card>& board, std::uint64_t dead_mask,
                                             int h0, int h1, const CancelPredicate* cancel) {
     std::uint64_t best = 0;
@@ -321,7 +317,10 @@ std::vector<double> exact_hero_category_joint_flop_to_river(
         const int cat_turn = category_from_seven(hero_r, hero_s);
         fill_seven(h0, h1, river_board, nullptr, 0, hero_r, hero_s);
         const int cat_river = category_from_seven(hero_r, hero_s);
-        joint[static_cast<std::size_t>(cat_turn * 9 + cat_river)] += 1.0;
+        // 9x9 table: royal flush (category 9) is folded into straight flush (8).
+        const int ct = std::min(cat_turn, 8);
+        const int cr = std::min(cat_river, 8);
+        joint[static_cast<std::size_t>(ct * 9 + cr)] += 1.0;
         total += 1.0;
     }, cancel);
     if (total > 0.0) {
@@ -455,8 +454,8 @@ CardRemovalGradientResult exact_equity_card_removal_gradient(
             out.gradient[static_cast<std::size_t>(c)] = 0.0;
             continue;
         }
-        const double eq =
-            exact_hu_equity_vs_range(hero_hole_cards, board_cards, filtered, cancel);
+        const double eq = exact_hu_equity_vs_range(hero_hole_cards, board_cards, filtered, cancel,
+                                                   std::uint64_t{1} << c);
         out.gradient[static_cast<std::size_t>(c)] = out.base_equity - eq;
     }
     return out;
@@ -473,13 +472,12 @@ double exact_information_regret_vs_clairvoyant(const std::vector<Card>& hero_hol
     const double realistic =
         exact_hu_equity_vs_range(hero_hole_cards, board_cards, villain_range, cancel);
     const double ev_realistic =
-        expected_value_call(realistic, static_cast<int>(pot_before_call),
-                            static_cast<int>(to_call));
+        expected_value_call(realistic, pot_before_call, to_call);
 
     if (board_cards.size() == 5) {
         const double clair = realistic;
         const double ev_clair =
-            expected_value_call(clair, static_cast<int>(pot_before_call), static_cast<int>(to_call));
+            expected_value_call(clair, pot_before_call, to_call);
         return ev_clair - ev_realistic;
     }
 
@@ -498,7 +496,7 @@ double exact_information_regret_vs_clairvoyant(const std::vector<Card>& hero_hol
         const double eq = exact_hu_equity_vs_range(hero_hole_cards, full, villain_range, cancel);
         const double ev_fold = 0.0;
         const double ev_call =
-            expected_value_call(eq, static_cast<int>(pot_before_call), static_cast<int>(to_call));
+            expected_value_call(eq, pot_before_call, to_call);
         sum_clair_ev += std::max(ev_fold, ev_call);
         count += 1.0;
     }, cancel);

@@ -17,7 +17,9 @@
 
 ---
 
-**Poker-Calculations** is a production-ready Node library for NL Hold’em: fast hand evaluation, Monte Carlo and exact equity, pot odds and chip EV, ICM and side pots, draw probabilities, GTO-style frequencies, fold-equity models, Kelly and jam analysis, and a rule-based **`decideAction`** layer over serialized table state. Everything runs in native code and ships with **prebuilt binaries**—`npm install` does not require CMake, a compiler, or the Windows SDK.
+**Poker-Calculations** is a production-ready Node library for NL Hold’em: fast hand evaluation, Monte Carlo and exact equity, pot odds and chip EV, ICM and side pots, draw probabilities, GTO-style frequencies, fold-equity models, Kelly and jam analysis, and a rule-based **`decideAction`** layer over serialized table state. It also covers Omaha Hi and Hi-Lo, Big O, short deck, stud, razz, and 2-7 single draw. Everything runs in native code and ships with **prebuilt binaries**—`npm install` does not require CMake, a compiler, or the Windows SDK.
+
+> **Status:** feature-complete as of 4.0.0 and maintained for bug fixes only. 4.0.0 fixes a hand-evaluator bug that skewed equity results in 2.2.0–3.2.0 — upgrade if you are on any of those. See the [changelog](CHANGELOG.md).
 
 ## What you can build
 
@@ -35,10 +37,10 @@
 | **Strategy** | `decideAction` from serialized state using MC equity, pot odds, call EV, legal-action summaries, and diagnostics |
 | **Tournaments** | ICM (Harville and Weitzman chip utility), placement and payout expectations, pairwise bubble factor, side-pot ladders |
 | **Theory helpers** | MDF / alpha, fold-equity breakevens, Kelly and Chubukov symmetric-jam search, Wilson and Agresti–Coull intervals, risk-of-ruin approximations |
-| **Tournament & runouts** | Shapley ICM, runout equity spread, range materialization, subgame bet toys — [guide](https://poker-calculations.devomb.com/docs/guides/tournament-runouts-and-bots) |
-| **Ranges & boards** | Range algebra, range distances, notation buckets, board texture, scare cards, and range-board coverage |
-| **Opponent modeling** | Fold-to-c-bet posteriors, aggression/showdown tendency estimates, range elasticity, and exploit adjustments |
-| **Developer experience** | **[`index.d.ts`](index.d.ts)** typings, **400** native exports, docs at [poker-calculations.devomb.com](https://poker-calculations.devomb.com) |
+| **Tournament & runouts** | Runout equity quantiles and vulnerability, chop negotiation, Nash push/fold (heads-up, blind vs blind, ICM), river CFR and polarized-bet solvers, tournament duel odds — [guide](https://poker-calculations.devomb.com/docs/guides/tournament-runouts-and-bots) |
+| **Ranges & boards** | Range algebra, range distances, notation and hand-class buckets, blocker-aware range materialization, suit-isomorphic board canonicalization |
+| **Opponent modeling** | Fold-to-c-bet posteriors, aggression factor, range elasticity from sizing, polarized-range scoring |
+| **Developer experience** | **[`index.d.ts`](index.d.ts)** typings, **370** native exports, docs at [poker-calculations.devomb.com](https://poker-calculations.devomb.com) |
 
 Published releases include **N-API prebuilds** for Linux (glibc and musl), macOS, and Windows via [`node-gyp-build`](https://github.com/prebuild/node-gyp-build). Linux glibc builds use static libstdc++/libgcc where needed so older server and serverless images avoid `GLIBCXX_*` mismatches.
 
@@ -129,7 +131,11 @@ All exports come from the native addon. Grouped overview—see the [reference](h
 | **Hands & equity** | `evaluateBestHand`, `evaluateHandStrength`, `evaluateHandStrengthFast`, `simulateHandOutcome`, `simulateHandOutcomeAsync`, `parallelHandSimulation`, `exactHuEquityVsRandomHand`, … |
 | **Hand potential** | `handStrengthVsRange`, `positivePotentialVsRange`, `effectiveHandStrength`, `handPotentialBreakdown`, `comboEhsTableVsRange` |
 | **Omaha Hi** | `evaluateOmahaBestHand`, `exactHuOmahaEquityVsKnown`, `omahaNutsOnBoard`, `omahaWrapDrawOuts` |
+| **Omaha Hi-Lo (PLO-8)** | `evaluateOmahaHiLo`, `exactHuOmahaHiLoEquity`, `omahaScoopProbabilityMc`, `omahaHiLoNuttedness` |
+| **Big O** | `evaluateBigOBestHand`, `exactHuBigOEquityVsKnown`, `bigONutsOnBoard` |
 | **Short deck (6+)** | `evaluateShortDeckBestHand`, `exactHuShortDeckEquityVsKnown`, `shortDeckNashHuJamRange` |
+| **2-7 single draw** | `evaluateDeuceSevenHand`, `deuceSevenDrawEquityVsKnown`, `deuceSevenNutsPat` |
+| **7-card stud / razz** | `evaluateStudBestHand`, `evaluateRazzHand`, `exactHuStudEquityVsKnown` |
 | **Strategy** | `decideAction`, `decideActionAsync`, `legalActionSummary`, `decideActionWithDiagnostics` |
 | **Pot / EV** | `potOddsRatio`, `expectedValueCall`, `breakevenCallEquity`, `rakeFromPot` |
 | **Stacks & display** | `spr`, `harringtonM`, `harringtonQ`, `stackInBigBlinds`, `formatPotOdds` |
@@ -137,16 +143,16 @@ All exports come from the native addon. Grouped overview—see the [reference](h
 | **GTO-style** | `minimumDefenseFrequency`, `alphaFrequency`, `bluffToValueRatio` |
 | **Fold equity** | `breakevenFoldEquityPureBluff`, `breakevenFoldEquitySemiBluff` |
 | **Range tools** | `normalizeSparseRange`, `rangeTopCombos`, `rangeBucketWeightsByNotation`, `rangeDistanceJensenShannon` |
-| **Board texture** | `boardTextureScore`, `enumerateScareCards`, `rangeBoardCoverage`, `heroBoardConnectivityScore` |
 | **Suit isomorphism** | `canonicalFlopBoard`, `canonicalBoard`, `isomorphicFlopIndex`, `applySuitPermToRange1326` |
-| **Sizing plans** | `cbetSizeEvGrid`, `probeBetEvGrid`, `geometricStreetSizingPlan`, `thinValueMargin` |
-| **Opponent modeling** | `opponentFoldToCbetPosterior`, `opponentAggressionFactor`, `villainLineRangeShift` |
+| **Flop CFR (bucketed)** | `ehs2BucketsVsRange`, `canonicalFlopCfrKey` |
+| **Sizing plans** | `geometricStreetSizingPlan`, `thinValueMargin` |
+| **Opponent modeling** | `opponentFoldToCbetPosterior`, `opponentAggressionFactor` |
 | **ICM & side pots** | `icmExpectedPayouts`, `icmExpectedPayoutsWeitzman`, `icmPairwiseBubbleFactor`, `sidePotLadderFromCommitments` |
-| **MTT spots** | `spinGoPayouts`, `pkoFgsPayouts`, `lateRegOverlayEv`, `squeezeEv`, `fourBetJamEv` |
+| **MTT spots** | `spinGoPayouts`, `pkoFgsPayouts`, `squeezeEv`, `fourBetJamEv` |
 | **Stats & risk** | `wilsonScoreInterval`, `riskOfRuinDiffusionApprox`, `monteCarloStandardError` |
 | **Kelly & jam** | `kellyCriterionBinary`, `chubukovSymmetricJamEv`, `chubukovMaxSymmetricJamStackBinarySearch` |
 
-A complete inventory is in [`FEATURES_ADDED.md`](FEATURES_ADDED.md).
+A complete inventory is in [`API.md`](API.md).
 
 ## Bundlers and serverless
 
@@ -172,6 +178,8 @@ npm ci
 npm run build:native
 node scripts/stage-prebuild.js <platform-arch>
 npm run smoke
+npm test          # correctness tests against brute-force enumeration
+npm run sweep     # every export x edge-case inputs; fails if any call crashes Node
 ```
 
 Use tuples like `win32-x64`, `linux-x64`, `darwin-arm64`. For Alpine/musl: `node scripts/stage-prebuild.js linux-x64 musl`. `npm run smoke` loads the staged addon through `index.js` exactly as an installed package does and exercises a few calls; CI runs it on every prebuild and on the assembled package before publishing.

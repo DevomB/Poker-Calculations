@@ -105,8 +105,12 @@ assertThrows('omahaComboCount duplicate dead', () => poker.omahaComboCount(['As'
 
 const flop = ['6c', '7d', '8s'];
 const wrapHero = ['9h', 'Th', 'Jc', 'Qd'];
-const wrap = poker.omahaWrapDrawOuts(wrapHero, flop);
-assertTrue(`wrap outs > 0 (${wrap.outs})`, wrap.outs > 0);
+// 9TJQ on 678 is already a straight, so it is not drawing.
+const made = poker.omahaWrapDrawOuts(wrapHero, flop);
+assertTrue(`made straight has no wrap outs (${made.outs})`, made.outs === 0 && made.nutOuts === 0);
+// 9TJ + 2 on 78K is the classic 13-out wrap (any 6, 8, 9, T, J, Q that is live).
+const wrap = poker.omahaWrapDrawOuts(['9h', 'Th', 'Jc', '2d'], ['7s', '8d', 'Kc']);
+assertTrue(`13-out wrap (${wrap.outs})`, wrap.outs === 13);
 assertTrue('nutOuts <= outs', wrap.nutOuts <= wrap.outs);
 
 const flopEq = poker.evaluateOmahaBestHand(wrapHero, flop);

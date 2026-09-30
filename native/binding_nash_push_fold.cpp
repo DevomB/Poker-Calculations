@@ -95,6 +95,7 @@ bool parse_hu_spec(const Napi::CallbackInfo& info, poker::NashPushFoldSpec& spec
                 return false;
             }
         }
+        spec.use_icm = !spec.payouts.empty();
         return true;
     }
     if (!info[0].IsObject()) {
@@ -104,6 +105,8 @@ bool parse_hu_spec(const Napi::CallbackInfo& info, poker::NashPushFoldSpec& spec
         return false;
     }
     apply_common_options(info[0].As<Napi::Object>(), spec, err);
+    // Supplying payouts means the caller wants $EV terminals, not chip EV.
+    spec.use_icm = spec.use_icm || !spec.payouts.empty();
     return err == nullptr || err->empty();
 }
 
@@ -186,50 +189,6 @@ Napi::Value NashIcmHeadsUpJamCallSolve(const Napi::CallbackInfo& info) {
     }
     POKER_TRY(env, { return solve_to_js(env, poker::nash_heads_up_jam_call_solve(spec)); });
 }
-
-Napi::Value NashFirstInJamRange(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    POKER_REQUIRE(env, info.Length() >= 1, "nashFirstInJamRange({ stackBb, nOpponents, stacks, ... })");
-    std::string err;
-    poker::NashPushFoldSpec spec;
-    std::vector<double> stacks;
-    int n_opp = 0;
-    if (info[0].IsObject()) {
-        const Napi::Object o = info[0].As<Napi::Object>();
-        apply_common_options(o, spec, &err);
-        if (!err.empty()) {
-            POKER_FAIL_TYPE(env, err);
-        }
-        n_opp = opt_int(o, "nOpponents", 0);
-        if (o.Has("stacks")) {
-            if (!read_f64_vector(o.Get("stacks"), "stacks", stacks, &err)) {
-                POKER_FAIL_TYPE(env, err);
-            }
-        }
-    } else if (info[0].IsNumber() && info.Length() >= 3) {
-        n_opp = info[1].As<Napi::Number>().Int32Value();
-        if (!read_f64_vector(info[2], "stacks", stacks, &err)) {
-            POKER_FAIL_TYPE(env, err);
-        }
-        spec.small_blind = info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().DoubleValue() : 0.5;
-        spec.big_blind = info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().DoubleValue() : 1.0;
-        spec.ante = info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().DoubleValue() : 0.0;
-        spec.hero_stack = info[0].As<Napi::Number>().DoubleValue() * spec.big_blind;
-        spec.villain_stack = spec.hero_stack;
-    } else {
-        POKER_FAIL_TYPE(env, "nashFirstInJamRange({ stackBb, nOpponents, stacks })");
-    }
-    if (n_opp < 1) {
-        n_opp = static_cast<int>(stacks.size());
-    }
-    if (n_opp < 1 || stacks.size() != static_cast<std::size_t>(n_opp)) {
-        POKER_FAIL_TYPE(env, "nOpponents must match stacks[] length");
-    }
-    spec.hero_posted = 0.0;
-    spec.villain_posted = 0.0;
-    POKER_TRY(env, { return to_f64(env, poker::nash_multiway_shove_call(spec, stacks).jam); });
-}
-
 Napi::Value NashJamFoldChart169(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     std::string err;
@@ -302,40 +261,5 @@ Napi::Value NashIndifferenceStackBb(const Napi::CallbackInfo& info) {
     POKER_TRY(env, {
         const int hand = parse_hand_arg(info[0]);
         return Napi::Number::New(env, poker::nash_indifference_stack_bb(hand, spec, max_bb));
-    });
-}
-
-Napi::Value NashMultiwayShoveCall(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    POKER_REQUIRE(env, info.Length() >= 1 && info[0].IsObject(),
-                  "nashMultiwayShoveCall({ shoverStack|stackBb, callerStacks, ... })");
-    std::string err;
-    poker::NashPushFoldSpec spec;
-    const Napi::Object o = info[0].As<Napi::Object>();
-    apply_common_options(o, spec, &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    if (o.Has("shoverStack") && o.Get("shoverStack").IsNumber()) {
-        spec.hero_stack = o.Get("shoverStack").As<Napi::Number>().DoubleValue();
-    }
-    spec.hero_posted = 0.0;
-    spec.villain_posted = 0.0;
-    spec.use_icm = !spec.payouts.empty();
-    std::vector<double> callers;
-    if (!o.Has("callerStacks") || !read_f64_vector(o.Get("callerStacks"), "callerStacks", callers, &err)) {
-        POKER_FAIL_TYPE(env, err.empty() ? "callerStacks[] required" : err);
-    }
-    POKER_TRY(env, {
-        const auto r = poker::nash_multiway_shove_call(spec, callers);
-        Napi::Object out = Napi::Object::New(env);
-        out.Set("jam", to_f64(env, r.jam));
-        Napi::Array calls = Napi::Array::New(env, r.calls.size());
-        for (std::size_t i = 0; i < r.calls.size(); ++i) {
-            calls.Set(static_cast<std::uint32_t>(i), to_f64(env, r.calls[i]));
-        }
-        out.Set("calls", calls);
-        out.Set("iterations", Napi::Number::New(env, r.iterations));
-        return out;
     });
 }

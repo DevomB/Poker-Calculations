@@ -13,8 +13,6 @@
 namespace poker {
 namespace {
 
-constexpr int kHolePairs[6][2] = {{0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}};
-
 [[nodiscard]] bool is_straight_category(HandRank r) {
     return r == HandRank::Straight || r == HandRank::StraightFlush || r == HandRank::RoyalFlush;
 }
@@ -61,31 +59,7 @@ void idx_to_rs(const int* idx, int n, std::uint8_t* ranks, std::uint8_t* suits) 
 }
 
 HandEvaluation omaha_best_from_idx(const int hole[4], const int* board, int board_n) {
-    std::uint8_t hr[4]{};
-    std::uint8_t hs[4]{};
-    std::uint8_t br[5]{};
-    std::uint8_t bs[5]{};
-    idx_to_rs(hole, 4, hr, hs);
-    idx_to_rs(board, board_n, br, bs);
-
-    HandEvaluation best{};
-    bool init = false;
-    for (int a = 0; a < board_n - 2; ++a) {
-        for (int b = a + 1; b < board_n - 1; ++b) {
-            for (int c = b + 1; c < board_n; ++c) {
-                for (const auto& pair : kHolePairs) {
-                    const std::uint8_t ranks[5] = {hr[pair[0]], hr[pair[1]], br[a], br[b], br[c]};
-                    const std::uint8_t suits[5] = {hs[pair[0]], hs[pair[1]], bs[a], bs[b], bs[c]};
-                    const HandEvaluation e = evaluate_five_cards_fast(ranks, suits);
-                    if (!init || best < e) {
-                        best = e;
-                        init = true;
-                    }
-                }
-            }
-        }
-    }
-    return best;
+    return plo_best_two_plus_three(hole, 4, board, board_n);
 }
 
 std::uint64_t omaha_strength_from_idx(const int hole[4], const int* board, int board_n) {
@@ -159,6 +133,39 @@ void sample_without_replace(std::vector<int>& pool, int take, std::mt19937& rng)
 }
 
 }  // namespace
+
+HandEvaluation plo_best_two_plus_three(const int* hole, int hole_n, const int* board, int board_n) {
+    if (hole_n < 2 || hole_n > 5 || board_n < 3 || board_n > 5) {
+        throw std::invalid_argument("2+3 evaluation needs 2..5 hole and 3..5 board");
+    }
+    std::uint8_t hr[5]{};
+    std::uint8_t hs[5]{};
+    std::uint8_t br[5]{};
+    std::uint8_t bs[5]{};
+    idx_to_rs(hole, hole_n, hr, hs);
+    idx_to_rs(board, board_n, br, bs);
+
+    HandEvaluation best{};
+    bool init = false;
+    for (int a = 0; a < board_n - 2; ++a) {
+        for (int b = a + 1; b < board_n - 1; ++b) {
+            for (int c = b + 1; c < board_n; ++c) {
+                for (int i = 0; i < hole_n - 1; ++i) {
+                    for (int j = i + 1; j < hole_n; ++j) {
+                        const std::uint8_t ranks[5] = {hr[i], hr[j], br[a], br[b], br[c]};
+                        const std::uint8_t suits[5] = {hs[i], hs[j], bs[a], bs[b], bs[c]};
+                        const HandEvaluation e = evaluate_five_cards_fast(ranks, suits);
+                        if (!init || best < e) {
+                            best = e;
+                            init = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return best;
+}
 
 HandEvaluation evaluate_omaha_best_hand(const std::vector<Card>& hole, const std::vector<Card>& board) {
     require_hole4(hole);
@@ -370,6 +377,10 @@ OmahaWrapDrawOuts omaha_wrap_draw_outs(const std::vector<Card>& hero, const std:
     cards_to_idx(hero, h);
     cards_to_idx(flop, f);
     OmahaWrapDrawOuts out{};
+    // A hand that already holds a straight (or better) on the flop is not drawing to one.
+    if (static_cast<int>(omaha_best_from_idx(h, f, 3).rank) >= static_cast<int>(HandRank::Straight)) {
+        return out;
+    }
     for (int x : used.unused_indices()) {
         const int board4[4] = {f[0], f[1], f[2], x};
         const HandEvaluation e = omaha_best_from_idx(h, board4, 4);
@@ -403,6 +414,10 @@ double omaha_nuttedness_score(const std::vector<Card>& hero, const std::vector<C
         }
     }
     const std::uint64_t hero_s = omaha_strength_from_idx(h, b, static_cast<int>(board.size()));
+    // Villain holdings cannot contain hero's cards.
+    for (int i = 0; i < 4; ++i) {
+        block.set(h[i]);
+    }
     const std::vector<int> pool = block.unused_indices();
     std::uint64_t better = 0;
     std::uint64_t total = 0;
@@ -413,10 +428,10 @@ double omaha_nuttedness_score(const std::vector<Card>& hero, const std::vector<C
             ++better;
         }
     });
-    if (total <= 1) {
+    if (total == 0) {
         return 1.0;
     }
-    return 1.0 - static_cast<double>(better) / static_cast<double>(total - 1);
+    return 1.0 - static_cast<double>(better) / static_cast<double>(total);
 }
 
 std::vector<double> omaha_multiway_equity_mc(const std::vector<std::vector<Card>>& holes,
