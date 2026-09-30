@@ -125,7 +125,11 @@ jobs:
             -v "$PWD:/ws" -w /ws \
             node:22.14-bullseye \
             bash -exc '
-              apt-get update
+              # Bullseye is past end of life: deb.debian.org prunes its security pool (404s) and
+              # the release now lives on archive.debian.org. Main alone has everything we need.
+              echo "deb http://archive.debian.org/debian bullseye main" > /etc/apt/sources.list
+              rm -f /etc/apt/sources.list.d/*
+              apt-get -o Acquire::Check-Valid-Until=false update
               DEBIAN_FRONTEND=noninteractive apt-get install -y python3 make g++ cmake git
               npm ci
               node scripts/build-native.js compile
@@ -158,7 +162,11 @@ jobs:
             -v "$PWD:/ws" -w /ws \
             node:22.14-bullseye \
             bash -exc '
-              apt-get update
+              # Bullseye is past end of life: deb.debian.org prunes its security pool (404s) and
+              # the release now lives on archive.debian.org. Main alone has everything we need.
+              echo "deb http://archive.debian.org/debian bullseye main" > /etc/apt/sources.list
+              rm -f /etc/apt/sources.list.d/*
+              apt-get -o Acquire::Check-Valid-Until=false update
               DEBIAN_FRONTEND=noninteractive apt-get install -y python3 make g++ cmake git
               npm ci
               node scripts/build-native.js compile
