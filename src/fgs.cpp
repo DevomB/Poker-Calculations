@@ -58,50 +58,6 @@ void deduct_average_orbit(std::vector<double>& stacks, double cost) {
     }
 }
 
-/// Harville ICM on alive seats using the top-k prizes. Busted seats have already finished and
-/// split the bottom prizes, so the prize pool is conserved (same rule as pko.cpp).
-[[nodiscard]] std::vector<double> icm_allowing_busts(const std::vector<double>& stacks,
-                                                     const std::vector<double>& payouts) {
-    const std::size_t n = stacks.size();
-    std::vector<double> ev(n, 0.0);
-    std::vector<std::size_t> alive;
-    std::vector<std::size_t> dead;
-    alive.reserve(n);
-    for (std::size_t i = 0; i < n; ++i) {
-        if (stacks[i] > 0.0) {
-            alive.push_back(i);
-        } else {
-            dead.push_back(i);
-        }
-    }
-    if (!dead.empty()) {
-        double dead_prize = 0.0;
-        for (std::size_t r = n - dead.size(); r < n; ++r) {
-            dead_prize += payouts[r];
-        }
-        const double each = dead_prize / static_cast<double>(dead.size());
-        for (std::size_t i : dead) {
-            ev[i] = each;
-        }
-    }
-    if (alive.empty()) {
-        return ev;
-    }
-    std::vector<double> live_stacks;
-    std::vector<double> live_payouts;
-    live_stacks.reserve(alive.size());
-    live_payouts.reserve(alive.size());
-    for (std::size_t k = 0; k < alive.size(); ++k) {
-        live_stacks.push_back(stacks[alive[k]]);
-        live_payouts.push_back(payouts[k]);
-    }
-    const auto live_ev = icm_expected_payouts(live_stacks, live_payouts);
-    for (std::size_t k = 0; k < alive.size(); ++k) {
-        ev[alive[k]] = live_ev[k];
-    }
-    return ev;
-}
-
 void apply_orbit_count(std::vector<double>& stacks, int orbits, double cost) {
     if (orbits < 0) {
         throw std::invalid_argument("FGS: orbits must be >= 0");
@@ -131,7 +87,7 @@ std::vector<double> icm_payouts_after_blind_post(const std::vector<double>& stac
         validate_nonneg("post", post);
         s[i] = std::max(0.0, s[i] - post);
     }
-    return icm_allowing_busts(s, payouts);
+    return icm_expected_payouts_allowing_busts(s, payouts);
 }
 
 double icm_calling_bubble_factor(const std::vector<double>& stacks, const std::vector<double>& payouts,
@@ -140,7 +96,7 @@ double icm_calling_bubble_factor(const std::vector<double>& stacks, const std::v
     validate_index_pair(stacks.size(), hero, villain);
     validate_nonneg("chipsAtRisk", chips_at_risk);
     const double risk = std::min({chips_at_risk, stacks[hero], stacks[villain]});
-    const auto now = icm_allowing_busts(stacks, payouts);
+    const auto now = icm_expected_payouts_allowing_busts(stacks, payouts);
     auto win = stacks;
     auto lose = stacks;
     win[hero] += risk;
@@ -148,8 +104,8 @@ double icm_calling_bubble_factor(const std::vector<double>& stacks, const std::v
     lose[hero] = std::max(0.0, lose[hero] - risk);
     lose[villain] += risk;
     const double ev_now = now[hero];
-    const double ev_win = icm_allowing_busts(win, payouts)[hero];
-    const double ev_lose = icm_allowing_busts(lose, payouts)[hero];
+    const double ev_win = icm_expected_payouts_allowing_busts(win, payouts)[hero];
+    const double ev_lose = icm_expected_payouts_allowing_busts(lose, payouts)[hero];
     const double loss = ev_now - ev_lose;
     const double gain = ev_win - ev_now;
     if (std::abs(gain) < kTinyIcm) {
@@ -180,7 +136,7 @@ std::vector<double> fgs_payouts_blind_schedule(const std::vector<double>& stacks
         const int orbits = static_cast<int>(orbits_at_level[i]);
         apply_orbit_count(s, orbits, orbit_cost(small_blinds[i], big_blinds[i], antes[i]));
     }
-    return icm_allowing_busts(s, payouts);
+    return icm_expected_payouts_allowing_busts(s, payouts);
 }
 
 IcmDeadPotDollarEvResult icm_dead_pot_dollar_ev(const std::vector<double>& stacks,
@@ -192,10 +148,10 @@ IcmDeadPotDollarEvResult icm_dead_pot_dollar_ev(const std::vector<double>& stack
     }
     validate_nonneg("deadChips", dead_chips);
     IcmDeadPotDollarEvResult out;
-    out.now_ev = icm_allowing_busts(stacks, payouts)[hero];
+    out.now_ev = icm_expected_payouts_allowing_busts(stacks, payouts)[hero];
     auto win = stacks;
     win[hero] += dead_chips;
-    out.win_ev = icm_allowing_busts(win, payouts)[hero];
+    out.win_ev = icm_expected_payouts_allowing_busts(win, payouts)[hero];
     out.delta = out.win_ev - out.now_ev;
     return out;
 }

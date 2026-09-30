@@ -5,6 +5,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Sources are UTF-8. Without this MSVC reads them as the system code page and string literals
+# such as "∞:1" (formatPotOdds with nothing to call) come out as "?:1" on Windows only.
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 add_library(poker_lib STATIC
     src/card.cpp
     src/card_string.cpp

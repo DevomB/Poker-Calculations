@@ -91,11 +91,13 @@ class CancellableWorker : public Napi::AsyncWorker {
     Napi::Promise::Deferred deferred_;
 
  private:
+    // Cooperative only: Execute checks the flag before starting and inside hot loops, then
+    // rejects with AbortError. AsyncWorker::Cancel() is not used because it throws from this
+    // JS listener once the work is running, and a cancelled queued worker never settles its promise.
     static void OnAbortCallback(const Napi::CallbackInfo& info) {
         auto* self = static_cast<CancellableWorker*>(info.Data());
         if (self != nullptr) {
             self->cancelled_flag_.store(true, std::memory_order_relaxed);
-            self->Cancel();
         }
     }
 
