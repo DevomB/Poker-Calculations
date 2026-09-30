@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.0.3
+
+- **Hands under five cards are categorized.** `evaluateBestHand`, `evaluateHandCategory`, `evaluateHandStrength(Fast)`, `compareBestHands`, and `evaluateShortDeckBestHand` reported every 1–4 card hand as high card, so a pocket pair or a stud upcard pair ranked below an unpaired hand. They now report one pair, two pair, three of a kind, and four of a kind (straights, flushes, and full houses need five cards). Hands of five or more cards are unchanged.
+- The crash sweep (`npm run sweep`) found no exports after the 4.0.2 namespace change and silently passed; it reads the new layout again.
+
 ## 4.0.2
 
 TypeScript definitions only; no runtime changes.

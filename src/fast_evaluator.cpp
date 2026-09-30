@@ -175,17 +175,31 @@ HandEvaluation evaluate_five_core(const std::uint8_t ranks[5], const std::uint8_
     return e;
 }
 
-HandEvaluation partial_high_card_fast(const std::uint8_t ranks[], int card_count) {
-    HandEvaluation e{};
-    e.rank = HandRank::HighCard;
-    std::array<std::uint8_t, 7> sorted{};
+// Same layout as partial_hand in hand_evaluator.cpp: pairs, two pair, trips and quads still count
+// under five cards; made ranks first, then the rest high to low.
+HandEvaluation partial_hand_fast(const std::uint8_t ranks[], int card_count) {
+    std::array<int, 13> freq{};
     for (int i = 0; i < card_count; ++i) {
-        sorted[static_cast<std::size_t>(i)] = ranks[i];
+        freq[static_cast<std::size_t>(ranks[i])]++;
     }
-    std::sort(sorted.begin(), sorted.begin() + card_count, std::greater<std::uint8_t>{});
-    for (int ki = 0; ki < card_count && ki < 5; ++ki) {
-        e.kickers[static_cast<std::size_t>(ki)] = sorted[static_cast<std::size_t>(ki)];
+    HandEvaluation e{};
+    int ki = 0;
+    int top = 0;
+    int pairs = 0;
+    for (int count = 4; count >= 1; --count) {
+        for (int r = 12; r >= 0 && ki < 5; --r) {
+            if (freq[static_cast<std::size_t>(r)] == count) {
+                e.kickers[static_cast<std::size_t>(ki++)] = static_cast<std::uint8_t>(r);
+                top = std::max(top, count);
+                pairs += count == 2 ? 1 : 0;
+            }
+        }
     }
+    e.rank = top == 4     ? HandRank::FourOfAKind
+             : top == 3   ? HandRank::ThreeOfAKind
+             : pairs >= 2 ? HandRank::TwoPair
+             : pairs == 1 ? HandRank::OnePair
+                          : HandRank::HighCard;
     return e;
 }
 
@@ -231,7 +245,7 @@ HandEvaluation evaluate_best_hand_fast(const std::uint8_t ranks[], const std::ui
         return HandEvaluation{};
     }
     if (card_count < 5) {
-        return partial_high_card_fast(ranks, card_count);
+        return partial_hand_fast(ranks, card_count);
     }
     HandEvaluation best{};
     bool init = false;
