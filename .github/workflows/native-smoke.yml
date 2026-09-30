@@ -62,3 +62,8 @@ jobs:
           node --version
           npm run smoke
         shell: bash
+
+      # `node --test` expands the glob in the test script only on Node 21+.
+      - name: Unit tests
+        if: matrix.node == '22'
+        run: npm test

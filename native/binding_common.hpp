@@ -2,9 +2,15 @@
 
 #include <napi.h>
 
+#include <cstdint>
 #include <string>
 
 namespace poker_bind {
+
+/** First element of a typed array. Views such as `subarray()` start partway into their ArrayBuffer. */
+[[nodiscard]] inline const void* typed_array_data(const Napi::TypedArray& ta) {
+    return static_cast<const std::uint8_t*>(ta.ArrayBuffer().Data()) + ta.ByteOffset();
+}
 
 enum class F64ReturnFormat { Array, Float64 };
 

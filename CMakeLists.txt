@@ -105,6 +105,9 @@ if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
     endif()
     target_compile_definitions(poker_calculations PRIVATE NAPI_VERSION=8)
     target_compile_definitions(poker_calculations PRIVATE $<$<BOOL:${WIN32}>:NOMINMAX>)
+    # Turn any std::exception escaping a binding into a JS Error. Without _ALL, node-addon-api only
+    # catches Napi::Error, and a std::invalid_argument from poker_lib aborts the Node process.
+    target_compile_definitions(poker_calculations PRIVATE NODE_ADDON_API_CPP_EXCEPTIONS NODE_ADDON_API_CPP_EXCEPTIONS_ALL)
     # Node-API on Windows: cmake-js skips full Node download; generate node.lib from node-api-headers .def (cmake-js README).
     if(MSVC AND CMAKE_JS_NODELIB_DEF AND CMAKE_JS_NODELIB_TARGET)
         execute_process(COMMAND ${CMAKE_AR} /def:${CMAKE_JS_NODELIB_DEF} /out:${CMAKE_JS_NODELIB_TARGET} ${CMAKE_STATIC_LINKER_FLAGS})

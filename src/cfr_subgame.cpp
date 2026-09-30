@@ -122,8 +122,6 @@ struct LiveCombo {
     throw std::invalid_argument("mix must be a scalar or length-1326 weights");
 }
 
-[[nodiscard]] std::vector<double> empty_mix_1326() { return std::vector<double>(static_cast<std::size_t>(kComboCount), 0.0); }
-
 void write_mix_1326(std::vector<double>& dest, const std::vector<LiveCombo>& combos,
                     const std::vector<double>& local) {
     dest.assign(static_cast<std::size_t>(kComboCount), 0.0);

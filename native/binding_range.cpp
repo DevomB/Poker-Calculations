@@ -36,7 +36,7 @@ bool parse_sparse_range(const Napi::Env env, const Napi::Value& v, const poker::
             return false;
         }
         std::vector<double> w(1326);
-        std::memcpy(w.data(), ta.ArrayBuffer().Data(), 1326 * sizeof(double));
+        std::memcpy(w.data(), poker_bind::typed_array_data(ta), 1326 * sizeof(double));
         out = poker::sparse_range_from_dense1326(w.data(), 1326, dead.mask);
         return true;
     }
@@ -62,9 +62,9 @@ bool parse_sparse_range(const Napi::Env env, const Napi::Value& v, const poker::
         const std::size_t n = ta.ElementLength();
         indices.resize(n);
         if (ta.TypedArrayType() == napi_int32_array) {
-            std::memcpy(indices.data(), ta.ArrayBuffer().Data(), n * sizeof(int32_t));
+            std::memcpy(indices.data(), poker_bind::typed_array_data(ta), n * sizeof(int32_t));
         } else if (ta.TypedArrayType() == napi_uint32_array) {
-            const auto* src = static_cast<const uint32_t*>(ta.ArrayBuffer().Data());
+            const auto* src = static_cast<const uint32_t*>(poker_bind::typed_array_data(ta));
             for (std::size_t i = 0; i < n; ++i) {
                 indices[i] = static_cast<int>(src[i]);
             }

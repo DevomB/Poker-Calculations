@@ -75,11 +75,10 @@ or `h / (h + v)` when `p = 0.5`; expected all-ins `h × v` at `p = 0.5`.
 
 `icmExpectedPayoutsWeitzman` splits each prize tier independently with weight `stack^alpha` (default `alpha = 2`). This is an independent chip-utility model, not Harville placement.
 
-## Bucketed flop CFR
+## Flop EHS2 buckets
 
-`cfrFlopCheckBetSolve` is a HU check/bet tree in **EHS2 bucket space**, not a 1326-combo river solver.
+Building blocks for bucketed flop abstractions; the package does not ship a flop solver.
 
-- Each range is collapsed to K equal-width EHS2 buckets vs the opponent (`ehs2BucketsVsRange`).
-- Showdown equity between buckets `i` and `j` is the mean-EHS2 ratio `ehs_i / (ehs_i + ehs_j)` (midpoint `(i+0.5)/K` when no EHS2 table is given). This is **not** exact turn+river runout EV.
-- Combo-level blockers between buckets are ignored.
+- `ehs2BucketsVsRange` assigns each of the 1326 hero combos to one of K equal-width EHS2 buckets vs the opponent range (default K = `flopBucketCountDefault()` = 20). Board-blocked combos are `-1`.
+- `bucketMassFromRange` sums a 1326 range into K bucket masses; `flopBucketStrategyTo1326` copies a per-bucket strategy back onto every combo in that bucket. Combo-level blockers between buckets are ignored.
 - `canonicalFlopCfrKey` hashes `isomorphicFlopIndex` / `countCanonicalFlops` (1755) plus millichip pot and stack so suit-isomorphic flops share a cache key.

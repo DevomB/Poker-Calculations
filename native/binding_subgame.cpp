@@ -31,7 +31,7 @@ bool parse_sparse_range(const Napi::Env env, const Napi::Value& v, const poker::
             return false;
         }
         std::vector<double> w(1326);
-        std::memcpy(w.data(), ta.ArrayBuffer().Data(), 1326 * sizeof(double));
+        std::memcpy(w.data(), poker_bind::typed_array_data(ta), 1326 * sizeof(double));
         out = poker::sparse_range_from_dense1326(w.data(), 1326, dead.mask);
         return true;
     }
@@ -50,7 +50,7 @@ bool parse_sparse_range(const Napi::Env env, const Napi::Value& v, const poker::
         const std::size_t n = ta.ElementLength();
         indices.resize(n);
         if (ta.TypedArrayType() == napi_int32_array) {
-            std::memcpy(indices.data(), ta.ArrayBuffer().Data(), n * sizeof(int32_t));
+            std::memcpy(indices.data(), poker_bind::typed_array_data(ta), n * sizeof(int32_t));
         } else {
             if (err) {
                 *err = "indices must be Int32Array";
@@ -108,7 +108,10 @@ Napi::Value MaterializeVillainRangeAfterBlockers(const Napi::CallbackInfo& info)
     POKER_TRY(env, {
         if (info[0].IsTypedArray()) {
             const Napi::TypedArray ta = info[0].As<Napi::TypedArray>();
-            const double* data = static_cast<const double*>(ta.ArrayBuffer().Data());
+            if (ta.TypedArrayType() != napi_float64_array || ta.ElementLength() != 1326) {
+                POKER_FAIL_TYPE(env, "range must be Float64Array(1326) or a sparse range");
+            }
+            const double* data = static_cast<const double*>(poker_bind::typed_array_data(ta));
             return materialized_to_js(
                 env, poker::materialize_villain_range_after_blockers(data, 1326, hero, board, dead_extra));
         }

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <future>
 #include <random>
 #include <vector>
@@ -73,6 +74,7 @@ float accumulate_showdown_equity(Rng& rng, const std::vector<Card>& player_hand,
     if (villains < 1) {
         villains = 1;
     }
+    validate_holdem_spot(player_hand, community_cards, villains);
     throw_if_cancelled(cancel);
     std::vector<bool> known(52, false);
     collect_known(player_hand, community_cards, known);
@@ -141,6 +143,11 @@ float accumulate_showdown_equity_fixed_villain(Rng& rng, const std::vector<Card>
     if (iterations <= 0) {
         return 0.0F;
     }
+    validate_holdem_spot(player_hand, community_cards, 1);
+    if (villain_deck_a < 0 || villain_deck_a > 51 || villain_deck_b < 0 || villain_deck_b > 51 ||
+        villain_deck_a == villain_deck_b) {
+        throw std::invalid_argument("villain hole cards must be two distinct deck indices 0..51");
+    }
     throw_if_cancelled(cancel);
     std::vector<bool> known(52, false);
     collect_known(player_hand, community_cards, known);
@@ -195,6 +202,36 @@ float accumulate_showdown_equity_fixed_villain(Rng& rng, const std::vector<Card>
 
 }  // namespace
 
+void validate_holdem_spot(const std::vector<Card>& player_hand,
+                          const std::vector<Card>& community_cards, int villains) {
+    if (player_hand.size() != 2) {
+        throw std::invalid_argument("hero hand must be exactly 2 cards");
+    }
+    if (community_cards.size() > 5) {
+        throw std::invalid_argument("board must have at most 5 cards");
+    }
+    std::uint64_t seen = 0;
+    const auto mark = [&seen](const Card& c) {
+        const std::uint64_t bit = std::uint64_t{1} << deck_index_from_card(c);
+        if ((seen & bit) != 0) {
+            throw std::invalid_argument("duplicate card in hero hand or board");
+        }
+        seen |= bit;
+    };
+    for (const Card& c : player_hand) {
+        mark(c);
+    }
+    for (const Card& c : community_cards) {
+        mark(c);
+    }
+    const std::size_t live = 52 - player_hand.size() - community_cards.size();
+    const std::size_t needed =
+        static_cast<std::size_t>(std::max(villains, 1)) * 2 + (5 - community_cards.size());
+    if (needed > live) {
+        throw std::invalid_argument("not enough cards left to deal every villain and the board");
+    }
+}
+
 float simulate_hand_outcome_vs_villain_holes(const std::vector<Card>& player_hand,
                                              const std::vector<Card>& community_cards,
                                              int villain_deck_a, int villain_deck_b,
@@ -219,6 +256,7 @@ float parallel_hand_simulation(const std::vector<Card>& player_hand,
     if (num_simulations <= 0) {
         return 0.0F;
     }
+    validate_holdem_spot(player_hand, community_cards, villains);
     throw_if_cancelled(cancel);
     if (num_threads == 0) {
         num_threads = 1;

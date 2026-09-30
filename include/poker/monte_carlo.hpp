@@ -9,6 +9,11 @@
 
 namespace poker {
 
+/// Throws std::invalid_argument unless hero has 2 cards, the board has at most 5, no card repeats,
+/// and the deck still holds 2 cards per villain plus the rest of the board.
+void validate_holdem_spot(const std::vector<Card>& player_hand,
+                          const std::vector<Card>& community_cards, int villains);
+
 /// Estimated equity (0–1) for hero winning share of a multi-way pot at showdown.
 [[nodiscard]] float simulate_hand_outcome(const std::vector<Card>& player_hand,
                                           const std::vector<Card>& community_cards,

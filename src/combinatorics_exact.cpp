@@ -53,10 +53,6 @@ int category_from_seven(const std::uint8_t ranks[7], const std::uint8_t suits[7]
     return static_cast<int>(hand_category(e));
 }
 
-std::uint64_t strength_from_seven(const std::uint8_t ranks[7], const std::uint8_t suits[7]) {
-    return evaluate_seven_strength_fast(ranks, suits);
-}
-
 std::uint64_t max_villain_strength_on_board(const std::vector<Card>& board, std::uint64_t dead_mask,
                                             int h0, int h1, const CancelPredicate* cancel) {
     std::uint64_t best = 0;

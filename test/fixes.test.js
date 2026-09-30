@@ -336,3 +336,36 @@ test('Nash heads-up solve uses ICM when payouts are supplied', () => {
   const mass = (v) => Array.from(v).reduce((a, b) => a + b, 0);
   assert.ok(mass(icm.jam) < mass(chip.jam), 'ICM pressure tightens the jam range');
 });
+
+// Before 4.0.0 a std::exception escaping a binding aborted the whole Node process
+// (719 of 5,152 crash-sweep calls). These must now surface as ordinary JS errors.
+test('invalid numeric input throws instead of terminating the process', () => {
+  assert.throws(() => poker.spr(-1, 100));
+  assert.throws(() => poker.harringtonM(0, 0, 0));
+  assert.throws(() => poker.icmExpectedPayouts([], []));
+  assert.throws(() => poker.wilsonScoreInterval(5, 0, 1.96));
+});
+
+test('Monte Carlo rejects impossible spots instead of reading past the deck', async () => {
+  assert.throws(() => poker.simulateHandOutcome(['Ah'], [], 100, 1), /2 cards/);
+  assert.throws(() => poker.simulateHandOutcome(['Ah', 'Kh'], ['2c', '3c', '4c', '5c', '6c', '7c'], 100, 1), /at most 5/);
+  assert.throws(() => poker.simulateHandOutcome(['Ah', 'Kh'], ['Ah', '3c', '4c'], 100, 1), /duplicate/);
+  assert.throws(() => poker.simulateHandOutcome(['Ah', 'Kh'], [], 100, 1, 30), /not enough cards/);
+  assert.throws(() => poker.simulateHandOutcomeDetailed(['Ah'], [], 100, 1));
+  assert.throws(() => poker.parallelHandSimulation(['Ah'], [], 100, 1, 1, 2));
+  await assert.rejects(poker.simulateHandOutcomeAsync(['Ah'], [], 100, 1), /2 cards/);
+});
+
+test('typed-array ranges are length-checked and read from their own offset', () => {
+  assert.throws(() => poker.materializeVillainRangeAfterBlockers(new Float64Array(0), ['Ah', 'Kh'], []), TypeError);
+  assert.throws(
+    () => poker.exactRangeDominatedComboFraction(['Ah', 'Kh'], ['2c', '7d', '9s'], { indices: new Uint8Array([0, 1, 2]), weights: [1, 1, 1] }),
+    TypeError,
+  );
+  // A subarray() view must read its own 1326 weights, not the start of the shared buffer.
+  const buf = new Float64Array(2 * 1326);
+  const view = buf.subarray(1326);
+  view.fill(1);
+  const board = ['2c', '7d', '9s', 'Ts', 'Jc'];
+  near(poker.exactHuEquityVsRange(['Ah', 'Kh'], board, view), poker.exactHuEquityVsRange(['Ah', 'Kh'], board, Float64Array.from(view)), 1e-12, 'subarray range');
+});

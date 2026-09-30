@@ -52,7 +52,7 @@ bool parse_class_weights(const Napi::Env env, const Napi::Value& v,
             return false;
         }
         const std::size_t n = ta.ElementLength();
-        const auto* src = static_cast<const double*>(ta.ArrayBuffer().Data());
+        const auto* src = static_cast<const double*>(poker_bind::typed_array_data(ta));
         if (n == static_cast<std::size_t>(poker::kShortDeckHandClasses)) {
             std::memcpy(out.data(), src, n * sizeof(double));
             return true;

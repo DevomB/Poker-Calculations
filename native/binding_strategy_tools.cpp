@@ -75,7 +75,7 @@ bool read_range_dense(const Napi::Value& v, std::vector<double>& out, std::strin
             }
             return false;
         }
-        std::memcpy(out.data(), ta.ArrayBuffer().Data(), kCombos * sizeof(double));
+        std::memcpy(out.data(), poker_bind::typed_array_data(ta), kCombos * sizeof(double));
         for (double& w : out) {
             if (!std::isfinite(w) || w < 0.0) {
                 w = 0.0;
@@ -106,9 +106,9 @@ bool read_range_dense(const Napi::Value& v, std::vector<double>& out, std::strin
         const Napi::TypedArray ta = iv.As<Napi::TypedArray>();
         indices.resize(ta.ElementLength());
         if (ta.TypedArrayType() == napi_int32_array) {
-            std::memcpy(indices.data(), ta.ArrayBuffer().Data(), indices.size() * sizeof(std::int32_t));
+            std::memcpy(indices.data(), poker_bind::typed_array_data(ta), indices.size() * sizeof(std::int32_t));
         } else if (ta.TypedArrayType() == napi_uint32_array) {
-            const auto* p = static_cast<const std::uint32_t*>(ta.ArrayBuffer().Data());
+            const auto* p = static_cast<const std::uint32_t*>(poker_bind::typed_array_data(ta));
             for (std::size_t i = 0; i < indices.size(); ++i) {
                 indices[i] = static_cast<int>(p[i]);
             }
