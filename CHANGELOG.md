@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.0.2
+
+TypeScript definitions only; no runtime changes.
+
+- **`index.d.ts` is valid TypeScript.** It combined `export =` with named exports (TS2309), so projects with `skipLibCheck: false` failed to compile. The types now live in a namespace merged with the export, and `import type { CardInput } from 'poker-calculations'` works as documented. CI compiles a consumer file against the definitions.
+- **`icmHarvillePlacementProbabilities`** is typed as the flat row-major `number[] | Float64Array` it has always returned (it was declared `number[][]`).
+- Removed 34 type declarations left over from exports deleted in 4.0.0.
+
 ## 4.0.1
 
 Bug fixes found while writing runnable examples for every export.
