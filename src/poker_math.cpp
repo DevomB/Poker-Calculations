@@ -7,6 +7,7 @@
 #include "poker/hand_evaluator.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cctype>
 #include <cstddef>
@@ -73,7 +74,9 @@ void assert_positive_finite(const char* name, double x) {
 }
 
 [[nodiscard]] double final_pot_after_hu_call(double pot_before_call, double to_call) {
-    return pot_before_call + 2.0 * to_call;
+    // `pot_before_call` already contains villain's bet (the amount hero must match), so the
+    // final pot adds only hero's call. Same convention as breakeven_call_equity.
+    return pot_before_call + to_call;
 }
 
 [[nodiscard]] double final_pot_after_hu_bet(double pot_before_bet, double bet_size) {
@@ -82,24 +85,29 @@ void assert_positive_finite(const char* name, double x) {
 
 }  // namespace
 
-double pot_odds_ratio(int pot, int to_call) {
-    if (to_call <= 0) {
+double pot_odds_ratio(double pot, double to_call) {
+    assert_non_neg_finite("pot", pot);
+    assert_non_neg_finite("toCall", to_call);
+    if (to_call <= 0.0) {
         return 0.0;
     }
-    const double denom = static_cast<double>(pot) + static_cast<double>(to_call);
+    const double denom = pot + to_call;
     if (denom <= 0.0) {
         return 0.0;
     }
-    return static_cast<double>(to_call) / denom;
+    return to_call / denom;
 }
 
-double expected_value_call(double equity, int pot, int to_call) {
-    if (to_call <= 0) {
-        return equity * static_cast<double>(pot);
+double expected_value_call(double equity, double pot, double to_call) {
+    if (!std::isfinite(equity)) {
+        throw std::invalid_argument("equity must be finite");
     }
-    const double win = static_cast<double>(pot + to_call);
-    const double lose = static_cast<double>(to_call);
-    return equity * win - (1.0 - equity) * lose;
+    assert_non_neg_finite("pot", pot);
+    assert_non_neg_finite("toCall", to_call);
+    const double e = clamp01(equity);
+    // Hero wins what is in the middle (`pot`, which includes villain's bet) or loses the call.
+    // Zero exactly at breakeven_call_equity(pot, to_call).
+    return e * pot - (1.0 - e) * to_call;
 }
 
 double spr(double pot_chips, double effective_stack_chips) {
@@ -416,28 +424,6 @@ double runner_runner_straight_draw_hit_probability(Runner_runner_straight_draw_k
     return flop_to_river_at_least_one_hit_probability(outs, unseen_after_flop);
 }
 
-double reverse_implied_odds_max_future_loss(double pot_before_call, double to_call, double equity) {
-    assert_non_neg_finite("potBeforeCall", pot_before_call);
-    assert_non_neg_finite("toCall", to_call);
-    if (!std::isfinite(equity)) {
-        throw std::invalid_argument("equity must be a finite number");
-    }
-    const double e = clamp01(equity);
-    if (e <= 0.0) {
-        return 0.0;
-    }
-    if (e >= 1.0) {
-        return std::numeric_limits<double>::infinity();
-    }
-    const double immediate_win = pot_before_call + to_call;
-    const double ev_at_zero_loss = e * immediate_win - (1.0 - e) * to_call;
-    if (ev_at_zero_loss < 0.0) {
-        return 0.0;
-    }
-    const double max_loss = (e * immediate_win) / (1.0 - e) - to_call;
-    return std::max(0.0, max_loss);
-}
-
 double geometric_pot_after_matched_pot_fractions(double pot0, double fraction, int n_rounds) {
     assert_non_neg_finite("pot0", pot0);
     if (!std::isfinite(fraction) || fraction < 0.0) {
@@ -527,16 +513,6 @@ Beta_binomial_fold_posterior beta_binomial_fold_update(double prior_alpha, doubl
     out.beta = b;
     out.posterior_mean = a / (a + b);
     return out;
-}
-
-double duplication_adjusted_outs(double outs, int num_villains, double duplication_weight) {
-    assert_non_neg_finite("outs", outs);
-    if (num_villains < 0) {
-        throw std::invalid_argument("numVillains must be non-negative");
-    }
-    assert_non_neg_finite("duplicationWeight", duplication_weight);
-    const double denom = 1.0 + duplication_weight * static_cast<double>(num_villains);
-    return denom <= 0.0 ? outs : outs / denom;
 }
 
 double risk_of_ruin_diffusion_approx(double drift_per_hand, double variance_per_hand,
@@ -787,9 +763,9 @@ double breakeven_call_equity_with_rake(double pot_before_call, double to_call, d
                                        double rake_cap) {
     assert_non_neg_finite("potBeforeCall", pot_before_call);
     assert_non_neg_finite("toCall", to_call);
-    const double final_pot = pot_before_call + 2.0 * to_call;
+    const double final_pot = final_pot_after_hu_call(pot_before_call, to_call);
     const double rake = rake_from_pot(final_pot, rake_fraction, rake_cap);
-    const double denom = pot_before_call + 2.0 * to_call - rake;
+    const double denom = final_pot - rake;
     if (denom <= 0.0) {
         throw std::invalid_argument("rake model leaves no positive pot for breakeven equity");
     }
@@ -885,9 +861,9 @@ double two_street_pure_bluff_ev(double pot_before_street1, double bet_street1, d
     const double P0 = pot_before_street1;
     const double B1 = bet_street1;
     const double B2 = bet_street2;
-    const double A = P0 + B1 - B2;
-    const double C = B1 + B2;
-    return fe1 * P0 + (1.0 - fe1) * (-B1 + fe2 * A - (1.0 - fe2) * C);
+    // Fold on street 1: +P0. Call then fold: hero wins P0 + B1 (villain's call). Called twice:
+    // hero loses B1 + B2 at showdown.
+    return fe1 * P0 + (1.0 - fe1) * (fe2 * (P0 + B1) - (1.0 - fe2) * (B1 + B2));
 }
 
 double breakeven_fold_equity_second_street_pure_bluff(double pot_before_street1, double bet_street1,
@@ -905,14 +881,13 @@ double breakeven_fold_equity_second_street_pure_bluff(double pot_before_street1,
     const double P0 = pot_before_street1;
     const double B1 = bet_street1;
     const double B2 = bet_street2;
-    const double A = P0 + B1 - B2;
-    const double C = B1 + B2;
-    const double sum = A + C;
-    if (std::abs(sum) < 1e-15) {
+    // Solve two_street_pure_bluff_ev(fe1, fe2) = 0 for fe2:
+    // fe2 (P0 + B1) - (1 - fe2)(B1 + B2) = -fe1 P0 / (1 - fe1).
+    const double den = P0 + 2.0 * B1 + B2;
+    if (std::abs(den) < 1e-15) {
         throw std::invalid_argument("degenerate pot/bet geometry for second-street breakeven");
     }
-    const double rhs = C - B1 - fe1 * P0 / (1.0 - fe1);
-    return rhs / sum;
+    return ((B1 + B2) - fe1 * P0 / (1.0 - fe1)) / den;
 }
 
 double two_street_pure_bluff_same_fold_equity(double pot_before_street1, double bet_street1,
@@ -923,11 +898,10 @@ double two_street_pure_bluff_same_fold_equity(double pot_before_street1, double 
     const double P0 = pot_before_street1;
     const double B1 = bet_street1;
     const double B2 = bet_street2;
-    const double Bsum = B1 + B2;
-    const double A = P0 + 2.0 * B1;
-    const double a = -A;
-    const double b = 2.0 * P0 + 3.0 * B1 + B2;
-    const double c = -Bsum;
+    // EV(f) = f P0 + (1 - f)[f (P0 + B1) - (1 - f)(B1 + B2)] expanded as a f^2 + b f + c.
+    const double a = -(P0 + 2.0 * B1 + B2);
+    const double b = 2.0 * P0 + 3.0 * B1 + 2.0 * B2;
+    const double c = -(B1 + B2);
     if (std::abs(a) < 1e-18) {
         return std::numeric_limits<double>::quiet_NaN();
     }
@@ -967,9 +941,8 @@ double breakeven_fold_equity_first_street_pure_bluff(double pot_before_street1, 
     const double P0 = pot_before_street1;
     const double B1 = bet_street1;
     const double B2 = bet_street2;
-    const double A = P0 + B1 - B2;
-    const double C = B1 + B2;
-    const double M = -B1 + fe2 * A - (1.0 - fe2) * C;
+    // M is the street-2 continuation value; EV = fe1 P0 + (1 - fe1) M = 0 gives fe1 = M/(M - P0).
+    const double M = fe2 * (P0 + B1) - (1.0 - fe2) * (B1 + B2);
     const double den = M - P0;
     if (std::abs(den) < 1e-15) {
         throw std::invalid_argument("degenerate pot/bet geometry for first-street breakeven");
@@ -1106,9 +1079,9 @@ double expected_value_call_with_rake(double equity, double pot_before_call, doub
     assert_non_neg_finite("potBeforeCall", pot_before_call);
     assert_non_neg_finite("toCall", to_call);
     const double e = clamp01(equity);
-    const double final_pot = pot_before_call + 2.0 * to_call;
+    const double final_pot = final_pot_after_hu_call(pot_before_call, to_call);
     const double rake = rake_from_pot(final_pot, rake_fraction, rake_cap);
-    const double win_net = pot_before_call + to_call - rake;
+    const double win_net = pot_before_call - rake;
     return e * win_net - (1.0 - e) * to_call;
 }
 
@@ -1349,30 +1322,6 @@ double net_pot_after_call_and_rake(double pot_before_call, double to_call, doubl
     return net_pot_after_rake(final_pot, rake_fraction, rake_cap);
 }
 
-double effective_pot_odds_display_after_rake(double pot_before_call, double to_call,
-                                             double rake_fraction, double rake_cap) {
-    assert_non_neg_finite("toCall", to_call);
-    if (to_call == 0.0) {
-        return std::numeric_limits<double>::infinity();
-    }
-    const double net =
-        net_pot_after_call_and_rake(pot_before_call, to_call, rake_fraction, rake_cap);
-    return net / to_call;
-}
-
-double implied_breakeven_total_pot(double pot_before_call, double to_call, double equity) {
-    assert_non_neg_finite("potBeforeCall", pot_before_call);
-    assert_non_neg_finite("toCall", to_call);
-    if (!std::isfinite(equity)) {
-        throw std::invalid_argument("equity must be finite");
-    }
-    const double e = clamp01(equity);
-    if (e <= 0.0) {
-        return std::numeric_limits<double>::infinity();
-    }
-    return (pot_before_call + to_call) / e;
-}
-
 double implied_odds_required_equity_from_future_win(double pot_before_call, double to_call,
                                                     double future_win) {
     assert_non_neg_finite("potBeforeCall", pot_before_call);
@@ -1410,7 +1359,8 @@ double expected_value_raise_with_rake(double equity_when_called, double pot_befo
     const double pot_if_called_net = pot_if_called - rake_called;
     const double shipped_fold = pot_before_raise + raise_size;
     const double rake_fold = rake_from_pot(shipped_fold, rake_fraction, rake_cap);
-    const double win_fold = shipped_fold - rake_fold;
+    // Hero's net on a fold is the pot before the raise (own raise comes back), less rake.
+    const double win_fold = pot_before_raise - rake_fold;
     assert_non_neg_finite("potBeforeRaise", pot_before_raise);
     assert_non_neg_finite("raiseSize", raise_size);
     if (!std::isfinite(equity_when_called) || !std::isfinite(fold_equity)) {
@@ -1473,10 +1423,12 @@ double minimum_defense_frequency_with_rake(double pot_before_bet, double bet_siz
                                            double rake_fraction, double rake_cap) {
     assert_non_neg_finite("potBeforeBet", pot_before_bet);
     assert_non_neg_finite("betSize", bet_size);
-    const double final_pot = final_pot_after_hu_bet(pot_before_bet, bet_size);
-    const double net = net_pot_after_rake(final_pot, rake_fraction, rake_cap);
-    const double denom = net + bet_size;
-    return denom <= 0.0 ? 0.0 : net / denom;
+    // Villain must defend often enough that a pure bluff breaks even. When villain folds, hero
+    // collects `pot + bet` less rake and nets `pot - rake`. Zero rake reduces to pot/(pot + bet).
+    const double shipped = pot_before_bet + bet_size;
+    const double pot_net = pot_before_bet - rake_from_pot(shipped, rake_fraction, rake_cap);
+    const double denom = pot_net + bet_size;
+    return denom <= 0.0 ? 0.0 : std::max(0.0, pot_net) / denom;
 }
 
 double alpha_frequency_with_rake(double pot_before_bet, double bet_size, double rake_fraction,
@@ -1489,10 +1441,11 @@ double bluff_to_value_ratio_with_rake(double pot_before_bet, double bet_size, do
                                       double rake_cap) {
     assert_non_neg_finite("potBeforeBet", pot_before_bet);
     assert_non_neg_finite("betSize", bet_size);
+    // Bluff-catcher indifference: villain calls `bet` to win `pot + bet` less rake on the final
+    // pot, so bluff share = bet / (pot + 2 bet - rake). Zero rake reduces to bet/(pot + 2 bet).
     const double final_pot = final_pot_after_hu_bet(pot_before_bet, bet_size);
     const double net = net_pot_after_rake(final_pot, rake_fraction, rake_cap);
-    const double denom = net + bet_size;
-    return denom <= 0.0 ? 0.0 : bet_size / denom;
+    return net <= 0.0 ? 0.0 : bet_size / net;
 }
 
 double value_to_bluff_ratio_with_rake(double pot_before_bet, double bet_size, double rake_fraction,
@@ -1586,7 +1539,7 @@ double two_street_pure_bluff_ev_with_rake(double pot_before_street1, double bet_
     const double rake_fold1 =
         rake_from_pot(pot_before_street1 + bet_street1, rake_fraction, rake_cap);
     const double rake_fold2 =
-        rake_from_pot(pot_before_street1 + 2.0 * bet_street1, rake_fraction, rake_cap);
+        rake_from_pot(pot_before_street1 + 2.0 * bet_street1 + bet_street2, rake_fraction, rake_cap);
     const double rake_adj = fe1 * rake_fold1 + (1.0 - fe1) * fe2 * rake_fold2;
     return base - rake_adj;
 }
@@ -1600,16 +1553,25 @@ double three_street_pure_bluff_same_fold_equity(double pot_before_street1, doubl
     if (bet_street3 == 0.0) {
         return two_street_pure_bluff_same_fold_equity(pot_before_street1, bet_street1, bet_street2);
     }
-    const double P0 = pot_before_street1;
-    const double B1 = bet_street1;
-    const double B2 = bet_street2;
-    const double B3 = bet_street3;
-    const double Bsum = B1 + B2 + B3;
-    const double coeff_fe3 = P0 + 2.0 * B1 + 2.0 * B2 - B3;
-    if (std::abs(coeff_fe3) < 1e-18) {
-        return std::numeric_limits<double>::quiet_NaN();
+    // EV(f, f, f) is a cubic in f with EV(0) = -(B1 + B2 + B3) <= 0 and EV(1) = P0 >= 0; bisect.
+    auto ev = [&](double f) {
+        return three_street_pure_bluff_ev(pot_before_street1, bet_street1, bet_street2, bet_street3,
+                                          f, f, f);
+    };
+    if (ev(1.0) <= 0.0) {
+        return 1.0;
     }
-    return Bsum / coeff_fe3;
+    double lo = 0.0;
+    double hi = 1.0;
+    for (int i = 0; i < 80; ++i) {
+        const double mid = 0.5 * (lo + hi);
+        if (ev(mid) < 0.0) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    return 0.5 * (lo + hi);
 }
 
 double three_street_pure_bluff_ev(double pot_before_street1, double bet_street1, double bet_street2,
@@ -1622,12 +1584,10 @@ double three_street_pure_bluff_ev(double pot_before_street1, double bet_street1,
     const double B1 = bet_street1;
     const double B2 = bet_street2;
     const double B3 = bet_street3;
-    double ev = 0.0;
-    ev += fe1 * P0;
-    ev += (1.0 - fe1) * (-B1 + fe2 * (P0 + 2.0 * B1) +
-                         (1.0 - fe2) * (-B2 + fe3 * (P0 + 2.0 * B1 + 2.0 * B2) -
-                                        (1.0 - fe3) * (B1 + B2 + B3)));
-    return ev;
+    // Fold on street k pays the pot plus villain's earlier calls; called down loses all bets.
+    const double street3 = fe3 * (P0 + B1 + B2) - (1.0 - fe3) * (B1 + B2 + B3);
+    const double street2 = fe2 * (P0 + B1) + (1.0 - fe2) * street3;
+    return fe1 * P0 + (1.0 - fe1) * street2;
 }
 
 double multiway_symmetric_breakeven_call_equity_with_rake(double pot_before, double to_call,
@@ -1693,7 +1653,8 @@ double multiway_expected_value_call(double equity, double pot_before, double to_
     }
     const double e = clamp01(equity);
     const double k = static_cast<double>(symmetric_extra_callers);
-    const double win_pot = pot_before + to_call * (1.0 + k);
+    // Hero wins the pot plus the k other calls; own call is not a gain.
+    const double win_pot = pot_before + to_call * k;
     return e * win_pot - (1.0 - e) * to_call;
 }
 
@@ -1737,25 +1698,65 @@ double variance_to_standard_deviation_per_hand(double variance_per_hand) {
     return std::sqrt(variance_per_hand);
 }
 
-int preflop_combos_from_notation_minus_blockers(const std::string& notation,
-                                                int dead_cards_among_combos) {
-    if (dead_cards_among_combos < 0) {
-        throw std::invalid_argument("deadCardsAmongCombos must be non-negative");
+int preflop_combos_from_notation_minus_blockers(const std::string& notation_raw,
+                                                const std::vector<Card>& dead_cards) {
+    std::string s;
+    s.reserve(notation_raw.size());
+    for (unsigned char ch : notation_raw) {
+        if (!std::isspace(ch)) {
+            s.push_back(static_cast<char>(ch));
+        }
     }
-    const int base = preflop_combos_from_notation(notation);
-    if (dead_cards_among_combos == 0) {
-        return base;
+    if (s.empty()) {
+        throw std::invalid_argument("preflopCombosFromNotationMinusBlockers: empty notation");
     }
-    const int remaining = std::max(0, 4 - dead_cards_among_combos);
-    if (base == 6) {
-        const int dead_pairs = std::min(2, dead_cards_among_combos);
-        return std::max(0, 6 - dead_pairs);
+    std::size_t i = 0;
+    const int r1 = parse_sh_rank(s, i);
+    const int r2 = parse_sh_rank(s, i);
+    if (r1 < 0 || r2 < 0) {
+        throw std::invalid_argument("preflopCombosFromNotationMinusBlockers: invalid rank");
     }
-    if (base == 4) {
-        return dead_cards_among_combos >= 4 ? 0 : 4 - dead_cards_among_combos;
+    char suffix = 0;
+    if (i < s.size()) {
+        if (i + 1 != s.size()) {
+            throw std::invalid_argument("preflopCombosFromNotationMinusBlockers: invalid notation length");
+        }
+        suffix = static_cast<char>(std::tolower(static_cast<unsigned char>(s[i])));
     }
-    return static_cast<int>(std::round(
-        static_cast<double>(base) * static_cast<double>(remaining) / 4.0));
+    // Count the concrete combos of this class whose two cards are both still live.
+    std::array<bool, 4> live1{true, true, true, true};
+    std::array<bool, 4> live2{true, true, true, true};
+    for (const Card& c : dead_cards) {
+        if (c.rank() == r1) {
+            live1[static_cast<std::size_t>(c.suit())] = false;
+        }
+        if (c.rank() == r2) {
+            live2[static_cast<std::size_t>(c.suit())] = false;
+        }
+    }
+    const int n1 = static_cast<int>(std::count(live1.begin(), live1.end(), true));
+    const int n2 = static_cast<int>(std::count(live2.begin(), live2.end(), true));
+    if (r1 == r2) {
+        if (suffix != 0) {
+            throw std::invalid_argument(
+                "preflopCombosFromNotationMinusBlockers: pocket pair must be two letters only");
+        }
+        return n1 * (n1 - 1) / 2;
+    }
+    int suited = 0;
+    for (std::size_t k = 0; k < 4; ++k) {
+        if (live1[k] && live2[k]) {
+            ++suited;
+        }
+    }
+    if (suffix == 's') {
+        return suited;
+    }
+    if (suffix == 'o') {
+        return n1 * n2 - suited;
+    }
+    throw std::invalid_argument(
+        "preflopCombosFromNotationMinusBlockers: offsuit/suited suffix required for non-pairs");
 }
 
 double stack_to_pot_after_call(double pot_before_call, double to_call,
@@ -1783,7 +1784,7 @@ double open_raise_breakeven_fold_equity(double pot_before_hero_bet, double hero_
 }
 
 double call_or_fold_chip_ev_delta(double equity, double pot, double to_call) {
-    return expected_value_call(equity, static_cast<int>(pot), static_cast<int>(to_call));
+    return expected_value_call(equity, pot, to_call);
 }
 
 double made_category_flop_to_river_exact_probability(

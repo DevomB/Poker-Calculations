@@ -39,14 +39,10 @@ const names = [
   'nashHeadsUpJamRange',
   'nashHeadsUpCallRange',
   'nashHeadsUpJamCallSolve',
-  'nashBlindVsBlindSolve',
-  'nashFirstInJamRange',
-  'nashJamFoldChart169',
+  'nashBlindVsBlindSolve',  'nashJamFoldChart169',
   'nashCallChart169',
   'nashIndifferenceStackBb',
-  'nashIcmHeadsUpJamCallSolve',
-  'nashMultiwayShoveCall',
-];
+  'nashIcmHeadsUpJamCallSolve',];
 for (const name of names) {
   assertTrue(`${name} exported`, typeof poker[name] === 'function');
 }
@@ -84,10 +80,6 @@ const bvb = poker.nashBlindVsBlindSolve(10, 0.5, 1, 0);
 assertTrue('bvb AA jams', bvb.jam[aa] >= 0.9);
 assertTrue('bvb 72o folds', bvb.jam[o72] <= 0.2);
 
-const firstIn = poker.nashFirstInJamRange({ stackBb: 10, nOpponents: 2, stacks: [10, 12] });
-assertTrue('first-in length 169', firstIn.length === 169);
-assertTrue('first-in AA jams', firstIn[aa] >= 0.9);
-
 const jamChart = poker.nashJamFoldChart169({ bigBlind: 1, ante: 0, maxStackBb: 16 });
 const callChart = poker.nashCallChart169({ bigBlind: 1, ante: 0, maxStackBb: 16 });
 assertTrue('jam chart length 169', jamChart.length === 169);
@@ -115,17 +107,6 @@ assertTrue(
   `ICM short-stack jams tighter than chip on bubble (${icmMass} < ${chipMass})`,
   icmMass < chipMass,
 );
-
-const multi = poker.nashMultiwayShoveCall({
-  stackBb: 10,
-  callerStacks: [10, 14],
-  smallBlind: 0.5,
-  bigBlind: 1,
-  ante: 0,
-});
-assertTrue('multi jam 169', multi.jam.length === 169);
-assertTrue('multi two callers', multi.calls.length === 2 && multi.calls[0].length === 169);
-assertTrue('multi AA jams', multi.jam[aa] >= 0.9);
 
 console.log(
   `OK: verify-nash-push-fold — AA@10bb=${jam10[aa].toFixed(2)} 72o@10bb=${jam10[o72].toFixed(2)} ` +

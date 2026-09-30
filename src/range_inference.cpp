@@ -1,8 +1,6 @@
 #include "poker/range_inference.hpp"
 
-#include "poker/card_string.hpp"
 #include "poker/deck_bitset.hpp"
-#include "poker/fast_evaluator.hpp"
 #include "poker/range.hpp"
 
 #include <cmath>
@@ -16,14 +14,8 @@ int combo_dense_index(int c0, int c1) {
     if (c0 > c1) {
         std::swap(c0, c1);
     }
-    return c0 * 51 + c1;
-}
-
-double strength_score(const std::vector<Card>& hero, const std::vector<Card>& board, int ca,
-                      int cb) {
-    std::vector<Card> vil = {card_from_deck_index(ca), card_from_deck_index(cb)};
-    const std::uint64_t s = evaluate_hand_strength_fast(vil, board);
-    return static_cast<double>(s);
+    // Lexicographic (a < b) slot in the 1326-entry dense range, matching range.cpp.
+    return c0 * 51 - c0 * (c0 - 1) / 2 + (c1 - c0 - 1);
 }
 
 MaterializedRangeResult from_sparse(const SparseRange& range) {
@@ -78,55 +70,6 @@ MaterializedRangeResult materialize_villain_range_after_blockers_sparse(
         filtered.weight_sum += c.weight;
     }
     return from_sparse(filtered);
-}
-
-MaterializedRangeResult bayesian_range_update_from_action(
-    const SparseRange& prior, const std::vector<Card>& hero_hole_cards,
-    const std::vector<Card>& board_cards, BayesianActionKind action, double alpha) {
-    if (alpha <= 0.0 || !std::isfinite(alpha)) {
-        throw std::invalid_argument("bayesianRangeUpdate: alpha must be positive");
-    }
-    if (prior.combos.empty()) {
-        throw std::invalid_argument("bayesianRangeUpdate: empty prior range");
-    }
-    double max_s = 0.0;
-    double min_s = 1e300;
-    std::vector<double> scores;
-    scores.reserve(prior.combos.size());
-    for (const WeightedHoleCombo& c : prior.combos) {
-        const double s = strength_score(hero_hole_cards, board_cards, c.card_a, c.card_b);
-        scores.push_back(s);
-        max_s = std::max(max_s, s);
-        min_s = std::min(min_s, s);
-    }
-    const double span = std::max(1.0, max_s - min_s);
-    SparseRange post;
-    post.weight_sum = 0.0;
-    for (std::size_t i = 0; i < prior.combos.size(); ++i) {
-        const double z = (scores[i] - min_s) / span;
-        double lik = 1.0;
-        switch (action) {
-            case BayesianActionKind::Raise:
-                lik = std::exp(alpha * z);
-                break;
-            case BayesianActionKind::Fold:
-                lik = std::exp(-alpha * z);
-                break;
-            case BayesianActionKind::Call:
-                lik = 1.0;
-                break;
-        }
-        WeightedHoleCombo c = prior.combos[i];
-        c.weight *= lik;
-        if (c.weight > 0.0) {
-            post.combos.push_back(c);
-            post.weight_sum += c.weight;
-        }
-    }
-    if (post.weight_sum <= 0.0) {
-        throw std::invalid_argument("bayesianRangeUpdate: posterior weight sum is zero");
-    }
-    return from_sparse(post);
 }
 
 }  // namespace poker

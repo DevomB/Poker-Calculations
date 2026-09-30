@@ -5,19 +5,8 @@
 
 namespace poker {
 
-struct IcmFieldPressureResult {
-    double index{0.0};
-    std::vector<double> pairwise_bubble_factors;
-    std::size_t argmax_villain{0};
-};
-
 [[nodiscard]] std::vector<double> icm_harville_stack_jacobian(const std::vector<double>& stacks,
                                                               const std::vector<double>& payouts);
-
-[[nodiscard]] IcmFieldPressureResult icm_field_pressure_index(const std::vector<double>& stacks,
-                                                              const std::vector<double>& payouts,
-                                                              std::size_t hero_index,
-                                                              double pot_chips);
 
 struct IcmChopParetoPair {
     std::size_t i{0};

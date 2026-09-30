@@ -144,6 +144,103 @@ export interface OmahaWrapDrawResult {
   nutOuts: number;
 }
 
+/**
+ * Sparse Big O range. `packed` is 5 deck ids (0..51) per combo (`length === 5 * n`).
+ * Omitted `weights` default to 1 per combo.
+ */
+export interface BigORangeSpec {
+  packed: Uint8Array | number[];
+  weights?: F64VectorInput;
+}
+
+/**
+ * 8-or-better low. `ranks` are high-to-low with Ace=1 … 8=8.
+ * `key` is packed for comparison (smaller is better). Non-qualifying: `qualifies=false`, `key=0xFFFFFFFF`.
+ */
+export interface OmahaLoHand {
+  qualifies: boolean;
+  ranks: number[];
+  key: number;
+}
+
+export interface OmahaHiLoHands {
+  hi: HandEvalResult;
+  lo: OmahaLoHand;
+}
+
+/**
+ * HU PLO-8. `hiEquity` / `loEquity` are side shares (win=1, tie=0.5).
+ * No qualifying low → high takes the full pot (`potShare === hiEquity`, `loEquity === 0`).
+ * `scoopEquity` = P(win the whole pot). `quarterRate` = P(exactly one side ties).
+ */
+export interface OmahaHiLoEquity {
+  hiEquity: number;
+  loEquity: number;
+  scoopEquity: number;
+  quarterRate: number;
+  potShare: number;
+}
+
+export interface OmahaHiLoNuttedness {
+  hiNuts: boolean;
+  loNuts: boolean;
+  scoopNuts: boolean;
+}
+
+/**
+ * Kansas City 2-7 single draw. Ace is **high** (A5432 is Ace-high, not a wheel).
+ * Straights and flushes count against you. Best hand is 7-5-4-3-2 rainbow.
+ * Packed strength uses the same bit layout as `evaluateHandStrength`; **lower is better**.
+ */
+export type DeuceSevenCategory =
+  | 'nuts'
+  | 'smooth'
+  | 'rough'
+  | 'number'
+  | 'paired'
+  | 'twoPair'
+  | 'trips'
+  | 'straight'
+  | 'flush'
+  | 'fullHouse'
+  | 'quads'
+  | 'straightFlush';
+
+export interface DeuceSevenDiscardChoice {
+  discard: string[];
+  keep: string[];
+  /** Share of replacements that beat standing pat (ties 0.5). Stand = 0.5. */
+  expectedStrength: number;
+}
+
+export interface DeuceSevenDrawOptions {
+  /** Cards to throw, or a count (best discard of that size). */
+  heroDiscard?: number | CardInput;
+  villainDiscard?: number | CardInput;
+  heroKeep?: CardInput;
+  villainKeep?: CardInput;
+  extraDead?: CardInput;
+  /** Used only when the replacement tree is too large for exact enumeration. Default 400. */
+  trials?: number;
+  seed?: number;
+}
+
+export interface DeuceSevenRoughSmooth {
+  /** `-1` if `a` is better 2-7, `1` if `b` is, `0` tie. */
+  cmp: number;
+  /** Unpaired 8-high whose second card is not a 7. */
+  aSmooth: boolean;
+  bSmooth: boolean;
+}
+
+export interface DeuceSevenDiscardEvTable {
+  /** Equity of standing pat vs a standing villain. */
+  pat: number;
+  /** Best one-card draw equity vs that standing villain. */
+  draw1: number;
+  draw2: number;
+}
+
 /** One-pass HS / PPot / NPot / EHS / EHS2 vs a villain range. `n*` are weighted combo masses. */
 export interface HandPotentialBreakdown {
   hs: number;
@@ -432,6 +529,33 @@ export interface HuRiverCheckBetTreeResult extends CfrRiverSolveResult {
   topBetCombos: RiverTopBetCombo[];
 }
 
+/** Vanilla CFR on a HU flop check/bet tree in EHS2-bucket space (K mixed actions). */
+export interface FlopBucketCfrResult {
+  betFreq: number;
+  callFreq: number;
+  evBettor: number;
+  evDefender: number;
+  iterations: number;
+  /** Length-K bet frequencies (one info set per bucket). */
+  betMix: Float64Array;
+  /** Length-K call frequencies. */
+  callMix: Float64Array;
+}
+
+export interface FlopBucketSolveFromHandsResult extends FlopBucketCfrResult {
+  heroBuckets: Int32Array;
+  villainBuckets: Int32Array;
+  betMix1326: Float64Array;
+  callMix1326: Float64Array;
+  flopIndex: number;
+}
+
+export interface BestResponseFlopBucketsResult {
+  value: number;
+  callFrequency: number;
+  action: 'call' | 'fold';
+}
+
 export interface NashPushFoldOptions {
   stackBb?: number;
   heroStack?: number;
@@ -536,8 +660,14 @@ export interface ThreeBetCommitEvResult {
   foldEv: number;
 }
 
+/**
+ * Heads-up gambler's ruin: each all-in moves `chipsPerAllIn`; hero busts after
+ * ceil(heroStack/chipsPerAllIn) net losses and wins after ceil(villainStack/chipsPerAllIn) net wins.
+ * Closed form, so `heroWinProbability` is the chip share at p = 0.5.
+ */
 export interface TournamentDuelAbsorptionResult {
   heroWinProbability: number;
+  /** Expected number of all-ins until someone busts. */
   expectedHands: number;
   heroPrizeEv: number;
 }
@@ -574,10 +704,18 @@ export interface CardRemovalGradientResult {
   baseEquity: number;
 }
 
+/**
+ * Polarized river bet that makes a bluff-catcher indifferent when the whole range bets:
+ * with value share v = value/(value+bluffs), `betSize = (1 − v) × pot / (2v − 1)` (requires
+ * v > 0.5; otherwise `betSize` is `Infinity` because every size is a profitable call).
+ */
 export interface RiverIndifferenceBetResult {
   betSize: number;
+  /** Share of the bluff supply needed at `betSize` (1 when the whole range bets). */
   bluffFrequency: number;
+  /** `mdf` when supplied, else pot/(pot + betSize). */
   defenderMdf: number;
+  /** Villain's bluff-catch EV at `betSize`; 0 at indifference. */
   evAtIndifference: number;
 }
 
@@ -722,7 +860,7 @@ export interface CandidateAction {
   amount: number;
 }
 
-/** N-API addon (400 native function exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, tournament/exact-runout/subgame helpers, board texture, suit isomorphism, range tools, opponent modeling, PKO/FGS/Nash/CFR/exact-multiway, Omaha Hi, MTT spots, short deck (6+), hand potential (HS/PPot/NPot/EHS), and related utilities (all implemented in C++). */
+/** N-API addon (370 native function exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, tournament/exact-runout/subgame helpers, board texture, suit isomorphism, range tools, opponent modeling, PKO/FGS/Nash/CFR/exact-multiway, Omaha Hi, PLO-8, Big O, MTT spots, short deck (6+), hand potential (HS/PPot/NPot/EHS), 2-7 single draw, 7-card stud / razz, bucketed flop CFR, and related utilities (all implemented in C++). */
 export interface PokerCalculations {
   evaluateBestHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult;
   evaluateBestHand(
@@ -848,7 +986,11 @@ export interface PokerCalculations {
     options?: AsyncOptions
   ): Promise<DecisionResult>;
   potOddsRatio(pot: number, toCall: number): number;
-  /** Chip EV of calling once vs folding (0); same semantics as C++ `expected_value_call`. */
+  /**
+   * Chip EV of calling once vs folding (0): `equity × pot − (1 − equity) × toCall`, where `pot`
+   * is everything in the middle before hero's call (villain's bet included). Zero exactly at
+   * `breakevenCallEquity(pot, toCall)`.
+   */
   expectedValueCall(equity: number, pot: number, toCall: number): number;
   /**
    * Chip EV of calling vs folding when the final heads-up pot (after call) pays rake like
@@ -994,8 +1136,6 @@ export interface PokerCalculations {
     deadAmongPatternOuts: number,
     unseenAfterFlop: number
   ): number;
-  /** toy reverse-implied ceiling (max future loss when losing). */
-  reverseImpliedOddsMaxFutureLoss(potBeforeCall: number, toCall: number, equity: number): number;
   /** pot after `nRounds` of matched pot-fraction betting heads-up. */
   geometricPotAfterMatchedPotFractions(pot0: number, fraction: number, nRounds: number): number;
   /** Harrington M = stack / (sb + bb + antes). */
@@ -1037,8 +1177,6 @@ export interface PokerCalculations {
     folds: number,
     calls: number
   ): BetaBinomialFoldPosterior;
-  /** heuristic outs discount with multiple villains. */
-  duplicationAdjustedOuts(outs: number, numVillains: number, duplicationWeight: number): number;
   /** diffusion-style risk of ruin in (0,1]. */
   riskOfRuinDiffusionApprox(driftPerHand: number, variancePerHand: number, bankroll: number): number;
   /** inverse of `riskOfRuinDiffusionApprox` for bankroll. */
@@ -1228,7 +1366,7 @@ export interface PokerCalculations {
     boardCards: CardInput,
     range: Float64Array | SparseRangeSpec
   ): number;
-  /** EHS2 = HS × (1 − NPot)² + (1 − HS) × PPot². */
+  /** Billings' two-opponent form: EHS2 = HS² × (1 − NPot) + (1 − HS²) × PPot. */
   effectiveHandStrengthSquared(
     heroHoleCards: CardInput,
     boardCards: CardInput,
@@ -1238,7 +1376,8 @@ export interface PokerCalculations {
   handPotentialBreakdown(
     heroHoleCards: CardInput,
     boardCards: CardInput,
-    range: Float64Array | SparseRangeSpec
+    range: Float64Array | SparseRangeSpec,
+    options?: { streets?: 1 | 2 }
   ): HandPotentialBreakdown;
   /** Flop→river (two-card) PPot. Board must be 3 cards. */
   twoStreetPositivePotential(
@@ -1256,13 +1395,32 @@ export interface PokerCalculations {
   equityBucketFromEhs(ehs: number, k: number): number;
   /**
    * EHS for all 1326 hero combos vs `range` on this flop/turn (`0` if blocked by the board).
-   * Exact when `trials` is omitted/0 (cheap on the turn; flop enumerates ~45 turn cards per combo).
-   * Pass `{ trials, seed }` to Monte Carlo next-street cards on a flop.
+   * Exact when `trials` is omitted/0. Cost is combos × range × next cards and is synchronous:
+   * a full 1326-combo range takes minutes on either street (the turn is slower per evaluation).
+   * Pass `{ trials, seed }` to Monte Carlo the next card, or use a small range.
    */
   comboEhsTableVsRange(
     boardCards: CardInput,
     range: Float64Array | SparseRangeSpec,
     options?: ComboEhsTableOptions
+  ): Float64Array;
+  /**
+   * EHS2 bucket id for every 1326 hero combo vs `range` on this flop/turn.
+   * Live combos are in `[0, k)`; board-blocked combos are `-1`.
+   * Default `k` is `flopBucketCountDefault()` (20). Pass `{ trials, seed }` to Monte Carlo
+   * next-street cards on a flop (same cost note as `comboEhsTableVsRange`).
+   */
+  ehs2BucketsVsRange(
+    boardCards: CardInput,
+    range: Float64Array | SparseRangeSpec,
+    k?: number,
+    options?: ComboEhsTableOptions
+  ): Int32Array;
+  /** Normalize a 1326 range into `k` bucket masses (sum ≈ 1). */
+  bucketMassFromRange(
+    range: Float64Array | SparseRangeSpec,
+    buckets: Int32Array | number[],
+    k?: number
   ): Float64Array;
   /** Monte Carlo equity vs weighted villain range. */
   simulateEquityVsRange(
@@ -1342,11 +1500,6 @@ export interface PokerCalculations {
     deadMoneyChips: number,
     maxStackChips: number
   ): number;
-  icmShapleyValues(
-    stacks: F64VectorInput,
-    payouts: F64VectorInput,
-    options?: IcmShapleyValuesOptions
-  ): IcmShapleyValuesResult;
   icmHarvilleStackJacobian(
     stacks: F64VectorInput,
     payouts: F64VectorInput,
@@ -1359,12 +1512,6 @@ export interface PokerCalculations {
     blend: number,
     returnFormat?: F64ReturnFormat
   ): number[] | Float64Array;
-  icmFieldPressureIndex(
-    stacks: F64VectorInput,
-    payouts: F64VectorInput,
-    heroIndex: number,
-    potChips: number
-  ): IcmFieldPressureIndexResult;
   icmChopNegotiationAnalysis(
     stacks: F64VectorInput,
     payouts: F64VectorInput
@@ -1376,25 +1523,11 @@ export interface PokerCalculations {
     chipsPerAllIn: number,
     winnerPrize?: number
   ): TournamentDuelAbsorptionResult;
-  sidePotLayerTournamentEvDelta(
-    tableStacks: F64VectorInput,
-    payouts: F64VectorInput,
-    heroIndex: number,
-    committedChips: F64VectorInput,
-    equityPlayerByLayer: number[][] | Float64Array
-  ): SidePotLayerTournamentEvRow[];
   materializeVillainRangeAfterBlockers(
     range: Float64Array | SparseRangeSpec,
     heroHoleCards: CardInput,
     boardCards: CardInput,
     knownDead?: CardInput
-  ): MaterializedVillainRangeResult;
-  bayesianRangeUpdateFromAction(
-    range: Float64Array | SparseRangeSpec,
-    heroHoleCards: CardInput,
-    boardCards: CardInput,
-    action: 'fold' | 'call' | 'raise',
-    alpha: number
   ): MaterializedVillainRangeResult;
   solveRiverPolarizedIndifferenceBet(
     potBeforeBet: number,
@@ -1402,13 +1535,6 @@ export interface PokerCalculations {
     numBluffCombos: number,
     mdf?: number
   ): RiverIndifferenceBetResult;
-  solveStageMinimaxRegretBet(
-    potBeforeBet: number,
-    betSizes: number[],
-    villainFoldFreq: number,
-    villainCallFreq: number,
-    heroEquityWhenCalled: number
-  ): StageMinimaxRegretBetResult;
   exactInformationRegretVsClairvoyant(
     heroHoleCards: CardInput,
     boardCards: CardInput,
@@ -1416,13 +1542,6 @@ export interface PokerCalculations {
     potBeforeCall: number,
     toCall: number
   ): number;
-  multiwayEquityIndependenceGap(
-    heroHoleCards: CardInput,
-    boardCards: CardInput,
-    numSimulations: number,
-    seed: number,
-    villains: number
-  ): MultiwayIndependenceGapResult;
   solveSymmetricPushFoldThreshold(
     effectiveStack: number,
     smallBlind: number,
@@ -1449,7 +1568,10 @@ export interface PokerCalculations {
     heroHoleCards: CardInput,
     flopThree: CardInput,
     knownDead?: CardInput
-  ): { jointMatrix: Float64Array };
+  ): {
+    /** 9×9 row-major `[turnCategory * 9 + riverCategory]`; royal flush is folded into straight flush (8). */
+    jointMatrix: Float64Array;
+  };
   exactRangeDominatedComboFraction(
     heroHoleCards: CardInput,
     boardCards: CardInput,
@@ -1565,13 +1687,6 @@ export interface PokerCalculations {
     rakeFraction: number,
     rakeCap: number
   ): number;
-  effectivePotOddsDisplayAfterRake(
-    potBeforeCall: number,
-    toCall: number,
-    rakeFraction: number,
-    rakeCap: number
-  ): number;
-  impliedBreakevenTotalPot(potBeforeCall: number, toCall: number, equity: number): number;
   impliedOddsRequiredEquityFromFutureWin(
     potBeforeCall: number,
     toCall: number,
@@ -1604,6 +1719,7 @@ export interface PokerCalculations {
     toCall: number,
     anteToPost: number
   ): number;
+  /** `potBeforeCall + toCall`: the pot already holds villain's bet, so only hero's call is added. */
   potSizeAfterHuCall(potBeforeCall: number, toCall: number): number;
   potSizeAfterHuBet(potBeforeBet: number, betSize: number): number;
   expectedValuePerBigBlind(chipEv: number, bigBlind: number): number;
@@ -1731,7 +1847,8 @@ export interface PokerCalculations {
   icmChipLeaderPremiumVsEqualChop(stacks: F64VectorInput, payouts: F64VectorInput): number;
   sidePotLayerCount(committedChips: F64VectorInput): number;
   sidePotBreakevenCallEquity(layerPotChips: number, toCall: number): number;
-  preflopCombosFromNotationMinusBlockers(notation: string, deadCardsAmongCombos: number): number;
+  /** Combos of `notation` ("AA", "AKs", "AKo") whose two cards are both outside `deadCards`. */
+  preflopCombosFromNotationMinusBlockers(notation: string, deadCards: CardInput): number;
   stackToPotAfterCall(
     potBeforeCall: number,
     toCall: number,
@@ -1842,136 +1959,11 @@ export interface PokerCalculations {
     range: SparseRangeSpec | Float64Array
   ): Float64Array;
 
-  classifyBoardTexture(board: CardInput): string;
-  boardTextureScore(board: CardInput): BoardTextureResult;
-  boardWetnessScore(board: CardInput): number;
-  boardPairednessIndex(board: CardInput): number;
-  boardFlushPressure(board: CardInput, deadCards?: CardInput): number;
-  boardStraightPressure(board: CardInput, deadCards?: CardInput): number;
-  boardNutAdvantageApprox(
-    heroRange: SparseRangeSpec | Float64Array,
-    villainRange: SparseRangeSpec | Float64Array,
-    board: CardInput
-  ): number;
-  boardRangeInteractionScore(range: SparseRangeSpec | Float64Array, board: CardInput): number;
-  boardStaticnessIndex(board: CardInput): number;
-  boardTurnVolatility(flop: CardInput): Float64Array;
-  boardRiverScareCardScore(turnBoard: CardInput, riverDeckIndex: Card52): number;
-  enumerateScareCards(
-    board: CardInput,
-    rangeA: SparseRangeSpec | Float64Array,
-    rangeB: SparseRangeSpec | Float64Array
-  ): CardScore[];
-  boardEquityShiftDistribution(
-    heroRange: SparseRangeSpec | Float64Array,
-    villainRange: SparseRangeSpec | Float64Array,
-    board: CardInput
-  ): EquityDistributionResult;
-  rangeBoardCoverage(range: SparseRangeSpec | Float64Array, board: CardInput): RangeCoverageResult;
-  heroBoardConnectivityScore(heroHoleCards: CardInput, board: CardInput): number;
   blockerMatrixByCard(range: SparseRangeSpec | Float64Array, board?: CardInput): Float64Array;
 
-  exactEquityDistributionVsRange(
-    heroHoleCards: CardInput,
-    boardCards: CardInput,
-    villainRange: SparseRangeSpec | Float64Array
-  ): EquityDistributionResult;
-  exactEquityPercentileVsRange(
-    heroHoleCards: CardInput,
-    boardCards: CardInput,
-    villainRange: SparseRangeSpec | Float64Array,
-    percentile: number
-  ): number;
-  exactEquityRealizationEstimate(
-    heroHoleCards: CardInput,
-    boardCards: CardInput,
-    villainRange: SparseRangeSpec | Float64Array,
-    position: string,
-    spr: number
-  ): number;
-  equityRealizationPenalty(equity: number, position: string, spr: number, boardStaticness: number): number;
-  riverCallThresholdDistribution(
-    turnBoard: CardInput,
-    villainRange: SparseRangeSpec | Float64Array,
-    betSizes: F64VectorInput
-  ): Float64Array;
-  turnBarrelRunoutEvDistribution(
-    heroHoleCards: CardInput,
-    turnBoard: CardInput,
-    villainRange: SparseRangeSpec | Float64Array,
-    betSize: number
-  ): EquityDistributionResult;
-  delayedCbetRunoutScore(
-    heroRange: SparseRangeSpec | Float64Array,
-    villainRange: SparseRangeSpec | Float64Array,
-    flop: CardInput
-  ): Float64Array;
-  protectionBetBenefit(
-    heroHoleCards: CardInput,
-    boardCards: CardInput,
-    villainRange: SparseRangeSpec | Float64Array,
-    betSize: number
-  ): number;
-  equityDenialValue(heroEquity: number, villainFoldShare: number, pot: number, betSize: number): number;
-  showdownValueIndex(
-    heroHoleCards: CardInput,
-    boardCards: CardInput,
-    villainRange: SparseRangeSpec | Float64Array
-  ): number;
-
-  cbetSizeEvGrid(
-    heroRange: SparseRangeSpec | Float64Array,
-    villainRange: SparseRangeSpec | Float64Array,
-    board: CardInput,
-    pot: number,
-    betSizes: F64VectorInput
-  ): EvGridResult;
-  probeBetEvGrid(
-    heroRange: SparseRangeSpec | Float64Array,
-    villainRange: SparseRangeSpec | Float64Array,
-    board: CardInput,
-    pot: number,
-    betSizes: F64VectorInput
-  ): EvGridResult;
-  checkRaiseSemiBluffEv(
-    heroHoleCards: CardInput,
-    boardCards: CardInput,
-    villainRange: SparseRangeSpec | Float64Array,
-    pot: number,
-    betSize: number,
-    raiseSize: number
-  ): number;
-  overbetPolarizationScore(range: SparseRangeSpec | Float64Array, board: CardInput, betSize: number, pot: number): number;
   geometricStreetSizingPlan(pot: number, effectiveStack: number, streetsRemaining: number): Float64Array;
-  riverValueBetThreshold(pot: number, betSize: number, villainCallRangeShare: number): number;
-  riverBluffCandidateScore(
-    heroHoleCards: CardInput,
-    boardCards: CardInput,
-    villainRange: SparseRangeSpec | Float64Array
-  ): number;
   thinValueMargin(heroEquityWhenCalled: number, pot: number, betSize: number): number;
   betSizingIndifferencePoint(pot: number, foldFrequency: number, equityWhenCalled: number): number;
-  multiStreetStackOffThreshold(pot: number, effectiveStack: number, equity: number, streetsRemaining: number): number;
-  foldEquityNeededByStreetPlan(pot: number, bets: F64VectorInput, equityWhenCalled: number): number;
-  bluffCatchDecisionScore(
-    heroHoleCards: CardInput,
-    boardCards: CardInput,
-    villainRange: SparseRangeSpec | Float64Array,
-    pot: number,
-    toCall: number
-  ): number;
-  blockerAwareBluffFrequency(
-    valueCombos: number,
-    bluffCandidates: F64VectorInput,
-    targetAlpha: number
-  ): Float64Array;
-  valueTargetingScore(
-    heroHoleCards: CardInput,
-    boardCards: CardInput,
-    villainRange: SparseRangeSpec | Float64Array,
-    betSize: number
-  ): number;
-
   opponentFoldToCbetPosterior(
     priorAlpha: number,
     priorBeta: number,
@@ -1979,52 +1971,29 @@ export interface PokerCalculations {
     continues: number
   ): BetaBinomialFoldPosterior;
   opponentAggressionFactor(bets: number, raises: number, calls: number): number;
-  opponentShowdownBiasEstimate(wentToShowdown: number, wonAtShowdown: number, hands: number): OpponentBiasResult;
   opponentRangeElasticityFromSizing(sizes: F64VectorInput, continueRates: F64VectorInput): number;
-  exploitativeBetSizeAdjustment(baseSize: number, elasticity: number, valueDensity: number): number;
-  exploitativeCallThresholdAdjustment(baseThreshold: number, bluffBias: number, aggression: number): number;
-  villainLineRangeShift(
-    priorRange: SparseRangeSpec | Float64Array,
-    actionSequence: string[],
-    model?: NativeOpponentModel
-  ): Float64Array;
-  villainCappedRangeScore(range: SparseRangeSpec | Float64Array, board: CardInput): number;
   villainPolarizedRangeScore(range: SparseRangeSpec | Float64Array, board: CardInput): number;
-  villainFloatFrequencyEstimate(flopCallRange: SparseRangeSpec | Float64Array, madeHandShare: number, drawShare: number): number;
-
   legalActionSummary(state: NativePokerState | PokerStateBytes): LegalActionSummaryResult;
   actionMaskFromState(state: NativePokerState | PokerStateBytes): number;
   normalizeBotConfig(config: Partial<NativeBotConfig>): NativeBotConfig;
   validatePokerState(state: NativePokerState | PokerStateBytes): PokerStateValidationResult;
   stateToFeatureVector(state: NativePokerState | PokerStateBytes): Float64Array;
-  actionEvBreakdown(
-    state: NativePokerState | PokerStateBytes,
-    config: NativeBotConfig,
-    opponentModel?: NativeOpponentModel | null,
-    heroSeat?: number
-  ): ActionEvBreakdownResult;
   decideActionWithDiagnostics(
     state: NativePokerState | PokerStateBytes,
     config: NativeBotConfig,
     opponentModel?: NativeOpponentModel | null,
     heroSeat?: number
   ): DecisionDiagnosticResult;
-  explainDecisionFactors(
-    state: NativePokerState | PokerStateBytes,
-    config: NativeBotConfig,
-    opponentModel?: NativeOpponentModel | null,
-    heroSeat?: number
-  ): DecisionFactor[];
-  candidateActionSet(state: NativePokerState | PokerStateBytes, sizingFractions: F64VectorInput): CandidateAction[];
   runBotPolicyBatch(
     states: Array<NativePokerState | PokerStateBytes>,
     config: NativeBotConfig,
     opponentModels?: Array<NativeOpponentModel | null>
   ): DecisionDiagnosticResult[];
   /**
-   * Covering PKO knockout matrix. P(j busts) from Harville last-place among players with chips;
-   * P(i knocks j | j busts) = stack_i / (total − stack_j) when i covers j, else 0. Diagonal 0.
-   * Rows need not sum to 1. Returns flat n×n row-major `Float64Array` plus `n`.
+   * PKO knockout matrix, entry `i*n+j` = P(i collects j's bounty). P(j busts) = 1 − stack_j/total
+   * (Harville first place). Given a bust, collectors are weighted by stack_i × stack_i/(stack_i+stack_j)
+   * over the players covering j (everyone else when nobody covers). Columns sum to P(j busts), so
+   * every bounty except the winner's own is paid out. Diagonal 0. Flat n×n row-major `Float64Array` plus `n`.
    */
   pkoKnockoutProbabilityMatrix(stacks: F64VectorInput): PkoKnockoutMatrixResult;
 
@@ -2136,34 +2105,6 @@ export interface PokerCalculations {
   ): PkoWinnerTakeBountiesResult;
 
   /**
-   * Average-position FGS $EV. Each orbit every alive seat pays `min(stack, sb+bb+ante)`;
-   * chips leave the table (not awarded to a blind seat). Bust = $0; remaining seats take
-   * Harville ICM on the top-k prizes. `orbits === 0` or zero cost matches `icmExpectedPayouts`
-   * when every stack is still positive.
-   */
-  futureGameSimulationPayouts(
-    stacks: F64VectorInput,
-    payouts: F64VectorInput,
-    orbits: number,
-    smallBlind: number,
-    bigBlind: number,
-    ante?: number,
-    returnFormat?: F64ReturnFormat
-  ): number[] | Float64Array;
-
-  /**
-   * Net chip growth from blinds over `orbits`. Short stacks bust and stop paying;
-   * leftover collected blinds split among survivors. Equal stacks that all survive have pay == receive.
-   */
-  futureGrowthShare(
-    stacks: F64VectorInput,
-    orbits: number,
-    smallBlind: number,
-    bigBlind: number,
-    ante?: number
-  ): FutureGrowthShareResult;
-
-  /**
    * Hero posts `heroPost`; every other seat posts `posts[i]`. Subtract (clamp 0), then ICM
    * on remaining stacks. Posted chips are dead for placement.
    */
@@ -2175,34 +2116,6 @@ export interface PokerCalculations {
     posts: F64VectorInput,
     returnFormat?: F64ReturnFormat
   ): number[] | Float64Array;
-
-  /**
-   * Jam vs fold $EV. Fold = ICM on the given stacks (blinds already posted if you modeled that).
-   * Jam = `foldEquity` * collect-pot + (1-FE) * stack-off mix at `equityWhenCalled` (ties as half).
-   */
-  icmJamVsFoldEv(
-    stacks: F64VectorInput,
-    payouts: F64VectorInput,
-    heroIndex: number,
-    villainIndex: number,
-    pot: number,
-    foldEquity: number,
-    equityWhenCalled: number
-  ): IcmJamVsFoldEvResult;
-
-  /**
-   * Call vs fold $EV facing a shove. Fold keeps stacks as given. Call puts `callAmount`
-   * from hero and `min(villain, call)` from villain into `pot`, then mixes win/lose ICM.
-   */
-  icmCallVsFoldEv(
-    stacks: F64VectorInput,
-    payouts: F64VectorInput,
-    heroIndex: number,
-    villainIndex: number,
-    pot: number,
-    callAmount: number,
-    heroEquity: number
-  ): IcmCallVsFoldEvResult;
 
   /**
    * Calling bubble factor for one hero-vs-villain all-in:
@@ -2227,30 +2140,6 @@ export interface PokerCalculations {
     orbitsAtLevel: F64VectorInput,
     returnFormat?: F64ReturnFormat
   ): number[] | Float64Array;
-
-  /**
-   * Stalling premium = FGS(1 orbit)[hero] − ICM now. Optional two-shortest-stack 50/50 collision.
-   */
-  icmStallingEv(
-    stacks: F64VectorInput,
-    payouts: F64VectorInput,
-    heroIndex: number,
-    smallBlind: number,
-    bigBlind: number,
-    ante?: number,
-    options?: IcmStallingEvOptions
-  ): IcmStallingEvResult;
-
-  /**
-   * $EV if the shortest other alive stack busts next (`vanish` chips leave; `chipLeader` they move
-   * to the current leader).
-   */
-  icmPayJumpSurvivalEv(
-    stacks: F64VectorInput,
-    payouts: F64VectorInput,
-    heroIndex: number,
-    options?: IcmPayJumpSurvivalOptions
-  ): IcmPayJumpSurvivalResult;
 
   /**
    * $EV of hero winning a dead pot of `deadChips` (chips in the middle owned by nobody).
@@ -2306,6 +2195,13 @@ export interface PokerCalculations {
     deadCards?: CardInput
   ): number[];
 
+  /** Exact win / split / lose frequencies for 2..9 known hands (general form of the 3-way export). */
+  exactMultiwayWinTieLoseKnownHands(
+    holeHands: CardInput[],
+    boardCards: CardInput,
+    deadCards?: CardInput
+  ): MultiwayWinTieLoseResult;
+
   /** Same as `exactMultiwayEquityKnownHands` with required dead/muck cards. */
   exactMultiwayEquityWithDeadCards(
     holeHands: CardInput[],
@@ -2322,16 +2218,6 @@ export interface PokerCalculations {
     boardCards: CardInput,
     deadCards?: CardInput
   ): MultiwaySidePotChipEvResult;
-
-  /**
-   * P(hero / player 0 is best on the current flop or turn) vs exact showdown equity.
-   * Board length must be 3 or 4.
-   */
-  exactMultiwayAheadFrequency(
-    holeHands: CardInput[],
-    boardCards: CardInput,
-    deadCards?: CardInput
-  ): MultiwayAheadFrequencyResult;
 
   /** P(showdown split involving hero) and P(any split). */
   exactMultiwayTieFrequency(
@@ -2402,17 +2288,6 @@ export interface PokerCalculations {
   ): number;
 
   /**
-   * HU preflop jam/fold vs call/fold via regret matching. Stacks in BB (blinds 0.5/1).
-   * Called equity is Monte Carlo vs the opposing hole.
-   */
-  cfrHeadsUpPushFoldSolve(
-    jammerRange: SparseRangeSpec | Float64Array,
-    callerRange: SparseRangeSpec | Float64Array,
-    stackBb: number,
-    iterations?: number
-  ): CfrPushFoldResult;
-
-  /**
    * Fictitious play on the same river check/bet tree as `cfrRiverBetCallFoldSolve`.
    */
   fictitiousPlayRiver(
@@ -2464,6 +2339,21 @@ export interface PokerCalculations {
     topK?: number
   ): HuRiverCheckBetTreeResult;
 
+  /** Copy each bucket's mixed action onto every 1326 combo in that bucket. */
+  flopBucketStrategyTo1326(
+    bucketMix: F64VectorInput,
+    comboBuckets: Int32Array | number[]
+  ): Float64Array;
+
+  /**
+   * Cache key: canonical flop index (`0..countCanonicalFlops()-1`) plus millichip
+   * pot/stack. Suit-isomorphic flops share the same key.
+   */
+  canonicalFlopCfrKey(flop: CardInput, pot: number, stack?: number): string;
+
+  /** Default EHS2 bucket count (20). */
+  flopBucketCountDefault(): number;
+
   /**
    * HU Nash jam frequencies (169). SB jam/fold vs BB call/fold, chip EV.
    * Accepts `stackBb` or `{ stackBb, smallBlind, bigBlind, ante, ... }`.
@@ -2500,20 +2390,6 @@ export interface PokerCalculations {
     ante?: number
   ): NashJamCallSolveResult;
 
-  /**
-   * First-in jam vs `nOpponents` with `stacks[]`. Sequential first-caller:
-   * earlier seats fold with Nash fold freq; first caller uses HU call vs the jam.
-   */
-  nashFirstInJamRange(options: NashPushFoldOptions): Float64Array;
-  nashFirstInJamRange(
-    stackBb: number,
-    nOpponents: number,
-    stacks: F64VectorInput,
-    smallBlind?: number,
-    bigBlind?: number,
-    ante?: number
-  ): Float64Array;
-
   /** Per-hand max stack in BB that still jams at Nash (indifference / threshold). */
   nashJamFoldChart169(
     bigBlindOrOptions: number | NashPushFoldOptions,
@@ -2542,12 +2418,6 @@ export interface PokerCalculations {
    * `payouts` is first-to-last prize. Showdown ties use equity split (no chop vector).
    */
   nashIcmHeadsUpJamCallSolve(options: NashPushFoldOptions): NashJamCallSolveResult;
-
-  /**
-   * One shover, N callers (1–3 typical, up to 8). Sequential first-caller approximation.
-   * ICM when `payouts` is set.
-   */
-  nashMultiwayShoveCall(options: NashPushFoldOptions): NashMultiwayShoveCallResult;
 
   /**
    * Suit-canonical 3-card flop. Rainbow / two-tone / monotone collapse under S4.
@@ -2652,13 +2522,14 @@ export interface PokerCalculations {
   /**
    * Flop wrap/OESD outs. Counts remaining cards that, as the turn, make a straight
    * (or SF/royal) using exactly 2 hole + 3 of the 4 board cards. `nutOuts` are those
-   * that are also the nut Omaha holding on that 4-card board.
+   * that are also the nut Omaha holding on that 4-card board. A hand that already holds a
+   * straight or better on the flop is not drawing and returns `{ outs: 0, nutOuts: 0 }`.
    */
   omahaWrapDrawOuts(heroHoleCards: CardInput, flopCards: CardInput): OmahaWrapDrawResult;
 
   /**
-   * 0–1 closeness to the nuts: `1 − (strictly better 4-card holdings) / (n − 1)`
-   * among legal Omaha holdings on this board. Unique nuts → 1; unique worst → 0.
+   * 0–1 closeness to the nuts: `1 − (strictly better 4-card holdings) / n` over villain holdings
+   * that exclude hero's cards, the board, and `extraDead`. Nuts → 1; unique worst → 0.
    */
   omahaNuttednessScore(
     heroHoleCards: CardInput,
@@ -2670,6 +2541,74 @@ export interface PokerCalculations {
    * Monte Carlo pot-share equity for 3–4 known 4-card hands. Returned array sums to ~1.
    */
   omahaMultiwayEquityMc(
+    holeHands: CardInput[],
+    boardCards: CardInput,
+    trials: number,
+    seed: number
+  ): number[];
+
+  /**
+   * Best 5-card Big O hand: exactly 2 hole + exactly 3 board.
+   * `holeCards` must be 5 cards; `boardCards` must be 3–5 (flop C(5,2)=10, river C(5,2)*C(5,3)=100).
+   * Same `HandEvalResult` shape as `evaluateBestHand`.
+   */
+  evaluateBigOBestHand(
+    holeCards: CardInput,
+    boardCards: CardInput,
+    options?: EvaluateBestHandOptions
+  ): HandEvalResult;
+  evaluateBigOBestHand(
+    holeCards: CardInput,
+    boardCards: CardInput,
+    options: { format: 'slim' }
+  ): HandEvalResultSlim;
+
+  /**
+   * Big O strength using the same `pack_hand_strength` encoding as `evaluateHandStrength`
+   * (5-card rank + kickers). Not a 10-card best-of-N.
+   */
+  evaluateBigOHandStrength(holeCards: CardInput, boardCards: CardInput): number;
+
+  /**
+   * Exact HU Big O equity vs a known 5-card hand. Board 0–5; remaining runouts enumerated.
+   * Ties count as 0.5.
+   */
+  exactHuBigOEquityVsKnown(
+    heroHoleCards: CardInput,
+    villainHoleCards: CardInput,
+    boardCards: CardInput
+  ): number;
+
+  /** Monte Carlo Big O equity vs a uniform random 5-card villain. */
+  simulateBigOEquityVsRandom(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    trials: number,
+    seed: number
+  ): number;
+
+  /** Monte Carlo Big O equity vs a sparse weighted 5-card range (`BigORangeSpec`). */
+  simulateBigOEquityVsRange(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    range: BigORangeSpec,
+    trials: number,
+    seed: number
+  ): number;
+
+  /** Remaining 5-card combo count: `C(52 − |unique dead|, 5)`. Throws on duplicate dead cards. */
+  bigOComboCount(deadCards: CardInput): number;
+
+  /**
+   * True iff hero’s Big O hand is unbeaten by every other 5-card combo that avoids
+   * `boardCards` and optional `extraDead`.
+   */
+  bigONutsOnBoard(heroHoleCards: CardInput, boardCards: CardInput, extraDead?: CardInput): boolean;
+
+  /**
+   * Monte Carlo pot-share equity for 3–4 known 5-card hands. Returned array sums to ~1.
+   */
+  bigOMultiwayEquityMc(
     holeHands: CardInput[],
     boardCards: CardInput,
     trials: number,
@@ -2695,20 +2634,6 @@ export interface PokerCalculations {
   ): number[] | Float64Array;
 
   /**
-   * 3-handed first-in Nash jam/call with ICM utility (not chip EV).
-   * Approximation: BTN open-jams; SB then BB call sequentially. Blinds are dead in the pot.
-   */
-  spinGoNashJamCall(
-    btnStack: number,
-    sbStack: number,
-    bbStack: number,
-    payouts: F64VectorInput,
-    smallBlind?: number,
-    bigBlind?: number,
-    ante?: number
-  ): SpinGoNashJamCallResult;
-
-  /**
    * Average-position FGS orbits, then ICMBU on surviving stacks.
    * `orbits === 0` matches `pkoIcmbuPayouts` on the original stacks.
    */
@@ -2722,30 +2647,6 @@ export interface PokerCalculations {
     ante?: number,
     returnFormat?: F64ReturnFormat
   ): PkoIcmbuResult;
-
-  /**
-   * Overlay = `(prizePool / fieldRemaining) / lateRegFee`.
-   * $EV of registering now: Harville on you / one average stack / rest of field,
-   * pool after you pay is `prizePool + lateRegFee`, then subtract the fee.
-   */
-  lateRegOverlayEv(
-    fieldRemaining: number,
-    prizePool: number,
-    lateRegFee: number,
-    startingStack: number,
-    averageStack: number
-  ): LateRegOverlayResult;
-
-  /**
-   * WTA satellite: P(top-K ticket) via Harville. `ticketEv = P * ticketValue`.
-   * Doubling hero's stack: chip-share of the ticket pool vs Harville $EV after the double.
-   */
-  winnerTakeAllSatelliteEv(
-    stacks: F64VectorInput,
-    heroIndex: number,
-    ticketCount: number,
-    ticketValue: number
-  ): SatelliteTicketEvResult;
 
   /**
    * Squeeze vs fold (chip EV). Fold = 0 (hero has not put chips in).
@@ -2774,20 +2675,6 @@ export interface PokerCalculations {
     foldEquity: number,
     equityWhenCalled: number
   ): FourBetJamEvResult;
-
-  /**
-   * Isolate vs `nLimpers`. Each folds independently with `pFold`.
-   * Vs `k` callers: `equities[k-1]` if given, else `1/(k+1)`.
-   * Check-behind is `1/(n+1)` of the current pot.
-   */
-  isoRaiseVsLimpersEv(
-    pot: number,
-    isoSize: number,
-    limpCall: number,
-    nLimpers: number,
-    pFold: number,
-    equities?: F64VectorInput
-  ): IsoRaiseEvResult;
 
   /**
    * SPR after the 3-bet. Realized equity = `equity * realization` (default 1).
@@ -2854,6 +2741,166 @@ export interface PokerCalculations {
    * Flush vs boat does not rename a single hand; it only swaps which wins at showdown.
    */
   shortDeckVsHoldemCategoryFlip(cards: CardInput): boolean;
+
+  /**
+   * Best 8-or-better Omaha low: exactly 2 hole + 3 board. Ace is low.
+   * Straights and flushes do not disqualify. Pair or any rank 9+ kills that 5-card combo.
+   */
+  evaluateOmahaLoHand(holeCards: CardInput, boardCards: CardInput): OmahaLoHand;
+
+  /** True iff `evaluateOmahaLoHand` qualifies. */
+  omahaLoQualifies(holeCards: CardInput, boardCards: CardInput): boolean;
+
+  /**
+   * Omaha Hi (same as `evaluateOmahaBestHand`) plus 8-or-better low.
+   * Hole 4, board 3–5.
+   */
+  evaluateOmahaHiLo(holeCards: CardInput, boardCards: CardInput): OmahaHiLoHands;
+
+  /**
+   * Exact HU PLO-8 vs a known 4-card hand. Board 0–5.
+   * No qualifying low → high takes the full pot.
+   */
+  exactHuOmahaHiLoEquity(
+    heroHoleCards: CardInput,
+    villainHoleCards: CardInput,
+    boardCards: CardInput
+  ): OmahaHiLoEquity;
+
+  /**
+   * Monte Carlo PLO-8. `villainHoleCards` null → uniform random 4-card opponent.
+   */
+  simulateOmahaHiLoEquity(
+    heroHoleCards: CardInput,
+    villainHoleCards: CardInput | null,
+    boardCards: CardInput,
+    trials: number,
+    seed: number
+  ): OmahaHiLoEquity;
+
+  /** P(hero wins both halves, or wins high when no low exists). */
+  omahaScoopProbabilityMc(
+    heroHoleCards: CardInput,
+    villainHoleCards: CardInput,
+    boardCards: CardInput,
+    trials: number,
+    seed: number
+  ): number;
+
+  /** P(exactly one side is a tie and the other is won or lost). */
+  omahaQuarterProbabilityMc(
+    heroHoleCards: CardInput,
+    villainHoleCards: CardInput,
+    boardCards: CardInput,
+    trials: number,
+    seed: number
+  ): number;
+
+  /** True iff hero has a qualifying low unbeaten by any other 4-card combo. */
+  omahaLoNutsOnBoard(heroHoleCards: CardInput, boardCards: CardInput, extraDead?: CardInput): boolean;
+
+  /**
+   * `scoopNuts` is nut high and nut low, or nut high when the board cannot make a low
+   * (high takes the whole pot).
+   */
+  omahaHiLoNuttedness(
+    heroHoleCards: CardInput,
+    boardCards: CardInput,
+    extraDead?: CardInput
+  ): OmahaHiLoNuttedness;
+
+  /**
+   * 3-way chip EV with hi/lo halves and quartering. Exactly 3 known 4-card hands.
+   * No qualifying low → high takes the full pot, split among high winners.
+   */
+  omahaHiLoMultiwayMc(
+    holeHands: CardInput[],
+    boardCards: CardInput,
+    trials: number,
+    seed: number
+  ): number[];
+
+  /**
+   * Kansas City 2-7 single draw. Ace high; straights and flushes are bad.
+   * Lower packed strength is the better low.
+   */
+  evaluateDeuceSevenHand(cards: CardInput): number;
+  evaluateDeuceSevenCategory(cards: CardInput): DeuceSevenCategory;
+  /**
+   * Unpaired, no straight, no flush. Default `eightPat=true` treats 8-high as pat;
+   * `false` requires 7-high.
+   */
+  deuceSevenIsPat(cards: CardInput, eightPat?: boolean | { eightPat?: boolean }): boolean;
+  /**
+   * Hero equity after both stand or draw (ties 0.5). Omit options to stand pat.
+   * Exact replacement tree when small; otherwise Monte Carlo.
+   */
+  deuceSevenDrawEquityVsKnown(
+    hero: CardInput,
+    villain: CardInput,
+    options?: DeuceSevenDrawOptions
+  ): number;
+  /** True iff 7-5-4-3-2 unpaired unsuited. */
+  deuceSevenNutsPat(cards: CardInput): boolean;
+  /** Both hands must be unpaired 8-high. Smooth = second card is not a 7. */
+  deuceSevenRoughVsSmooth(a: CardInput, b: CardInput): DeuceSevenRoughSmooth;
+  /** Pot-share vector for 2–8 disjoint 5-card hands. Ties split. */
+  deuceSevenMultiwayShowdown(hands: CardInput[]): number[];
+  /**
+   * 7-card stud hi. Best 5-card high from **3–7** cards. Same `HandEvalResult` as
+   * `evaluateBestHand`.
+   */
+  evaluateStudBestHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult;
+  evaluateStudBestHand(cards: CardInput, options: { format: 'slim' }): HandEvalResultSlim;
+
+  /**
+   * Razz (7-card A-to-5 low). Aces low. Straights and flushes do **not** count.
+   * Best 5 from **3–7** cards. Lower `strength` is better. Wheel is A2345.
+   * `kickers` are ace-low values (A=0 … K=12), unlike the hold'em evaluators; hands with fewer
+   * than 5 cards pad with 13. Distinct from 2-7 lowball.
+   */
+  evaluateRazzHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult;
+  evaluateRazzHand(cards: CardInput, options: { format: 'slim' }): HandEvalResultSlim;
+
+  /** True iff the best 5-card A-5 low is A2345 (suited wheel still counts). */
+  razzWheelIsNuts(cards: CardInput): boolean;
+
+  /**
+   * Exact HU 7-card stud equity vs a known hand. Each side 3–7 cards; remaining
+   * streets come from the dead-aware deck. Both already 7 → one comparison.
+   * Ties count 0.5. `extraDead` = folded upcards.
+   */
+  exactHuStudEquityVsKnown(
+    heroCards: CardInput,
+    villainCards: CardInput,
+    extraDead?: CardInput
+  ): number;
+
+  /** Exact HU razz equity. Same dealing rules as stud; lower A-5 low wins. */
+  exactHuRazzEquityVsKnown(
+    heroCards: CardInput,
+    villainCards: CardInput,
+    extraDead?: CardInput
+  ): number;
+
+  /** Remaining deck after holes + upcards. Canonical strings, deck-index order. */
+  studDeadCardDeck(deadCards: CardInput): string[];
+
+  /** Monte Carlo stud hi: random matching-street villain, complete both to 7. */
+  simulateStudEquityVsRandom(
+    heroCards: CardInput,
+    trials: number,
+    seed: number,
+    extraDead?: CardInput
+  ): number;
+
+  /** Monte Carlo razz: random matching-street villain, complete both to 7. */
+  simulateRazzEquityVsRandom(
+    heroCards: CardInput,
+    trials: number,
+    seed: number,
+    extraDead?: CardInput
+  ): number;
 }
 
 

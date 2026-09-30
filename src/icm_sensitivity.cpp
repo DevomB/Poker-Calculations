@@ -27,49 +27,6 @@ std::vector<double> icm_harville_stack_jacobian(const std::vector<double>& stack
     return j;
 }
 
-IcmFieldPressureResult icm_field_pressure_index(const std::vector<double>& stacks,
-                                                const std::vector<double>& payouts,
-                                                std::size_t hero_index, double pot_chips) {
-    const std::size_t n = stacks.size();
-    if (hero_index >= n) {
-        throw std::invalid_argument("icmFieldPressureIndex: invalid hero index");
-    }
-    IcmFieldPressureResult out;
-    out.pairwise_bubble_factors.assign(n, 0.0);
-    double denom = 0.0;
-    for (std::size_t j = 0; j < n; ++j) {
-        if (j == hero_index) {
-            continue;
-        }
-        denom += stacks[j];
-    }
-    if (denom <= 0.0) {
-        throw std::invalid_argument("icmFieldPressureIndex: no opposing stacks");
-    }
-    double psi = 0.0;
-    double max_bf = -1.0;
-    for (std::size_t j = 0; j < n; ++j) {
-        if (j == hero_index) {
-            continue;
-        }
-        double bf = 0.0;
-        try {
-            bf = icm_pairwise_bubble_factor(stacks, payouts, hero_index, j, pot_chips);
-        } catch (const std::exception&) {
-            bf = 0.0;
-        }
-        out.pairwise_bubble_factors[j] = bf;
-        const double w = stacks[j] / denom;
-        psi += w * bf / (1.0 + bf);
-        if (bf > max_bf) {
-            max_bf = bf;
-            out.argmax_villain = j;
-        }
-    }
-    out.index = psi;
-    return out;
-}
-
 IcmChopNegotiationResult icm_chop_negotiation_analysis(const std::vector<double>& stacks,
                                                        const std::vector<double>& payouts) {
     const std::size_t n = stacks.size();

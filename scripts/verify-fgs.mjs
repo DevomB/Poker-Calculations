@@ -28,17 +28,8 @@ function assertTrue(label, cond) {
   if (!cond) throw new Error(label);
 }
 
-const names = [
-  'futureGameSimulationPayouts',
-  'futureGrowthShare',
-  'icmPayoutsAfterBlindPost',
-  'icmJamVsFoldEv',
-  'icmCallVsFoldEv',
-  'icmCallingBubbleFactor',
-  'fgsPayoutsBlindSchedule',
-  'icmStallingEv',
-  'icmPayJumpSurvivalEv',
-  'icmDeadPotDollarEv',
+const names = [  'icmPayoutsAfterBlindPost',  'icmCallingBubbleFactor',
+  'fgsPayoutsBlindSchedule',  'icmDeadPotDollarEv',
 ];
 for (const name of names) {
   assertTrue(`${name} is a function`, typeof poker[name] === 'function');
@@ -48,47 +39,31 @@ const stacks = [5000, 3000, 2000];
 const payouts = [100, 60, 40];
 const icm = Array.from(poker.icmExpectedPayouts(stacks, payouts));
 
-const fgsZeroOrbits = Array.from(poker.futureGameSimulationPayouts(stacks, payouts, 0, 25, 50, 10));
-const fgsZeroCost = Array.from(poker.futureGameSimulationPayouts(stacks, payouts, 3, 0, 0, 0));
+const zeroPost = Array.from(poker.icmPayoutsAfterBlindPost(stacks, payouts, 0, 0, [0, 0, 0]));
 for (let i = 0; i < 3; ++i) {
-  assertNear(`FGS orbits=0 seat ${i}`, fgsZeroOrbits[i], icm[i], EPS);
-  assertNear(`FGS zero cost seat ${i}`, fgsZeroCost[i], icm[i], EPS);
+  assertNear(`zero post equals ICM seat ${i}`, zeroPost[i], icm[i], EPS);
 }
+// A seat blinded to zero keeps its finishing prize (bottom payout), so the pool is conserved.
+const busted = Array.from(poker.icmPayoutsAfterBlindPost([5000, 3000, 100], payouts, 2, 100, [0, 0, 100]));
+assertNear('busted seat keeps the bottom prize', busted[2], payouts[2], EPS);
+assertNear('prize pool conserved after a bust', busted[0] + busted[1] + busted[2], 200, EPS);
 
 const bubbleStacks = [4000, 2500, 1500];
 const bubblePayouts = [100, 50, 0];
 const callingBf = poker.icmCallingBubbleFactor(bubbleStacks, bubblePayouts, 1, 2, 1500);
 assertTrue(`calling bubble factor > 1 (got ${callingBf})`, Number.isFinite(callingBf) && callingBf > 1);
 
-const jam = poker.icmJamVsFoldEv(stacks, payouts, 0, 1, 150, 0.3, 0.55);
-assertTrue('jam foldEv finite', Number.isFinite(jam.foldEv));
-assertTrue('jam jamEv finite', Number.isFinite(jam.jamEv));
-assertTrue('jam delta finite', Number.isFinite(jam.delta));
-
 const dead = poker.icmDeadPotDollarEv([5000, 2000, 1000], [100, 50, 0], 0, 500);
 assertTrue('dead-pot winEv > nowEv', dead.winEv > dead.nowEv);
 assertTrue('dead-pot delta positive', dead.delta > 0);
-
-const growth = poker.futureGrowthShare([4000, 800, 800], 3, 25, 50, 0);
-assertTrue('growth survivorCount >= 1', growth.survivorCount >= 1);
-assertTrue('growth net length', growth.netGrowth.length === 3);
 
 const posted = Array.from(poker.icmPayoutsAfterBlindPost(stacks, payouts, 0, 50, [50, 25, 10]));
 assertTrue('after-post length', posted.length === 3);
 assertTrue('after-post finite', posted.every(Number.isFinite));
 
-const call = poker.icmCallVsFoldEv(stacks, payouts, 1, 0, 200, 300, 0.42);
-assertTrue('call delta finite', Number.isFinite(call.delta));
-
 const sched = Array.from(
   poker.fgsPayoutsBlindSchedule(stacks, payouts, [25, 50], [50, 100], [0, 10], [1, 1]),
 );
 assertTrue('schedule length', sched.length === 3);
-
-const stall = poker.icmStallingEv(stacks, payouts, 2, 25, 50, 0);
-assertTrue('stall premium finite', Number.isFinite(stall.stallingPremium));
-
-const jump = poker.icmPayJumpSurvivalEv(stacks, payouts, 0, { bustChips: 'vanish' });
-assertTrue('pay-jump ladder finite', Number.isFinite(jump.ladderDelta));
 
 console.log('OK: verify-fgs.mjs — all checks passed.');

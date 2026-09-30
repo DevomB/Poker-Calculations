@@ -12,7 +12,7 @@ inline constexpr int kNashHandCount = 169;
 inline constexpr int kNashDefaultIterations = 50;
 inline constexpr int kNashMaxIterations = 80;
 inline constexpr double kNashDefaultTolerance = 1e-3;
-inline constexpr int kNashDefaultEquityIterations = 80;
+inline constexpr int kNashDefaultEquityIterations = 200;  // ~3.5pp SE per matchup cell
 inline constexpr double kNashDefaultMaxStackBb = 40.0;
 
 /**
@@ -54,20 +54,11 @@ struct NashJamCallResult {
     int iterations{0};
 };
 
-struct NashMultiwayResult {
-    std::array<double, kNashHandCount> jam{};
-    std::vector<std::array<double, kNashHandCount>> calls;
-    int iterations{0};
-};
-
 [[nodiscard]] int nash_hand169_index(int high_rank, int low_rank, bool suited);
 [[nodiscard]] int nash_hand169_from_notation(const std::string& notation);
 [[nodiscard]] double nash_combo_weight(int hand169);
 
 [[nodiscard]] NashJamCallResult nash_heads_up_jam_call_solve(const NashPushFoldSpec& spec);
-
-[[nodiscard]] NashMultiwayResult nash_multiway_shove_call(const NashPushFoldSpec& spec,
-                                                          const std::vector<double>& caller_stacks);
 
 [[nodiscard]] std::array<double, kNashHandCount> nash_jam_threshold_stack_bb(
     const NashPushFoldSpec& spec, double max_stack_bb);

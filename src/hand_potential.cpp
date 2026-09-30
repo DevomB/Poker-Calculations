@@ -84,7 +84,9 @@ void finish_breakdown(HandPotentialBreakdown& out) {
     out.ppot = behind_mass > 0.0 ? out.ppot / behind_mass : 0.0;
     out.npot = ahead_mass > 0.0 ? out.npot / ahead_mass : 0.0;
     out.ehs = out.hs * (1.0 - out.npot) + (1.0 - out.hs) * out.ppot;
-    out.ehs2 = out.hs * (1.0 - out.npot) * (1.0 - out.npot) + (1.0 - out.hs) * out.ppot * out.ppot;
+    // Billings' multi-opponent form EHS_n = HS^n (1 - NPot) + (1 - HS^n) PPot with n = 2.
+    const double hs2 = out.hs * out.hs;
+    out.ehs2 = hs2 * (1.0 - out.npot) + (1.0 - hs2) * out.ppot;
 }
 
 void add_transition(double hp[3][3], double weight, int now, int later) {
@@ -369,13 +371,15 @@ int equity_bucket_from_ehs(double ehs, int bucket_count) {
     return bucket;
 }
 
-std::vector<double> combo_ehs_table_vs_range(const std::vector<Card>& board_cards,
-                                             const SparseRange& villain_range,
-                                             const ComboEhsTableOptions& options,
-                                             const CancelPredicate* should_cancel) {
+namespace {
+
+std::vector<double> combo_strength_table_vs_range(const std::vector<Card>& board_cards,
+                                                  const SparseRange& villain_range,
+                                                  const ComboEhsTableOptions& options,
+                                                  const CancelPredicate* should_cancel, bool squared) {
     const std::size_t n = board_cards.size();
     if (n != 3 && n != 4) {
-        throw std::invalid_argument("comboEhsTableVsRange requires a flop or turn (3 or 4 board cards)");
+        throw std::invalid_argument("combo EHS table requires a flop or turn (3 or 4 board cards)");
     }
     DeckBitset board_dead;
     board_dead.mark_cards(board_cards);
@@ -401,10 +405,26 @@ std::vector<double> combo_ehs_table_vs_range(const std::vector<Card>& board_card
             const HandPotentialBreakdown row =
                 compute_for_ids(a, b, board, board_n, 1, villain_range, hero_board, options.trials,
                                 options.seed, should_cancel);
-            out[static_cast<std::size_t>(idx)] = row.ehs;
+            out[static_cast<std::size_t>(idx)] = squared ? row.ehs2 : row.ehs;
         }
     }
     return out;
+}
+
+}  // namespace
+
+std::vector<double> combo_ehs_table_vs_range(const std::vector<Card>& board_cards,
+                                             const SparseRange& villain_range,
+                                             const ComboEhsTableOptions& options,
+                                             const CancelPredicate* should_cancel) {
+    return combo_strength_table_vs_range(board_cards, villain_range, options, should_cancel, false);
+}
+
+std::vector<double> combo_ehs2_table_vs_range(const std::vector<Card>& board_cards,
+                                              const SparseRange& villain_range,
+                                              const ComboEhsTableOptions& options,
+                                              const CancelPredicate* should_cancel) {
+    return combo_strength_table_vs_range(board_cards, villain_range, options, should_cancel, true);
 }
 
 }  // namespace poker

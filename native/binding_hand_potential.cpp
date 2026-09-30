@@ -212,11 +212,27 @@ Napi::Value HandPotentialBreakdownBind(const Napi::CallbackInfo& info) {
     std::vector<poker::Card> hero;
     std::vector<poker::Card> board;
     poker::SparseRange range;
-    if (!parse_hero_board_range(info, "handPotentialBreakdown(heroHole, board, range)", hero, board,
-                                range)) {
+    if (!parse_hero_board_range(info, "handPotentialBreakdown(heroHole, board, range[, { streets }])",
+                                hero, board, range)) {
         return env.Null();
     }
-    POKER_TRY(env, { return breakdown_to_js(env, poker::hand_potential_breakdown(hero, board, range)); });
+    poker::PotentialStreets streets = poker::PotentialStreets::One;
+    if (info.Length() >= 4 && info[3].IsObject()) {
+        const Napi::Object o = info[3].As<Napi::Object>();
+        if (o.Has("streets") && !o.Get("streets").IsUndefined()) {
+            if (!o.Get("streets").IsNumber()) {
+                POKER_FAIL_TYPE(env, "handPotentialBreakdown: streets must be 1 or 2");
+            }
+            const int s = o.Get("streets").As<Napi::Number>().Int32Value();
+            if (s != 1 && s != 2) {
+                POKER_FAIL_TYPE(env, "handPotentialBreakdown: streets must be 1 or 2");
+            }
+            streets = s == 2 ? poker::PotentialStreets::Two : poker::PotentialStreets::One;
+        }
+    }
+    POKER_TRY(env, {
+        return breakdown_to_js(env, poker::hand_potential_breakdown(hero, board, range, streets));
+    });
 }
 
 Napi::Value TwoStreetPositivePotential(const Napi::CallbackInfo& info) {

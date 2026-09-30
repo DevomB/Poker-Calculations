@@ -10,11 +10,13 @@ namespace poker {
  *
  * P(j busts) = Harville last-place of j among players with chips
  * (`icm_last_place_probabilities_harville` on the alive subset).
- * P(i knocks j | j busts) = stack_i / (totalChips - stack_j) when i covers j
- * (`stack_i >= stack_j` and i != j), else 0.
- * Diagonal is 0. Rows need not sum to 1 (multiple KOs; non-coverers get 0 without
- * renormalizing). Zero-stack players are already out: they neither collect nor
- * are collected. n in 2..31 (Harville limit).
+ * P(j busts) = 1 - stack_j / totalChips (Harville first place is the chip share).
+ * P(i collects j | j busts) weights each eligible i by stack_i * stack_i / (stack_i + stack_j)
+ * (chip share times a pairwise "i outlasts j" estimate), normalized over the players who
+ * cover j (`stack_i >= stack_j`), or over everyone else when nobody covers j.
+ * Columns sum to P(j busts), so the matrix pays out every bounty except the winner's.
+ * Diagonal is 0. Zero-stack players are already out: they neither collect nor
+ * are collected. n in 2..31.
  */
 struct PkoKnockoutMatrix {
     std::vector<double> flat;  // n×n row-major; entry i*n+j = P(i collects j's bounty)

@@ -41,29 +41,6 @@ void require_aligned(const std::vector<double>& stacks, const std::vector<double
     return std::accumulate(stacks.begin(), stacks.end(), 0.0);
 }
 
-[[nodiscard]] std::vector<double> last_place_alive(const std::vector<double>& stacks) {
-    const std::size_t n = stacks.size();
-    std::vector<double> out(n, 0.0);
-    std::vector<std::size_t> alive;
-    std::vector<double> alive_stacks;
-    alive.reserve(n);
-    alive_stacks.reserve(n);
-    for (std::size_t i = 0; i < n; ++i) {
-        if (stacks[i] > 0.0) {
-            alive.push_back(i);
-            alive_stacks.push_back(stacks[i]);
-        }
-    }
-    if (alive.size() < 2) {
-        return out;
-    }
-    const auto lp = icm_last_place_probabilities_harville(alive_stacks);
-    for (std::size_t k = 0; k < alive.size(); ++k) {
-        out[alive[k]] = lp[k];
-    }
-    return out;
-}
-
 /// ICM on remaining chips: busted seats (stack == 0) split the last-k prizes equally.
 [[nodiscard]] std::vector<double> icm_allowing_busts(const std::vector<double>& stacks,
                                                      const std::vector<double>& payouts) {
@@ -199,23 +176,41 @@ PkoKnockoutMatrix pko_knockout_probability_matrix(const std::vector<double>& sta
     if (total <= 0.0) {
         return out;
     }
-    const auto p_bust = last_place_alive(stacks);
     for (std::size_t j = 0; j < n; ++j) {
-        if (stacks[j] <= 0.0 || p_bust[j] <= 0.0) {
+        if (stacks[j] <= 0.0) {
             continue;
         }
-        const double denom = total - stacks[j];
-        if (denom <= 0.0) {
+        // j's bounty is paid out unless j wins the tournament (Harville first place = chip share).
+        const double p_bust = 1.0 - stacks[j] / total;
+        // Who collects: weight i by P(i outlasts j) ~ s_i / (s_i + s_j) times i's chip share, over
+        // the players who cover j (everyone else when nobody covers). Columns then sum to P(j busts),
+        // so the matrix distributes every bounty except the winner's own.
+        bool any_cover = false;
+        for (std::size_t i = 0; i < n; ++i) {
+            if (i != j && stacks[i] > 0.0 && covers(stacks[i], stacks[j])) {
+                any_cover = true;
+                break;
+            }
+        }
+        std::vector<double> w(n, 0.0);
+        double wsum = 0.0;
+        for (std::size_t i = 0; i < n; ++i) {
+            if (i == j || stacks[i] <= 0.0) {
+                continue;
+            }
+            if (any_cover && !covers(stacks[i], stacks[j])) {
+                continue;
+            }
+            w[i] = stacks[i] * (stacks[i] / (stacks[i] + stacks[j]));
+            wsum += w[i];
+        }
+        if (wsum <= 0.0) {
             continue;
         }
         for (std::size_t i = 0; i < n; ++i) {
-            if (i == j) {
-                continue;
+            if (w[i] > 0.0) {
+                out.flat[i * n + j] = p_bust * w[i] / wsum;
             }
-            if (!covers(stacks[i], stacks[j])) {
-                continue;
-            }
-            out.flat[i * n + j] = p_bust[j] * (stacks[i] / denom);
         }
     }
     return out;

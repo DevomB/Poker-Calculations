@@ -77,7 +77,7 @@ double exact_hu_equity_vs_random_hand(const std::vector<Card>& hero_hole_cards,
             u2.set(vc[i]);
         }
         const std::vector<int> after_villain = u2.unused_indices();
-        for_each_combo_indices(after_villain, need_board, [&](const int* run, int run_k) {
+        auto score_runout = [&](const int* run, int run_k) {
             throw_if_cancelled(should_cancel);
             fill_seven_from_hole_board_run(hero_hole_cards, board_cards, run, run_k, hero_r, hero_s);
             vil_r[0] = static_cast<std::uint8_t>(vc[0] / 4);
@@ -101,7 +101,12 @@ double exact_hu_equity_vs_random_hand(const std::vector<Card>& hero_hole_cards,
             } else if (cmp == 0) {
                 win_weight += 0.5;
             }
-        });
+        };
+        if (need_board == 0) {
+            score_runout(nullptr, 0);  // river: nothing left to deal, score the board as is
+        } else {
+            for_each_combo_indices(after_villain, need_board, score_runout);
+        }
     });
     if (total <= 0.0) {
         throw std::invalid_argument("exactHuEquityVsRandomHand: empty enumeration");

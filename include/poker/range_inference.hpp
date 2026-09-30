@@ -24,10 +24,4 @@ struct MaterializedRangeResult {
     const SparseRange& prior, const std::vector<Card>& hero_hole_cards,
     const std::vector<Card>& board_cards, const std::vector<Card>& known_dead_cards);
 
-enum class BayesianActionKind { Fold, Call, Raise };
-
-[[nodiscard]] MaterializedRangeResult bayesian_range_update_from_action(
-    const SparseRange& prior, const std::vector<Card>& hero_hole_cards,
-    const std::vector<Card>& board_cards, BayesianActionKind action, double alpha);
-
 }  // namespace poker

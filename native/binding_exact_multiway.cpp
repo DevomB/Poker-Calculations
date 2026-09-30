@@ -96,6 +96,28 @@ Napi::Value ExactThreeWayWinTieLoseKnownHands(const Napi::CallbackInfo& info) {
     });
 }
 
+Napi::Value ExactMultiwayWinTieLoseKnownHands(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    POKER_REQUIRE(env, info.Length() >= 2,
+                  "exactMultiwayWinTieLoseKnownHands(holeHands, boardCards[, deadCards])");
+    std::string err;
+    std::vector<std::vector<poker::Card>> holes;
+    if (!parse_hole_hands(env, info[0], holes, &err)) {
+        POKER_FAIL_TYPE(env, err);
+    }
+    const std::vector<poker::Card> board = parse_cards_from_js(env, info[1], &err);
+    if (!err.empty()) {
+        POKER_FAIL_TYPE(env, err);
+    }
+    std::vector<poker::Card> dead;
+    if (!parse_optional_dead(info, 2, dead, &err)) {
+        POKER_FAIL_TYPE(env, err);
+    }
+    POKER_TRY(env, {
+        return win_tie_lose_to_js(env, poker::exact_multiway_win_tie_lose_known_hands(holes, board, dead));
+    });
+}
+
 Napi::Value ExactFourWayEquityKnownHands(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     POKER_REQUIRE(env, info.Length() >= 5,
@@ -185,34 +207,6 @@ Napi::Value ExactMultiwaySidePotChipEv(const Napi::CallbackInfo& info) {
         return o;
     });
 }
-
-Napi::Value ExactMultiwayAheadFrequency(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    POKER_REQUIRE(env, info.Length() >= 2,
-                  "exactMultiwayAheadFrequency(holeHands, boardCards[, deadCards])");
-    std::string err;
-    std::vector<std::vector<poker::Card>> holes;
-    if (!parse_hole_hands(env, info[0], holes, &err)) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    const std::vector<poker::Card> board = parse_cards_from_js(env, info[1], &err);
-    if (!err.empty()) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    std::vector<poker::Card> dead;
-    if (!parse_optional_dead(info, 2, dead, &err)) {
-        POKER_FAIL_TYPE(env, err);
-    }
-    POKER_TRY(env, {
-        const poker::MultiwayAheadFrequency r =
-            poker::exact_multiway_ahead_frequency(holes, board, dead);
-        Napi::Object o = Napi::Object::New(env);
-        o.Set("pAheadNow", Napi::Number::New(env, r.p_ahead_now));
-        o.Set("pWinShowdown", Napi::Number::New(env, r.p_win_showdown));
-        return o;
-    });
-}
-
 Napi::Value ExactMultiwayTieFrequency(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     POKER_REQUIRE(env, info.Length() >= 2, "exactMultiwayTieFrequency(holeHands, boardCards[, deadCards])");

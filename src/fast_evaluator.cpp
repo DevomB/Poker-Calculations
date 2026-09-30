@@ -58,6 +58,15 @@ HandEvaluation evaluate_five_core(const std::uint8_t ranks[5], const std::uint8_
             groups[static_cast<std::size_t>(group_count++)] = {r, c};
         }
     }
+    // The category checks below inspect groups[0], so order by multiplicity first (then rank).
+    // Without this a pair, trips, or quads below a higher singleton read as high card.
+    std::sort(groups.begin(), groups.begin() + group_count,
+              [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                  if (a.second != b.second) {
+                      return a.second > b.second;
+                  }
+                  return a.first > b.first;
+              });
 
     const bool flush = suits[0] == suits[1] && suits[0] == suits[2] && suits[0] == suits[3] &&
                        suits[0] == suits[4];

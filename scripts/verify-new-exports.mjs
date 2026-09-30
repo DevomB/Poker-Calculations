@@ -84,13 +84,6 @@ assertNear('netPotAfterRake', poker.netPotAfterRake(pot, rakeF, rakeC), pot - ra
 const toCall = 50;
 const netAfterCall = poker.netPotAfterCallAndRake(100, toCall, rakeF, rakeC);
 assertNear(
-  'effectivePotOdds inverse breakevenCallEquityWithRake',
-  poker.effectivePotOddsDisplayAfterRake(100, toCall, rakeF, rakeC),
-  1 / poker.breakevenCallEquityWithRake(100, toCall, rakeF, rakeC),
-  1e-6,
-);
-assertNear('impliedBreakevenTotalPot', poker.impliedBreakevenTotalPot(100, 50, 0.25), (100 + 50) / 0.25);
-assertNear(
   'impliedOdds round-trip',
   poker.impliedOddsRequiredEquityFromFutureWin(100, 50, 100),
   poker.breakevenCallEquity(100 + 100, 50),
@@ -118,17 +111,19 @@ assertTrue(
   'breakevenCallEquityWithPostedAnte >= breakevenCallEquity',
   poker.breakevenCallEquityWithPostedAnte(100, 50, 10) >= poker.breakevenCallEquity(100, 50) - EPS,
 );
-assertNear('potSizeAfterHuCall', poker.potSizeAfterHuCall(100, 50), 200);
+assertNear('potSizeAfterHuCall (pot already holds villain bet)', poker.potSizeAfterHuCall(100, 50), 150);
 assertNear('potSizeAfterHuBet', poker.potSizeAfterHuBet(100, 50), 200);
 assertNear('expectedValuePerBigBlind', poker.expectedValuePerBigBlind(10, 2), 5);
 
 // --- GTO with rake ---
 const mdfRake = poker.minimumDefenseFrequencyWithRake(100, 50, rakeF, rakeC);
-assertTrue('MDF with rake >= MDF', mdfRake >= poker.minimumDefenseFrequency(100, 50) - EPS);
+// Rake shrinks the pot a bluff wins, so villain can defend less and the bluff share rises.
+assertTrue('MDF with rake <= MDF', mdfRake <= poker.minimumDefenseFrequency(100, 50) + EPS);
+assertNear('MDF with zero rake equals MDF', poker.minimumDefenseFrequencyWithRake(100, 50, 0, 0), poker.minimumDefenseFrequency(100, 50), 1e-12);
 assertNear('alpha+MDF with rake', mdfRake + poker.alphaFrequencyWithRake(100, 50, rakeF, rakeC), 1);
 assertTrue(
-  'bluffToValueRatioWithRake <= without',
-  poker.bluffToValueRatioWithRake(100, 50, rakeF, rakeC) <= poker.bluffToValueRatio(100, 50) + EPS,
+  'bluffToValueRatioWithRake >= without',
+  poker.bluffToValueRatioWithRake(100, 50, rakeF, rakeC) >= poker.bluffToValueRatio(100, 50) - EPS,
 );
 assertNear(
   'valueToBluff inverse',
@@ -227,7 +222,7 @@ assertNear('sidePotBreakevenCallEquity', poker.sidePotBreakevenCallEquity(100, 5
 // --- stacks ---
 assertTrue(
   'preflopCombosFromNotationMinusBlockers <= full',
-  poker.preflopCombosFromNotationMinusBlockers('AKs', 2) <= poker.preflopCombosFromNotation('AKs'),
+  poker.preflopCombosFromNotationMinusBlockers('AKs', ['Ah', 'Kd']) <= poker.preflopCombosFromNotation('AKs'),
 );
 const spr = poker.sprAfterCall(100, 50, 200);
 assertNear('stackToPotAfterCall round-trip', poker.stackToPotAfterCall(100, 50, 200), 1 / spr, 1e-6);
@@ -265,9 +260,6 @@ const dense = new Float64Array(1326);
 dense.fill(1 / 1326);
 assertNear('normalizeSparseRange sum', poker.normalizedRangeWeightSum(poker.normalizeSparseRange(dense)), 1, 1e-6);
 assertTrue('rangeTopCombos rows', poker.rangeTopCombos(dense, 3).length === 3);
-assertTrue('boardWetnessScore in [0,1]', poker.boardWetnessScore(['Qh', 'Jh', '2c']) >= 0 && poker.boardWetnessScore(['Qh', 'Jh', '2c']) <= 1);
-assertTrue('boardTextureScore has wetness', typeof poker.boardTextureScore(['Qh', 'Jh', '2c']).wetness === 'number');
-assertTrue('cbetSizeEvGrid rows', poker.cbetSizeEvGrid(dense, dense, ['Qh', 'Jh', '2c'], 100, [33, 66]).rows.length === 2);
 assertTrue('opponentAggressionFactor number', typeof poker.opponentAggressionFactor(3, 2, 5) === 'number');
 const state = {
   players: [
@@ -288,8 +280,8 @@ assertTrue('legalActionSummary', typeof poker.legalActionSummary(state).toCall =
 // --- export count ---
 const reg = readFileSync(join(root, 'native', 'binding_register.cpp'), 'utf8');
 const regCount = (reg.match(/PropertyDescriptor::Function/g) || []).length;
-assertTrue('binding_register count 400', regCount === 400);
+assertTrue('binding_register count 370', regCount === 370);
 const exportCount = Object.keys(poker).filter((k) => typeof poker[k] === 'function').length;
-assertTrue('runtime export count 400', exportCount === 400);
+assertTrue('runtime export count 370', exportCount === 370);
 
 console.log('OK: verify-new-exports.mjs - all checks passed.');
