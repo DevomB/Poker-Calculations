@@ -1,5 +1,15 @@
 # Changelog
 
+## 4.0.1
+
+Bug fixes found while writing runnable examples for every export.
+
+- **Aborting an async call no longer crashes Node.** Calling `abort()` on the `AbortSignal` passed to any `*Async` export threw "Unknown failure" from inside the abort event and terminated the process once the work had started. The promise now rejects with `AbortError`.
+- **State APIs accept PKST bytes.** `decideAction`, `decideActionAsync`, `legalActionSummary`, `actionMaskFromState`, `validatePokerState`, `stateToFeatureVector`, and `runBotPolicyBatch` rejected the `Uint8Array` from `encodePokerState` with "state.players must be an array".
+- **`icmPairwiseBubbleFactor`** handles a pot that busts a player (the usual bubble spot) instead of throwing. Busted seats take the bottom prize, as in the bounty and future-game functions, which now share one implementation.
+- **`sprAfterCall` and `stackToPotAfterCall`** use the package's pot convention: `potBeforeCall` already includes villain's bet, so the pot after the call is `potBeforeCall + toCall`. They previously added the call twice.
+- **Windows:** `formatPotOdds` and `formatPotOddsReducedFraction` return `∞:1` instead of `?:1` when there is nothing to call (sources are now compiled as UTF-8 on MSVC).
+
 ## 4.0.0
 
 Correctness release. Several results change, 69 exports are removed, and the package is now feature-complete: later releases are bug fixes only.

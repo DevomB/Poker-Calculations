@@ -28,6 +28,11 @@ namespace poker {
 [[nodiscard]] std::vector<double> icm_expected_payouts(const std::vector<double>& stacks,
                                                        const std::vector<double>& payouts);
 
+/// Same as `icm_expected_payouts`, but zero stacks are allowed: those seats have busted and split
+/// the bottom prizes, and the rest play for the remaining places. Prize pool is conserved.
+[[nodiscard]] std::vector<double> icm_expected_payouts_allowing_busts(const std::vector<double>& stacks,
+                                                                    const std::vector<double>& payouts);
+
 /**
  * Pairwise bubble factor: marginal $EV loss from losing `pot_chips` to villain j vs marginal gain
  * from winning the same pot (finite differences on `icm_expected_payouts`).

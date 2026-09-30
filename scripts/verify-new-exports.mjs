@@ -133,7 +133,8 @@ assertNear(
 );
 
 // --- sizing ---
-assertNear('sprAfterBet mirrors sprAfterCall', poker.sprAfterBet(100, 50, 200), poker.sprAfterCall(100, 50, 200));
+// Betting 50 into 100 and being called leaves the same SPR as calling 50 into 150.
+assertNear('sprAfterBet mirrors sprAfterCall', poker.sprAfterBet(100, 50, 200), poker.sprAfterCall(150, 50, 200));
 assertNear('sprAfterRaise', poker.sprAfterRaise(100, 50, 200), poker.sprAfterBet(100, 50, 200));
 assertNear('commitmentRatioAfterBet', poker.commitmentRatioAfterBet(50, 200), 0.25);
 const frac = 0.5;

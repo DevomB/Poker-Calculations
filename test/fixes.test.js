@@ -371,3 +371,51 @@ test('typed-array ranges are length-checked and read from their own offset', () 
   const board = ['2c', '7d', '9s', 'Ts', 'Jc'];
   near(poker.exactHuEquityVsRange(['Ah', 'Kh'], board, view), poker.exactHuEquityVsRange(['Ah', 'Kh'], board, Float64Array.from(view)), 1e-12, 'subarray range');
 });
+
+test('aborting an in-flight async call rejects with AbortError instead of crashing', async () => {
+  const ac = new AbortController();
+  const pending = poker.parallelHandSimulationAsync(['Ah', 'Kh'], ['Qh', 'Jh', '2c'], 20_000_000, 99, 1, 4, { signal: ac.signal });
+  ac.abort();
+  await assert.rejects(pending, (e) => e.name === 'AbortError');
+  const queued = poker.simulateHandOutcomeAsync(['Ah', 'Kh'], [], 20_000_000, 1, 1, { signal: ac.signal });
+  await assert.rejects(queued, (e) => e.name === 'AbortError'); // already-aborted signal
+});
+
+test('state APIs accept PKST bytes as well as objects', () => {
+  const state = {
+    players: [
+      { holeCards: ['Ah', 'Kh'], stack: 200, seat: 0, committedThisStreet: 0 },
+      { holeCards: ['7c', '7d'], stack: 180, seat: 1, committedThisStreet: 10 },
+    ],
+    communityCards: ['Qh', 'Jh', '2c'],
+    phase: 'flop',
+    pot: 30,
+    currentBet: 10,
+    smallBlind: 1,
+    bigBlind: 2,
+    actingIndex: 0,
+    actedThisStreet: [false, true],
+  };
+  const bytes = poker.encodePokerState(state);
+  const cfg = { monteCarloSimulations: 500, rngSeed: 1 };
+  assert.equal(poker.decideAction(bytes, cfg, null, 0).action, poker.decideAction(state, cfg, null, 0).action);
+  assert.deepEqual(poker.legalActionSummary(bytes), poker.legalActionSummary(state));
+  assert.equal(poker.validatePokerState(bytes).valid, true);
+});
+
+test('pairwise bubble factor handles a pot that busts a player', () => {
+  // Hero covers the short stack; losing the flip is fine, winning it busts seat 2 on the bubble.
+  const bf = poker.icmPairwiseBubbleFactor([9000, 8500, 3000], [6000, 3600, 0], 0, 2, 3000);
+  assert.ok(Number.isFinite(bf) && bf > 1, `bubble factor ${bf}`);
+});
+
+test('infinite pot odds render as the infinity sign on every platform', () => {
+  assert.equal(poker.formatPotOdds(100, 0), '\u221e:1');
+});
+
+test('sprAfterCall uses the same pot convention as expectedValueCall', () => {
+  // 90 in the middle (villain's 30 bet included), hero calls 30 with 270 behind: 240 / 120.
+  assert.equal(poker.sprAfterCall(90, 30, 270), 2);
+  assert.equal(poker.sprAfterCall(90, 30, 270), poker.sprAfterBet(60, 30, 270));
+  near(poker.stackToPotAfterCall(90, 30, 270), 0.5, 1e-12, 'stackToPotAfterCall');
+});

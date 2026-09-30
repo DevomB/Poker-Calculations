@@ -41,59 +41,6 @@ void require_aligned(const std::vector<double>& stacks, const std::vector<double
     return std::accumulate(stacks.begin(), stacks.end(), 0.0);
 }
 
-/// ICM on remaining chips: busted seats (stack == 0) split the last-k prizes equally.
-[[nodiscard]] std::vector<double> icm_allowing_busts(const std::vector<double>& stacks,
-                                                     const std::vector<double>& payouts) {
-    const std::size_t n = stacks.size();
-    if (payouts.size() != n) {
-        throw std::invalid_argument("PKO: payouts length must match stacks");
-    }
-    require_finite_nonneg(payouts, "payouts");
-
-    std::vector<std::size_t> alive;
-    std::vector<std::size_t> dead;
-    alive.reserve(n);
-    dead.reserve(n);
-    for (std::size_t i = 0; i < n; ++i) {
-        if (stacks[i] > kBustEps) {
-            alive.push_back(i);
-        } else {
-            dead.push_back(i);
-        }
-    }
-
-    std::vector<double> ev(n, 0.0);
-    const std::size_t k = dead.size();
-    if (k > 0) {
-        double dead_prize = 0.0;
-        for (std::size_t r = n - k; r < n; ++r) {
-            dead_prize += payouts[r];
-        }
-        const double each = dead_prize / static_cast<double>(k);
-        for (std::size_t i : dead) {
-            ev[i] = each;
-        }
-    }
-    if (alive.empty()) {
-        return ev;
-    }
-    std::vector<double> alive_stacks;
-    std::vector<double> alive_payouts;
-    alive_stacks.reserve(alive.size());
-    alive_payouts.reserve(alive.size());
-    for (std::size_t i : alive) {
-        alive_stacks.push_back(stacks[i]);
-    }
-    for (std::size_t r = 0; r < alive.size(); ++r) {
-        alive_payouts.push_back(payouts[r]);
-    }
-    const auto alive_ev = icm_expected_payouts(alive_stacks, alive_payouts);
-    for (std::size_t t = 0; t < alive.size(); ++t) {
-        ev[alive[t]] = alive_ev[t];
-    }
-    return ev;
-}
-
 [[nodiscard]] bool covers(double hunter, double prey) {
     return hunter + 1e-15 >= prey && prey > 0.0;
 }
@@ -158,7 +105,7 @@ struct HandStacks {
 [[nodiscard]] double seat_dollar_ev(const std::vector<double>& stacks, const std::vector<double>& payouts,
                                     const std::vector<double>& bounty_values, std::size_t seat,
                                     double immediate_bounty) {
-    const auto icm = icm_allowing_busts(stacks, payouts);
+    const auto icm = icm_expected_payouts_allowing_busts(stacks, payouts);
     const auto bounty = pko_expected_bounty_collection(stacks, bounty_values);
     return icm[seat] + bounty[seat] + immediate_bounty;
 }
@@ -240,7 +187,7 @@ PkoIcmbuResult pko_icmbu_payouts(const std::vector<double>& stacks, const std::v
     require_aligned(stacks, payouts, "payouts");
     require_aligned(stacks, bounty_values, "bountyValues");
     PkoIcmbuResult r;
-    r.icm = icm_allowing_busts(stacks, payouts);
+    r.icm = icm_expected_payouts_allowing_busts(stacks, payouts);
     r.bounty = pko_expected_bounty_collection(stacks, bounty_values);
     r.icmbu.resize(stacks.size());
     for (std::size_t i = 0; i < stacks.size(); ++i) {
@@ -466,7 +413,7 @@ PkoWinnerTakeBountiesResult pko_winner_take_remaining_bounties(const std::vector
     PkoWinnerTakeBountiesResult r;
     r.adjusted_payouts = payouts;
     r.adjusted_payouts[0] += remaining_bounty_pool;
-    r.ev = icm_allowing_busts(stacks, r.adjusted_payouts);
+    r.ev = icm_expected_payouts_allowing_busts(stacks, r.adjusted_payouts);
 
     std::vector<std::size_t> alive;
     std::vector<double> alive_stacks;

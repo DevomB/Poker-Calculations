@@ -1059,8 +1059,8 @@ export interface PokerCalculations {
    */
   nlMinimumRaiseToTotal(currentMaxWager: number, lastRaiseIncrement: number, bigBlind: number): number;
   /**
-   * SPR after a call: remaining stack divided by new pot.
-   * Assumes heads-up single call: new pot = `potBeforeCall + 2 * toCall`. Throws if `toCall` exceeds stack.
+   * SPR after a heads-up call: `(effectiveStackBeforeCall − toCall) / (potBeforeCall + toCall)`.
+   * `potBeforeCall` already includes villain's bet, as in `expectedValueCall`. Throws if `toCall` exceeds stack.
    */
   sprAfterCall(potBeforeCall: number, toCall: number, effectiveStackBeforeCall: number): number;
   commitmentRatio(toCall: number, effectiveStackBeforeCall: number): number;

@@ -242,7 +242,8 @@ double spr_after_call(double pot_before_call, double to_call, double effective_s
         throw std::invalid_argument("toCall cannot exceed effectiveStackBeforeCall for sprAfterCall");
     }
     const double stack_after = effective_stack_before_call - to_call;
-    const double new_pot = pot_before_call + 2.0 * to_call;
+    // pot_before_call already holds villain's bet (package-wide convention), so only hero's call is added.
+    const double new_pot = pot_before_call + to_call;
     if (new_pot <= 0.0) {
         return stack_after > 0.0 ? std::numeric_limits<double>::infinity() : 0.0;
     }
