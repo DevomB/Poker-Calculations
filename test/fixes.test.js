@@ -334,7 +334,9 @@ test('Nash heads-up solve uses ICM when payouts are supplied', () => {
   const chip = poker.nashHeadsUpJamCallSolve({ stackBb: 10, equityIterations: 40 });
   const icm = poker.nashHeadsUpJamCallSolve({ stackBb: 10, equityIterations: 40, otherStacks: [30, 30], payouts: [50, 30, 20, 0] });
   const mass = (v) => Array.from(v).reduce((a, b) => a + b, 0);
-  assert.ok(mass(icm.jam) < mass(chip.jam), 'ICM pressure tightens the jam range');
+  // Busting 4th pays nothing, so the caller risks more than chips: the call range must shrink.
+  // (The jammer's range can widen in response, so it is not a stable thing to assert on.)
+  assert.ok(mass(icm.call) < 0.85 * mass(chip.call), 'ICM tightens the calling range');
 });
 
 // Before 4.0.0 a std::exception escaping a binding aborted the whole Node process
