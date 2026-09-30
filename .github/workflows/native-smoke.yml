@@ -67,3 +67,7 @@ jobs:
       - name: Unit tests
         if: matrix.node == '22'
         run: npm test
+
+      - name: Type definitions compile for consumers
+        if: matrix.node == '22' && runner.os == 'Linux'
+        run: npm run test:types
