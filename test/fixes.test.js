@@ -419,3 +419,43 @@ test('sprAfterCall uses the same pot convention as expectedValueCall', () => {
   assert.equal(poker.sprAfterCall(90, 30, 270), poker.sprAfterBet(60, 30, 270));
   near(poker.stackToPotAfterCall(90, 30, 270), 0.5, 1e-12, 'stackToPotAfterCall');
 });
+
+test('hands under five cards still count pairs, two pair, trips and quads', () => {
+  const cases = [
+    [['As', 'Kd'], 'highCard', [12, 11]],
+    [['As', 'Ad'], 'onePair', [12]],
+    [['7c', 'As', 'Ad'], 'onePair', [12, 5]],
+    [['As', 'Ad', 'Kc', 'Kd'], 'twoPair', [12, 11]],
+    [['Kd', 'As', 'Ad', 'Ac'], 'threeOfAKind', [12, 11]],
+    [['As', 'Ad', 'Ac', 'Ah'], 'fourOfAKind', [12]],
+  ];
+  for (const [cards, rank, kickers] of cases) {
+    const e = poker.evaluateBestHand(cards);
+    assert.equal(e.rank, rank, cards.join(' '));
+    assert.deepEqual(e.kickers.slice(0, kickers.length), kickers, cards.join(' '));
+    assert.equal(poker.evaluateHandCategory(cards.slice(0, 2), cards.slice(2)), rank, cards.join(' '));
+  }
+  assert.equal(poker.evaluateShortDeckBestHand(['As', 'Ad']).rank, 'onePair');
+  assert.equal(poker.evaluateShortDeckBestHand(['As', 'Ad', 'Ac', 'Kd']).rank, 'threeOfAKind');
+  // A pocket pair outranks any unpaired two cards.
+  assert.ok(
+    poker.evaluateHandStrengthFast(['2c', '2d'], []) > poker.evaluateHandStrengthFast(['As', 'Kd'], []),
+  );
+});
+
+test('fast and legacy evaluators agree on every two- and three-card hand', () => {
+  const pack = (e) =>
+    poker.handRankCategoryOrder(e.rank) * 2 ** 24 +
+    e.kickers.reduce((acc, k, i) => acc + (k & 0x1f) * 2 ** (4 * (4 - i)), 0);
+  const check = (cards) => {
+    const legacy = pack(poker.evaluateBestHand(cards));
+    const fast = poker.evaluateHandStrengthFast(cards.slice(0, 2), cards.slice(2));
+    assert.equal(fast, legacy, cards.join(' '));
+  };
+  for (let a = 0; a < 52; a++) {
+    for (let b = a + 1; b < 52; b++) {
+      check([DECK[a], DECK[b]]);
+      for (let c = b + 1; c < 52; c++) check([DECK[a], DECK[b], DECK[c]]);
+    }
+  }
+});

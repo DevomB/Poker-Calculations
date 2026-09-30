@@ -10,17 +10,6 @@ namespace poker {
 
 namespace {
 
-std::vector<Card> sort_cards_desc(const std::vector<Card>& in) {
-    std::vector<Card> v = in;
-    std::sort(v.begin(), v.end(), [](const Card& a, const Card& b) {
-        if (a.rank() != b.rank()) {
-            return a.rank() > b.rank();
-        }
-        return a.suit() < b.suit();
-    });
-    return v;
-}
-
 bool is_flush_five(const std::vector<Card>& five) {
     std::uint8_t s0 = five[0].suit();
     for (const auto& c : five) {
@@ -179,17 +168,31 @@ HandEvaluation evaluate_sorted_five(std::vector<Card> v) {
     return e;
 }
 
-HandEvaluation partial_high_card(const std::vector<Card>& cards) {
-    HandEvaluation e{};
-    e.rank = HandRank::HighCard;
-    auto v = sort_cards_desc(cards);
-    int ki = 0;
-    for (const auto& c : v) {
-        if (ki >= 5) {
-            break;
-        }
-        e.kickers[static_cast<std::size_t>(ki++)] = c.rank();
+// Under five cards there is no straight, flush or full house, but pairs, two pair, trips and quads
+// still count. Kickers follow the five-card layout: made ranks first, then the rest high to low.
+HandEvaluation partial_hand(const std::vector<Card>& cards) {
+    std::array<int, 13> freq{};
+    for (const auto& c : cards) {
+        freq[static_cast<std::size_t>(c.rank())]++;
     }
+    HandEvaluation e{};
+    int ki = 0;
+    int top = 0;
+    int pairs = 0;
+    for (int count = 4; count >= 1; --count) {
+        for (int r = 12; r >= 0 && ki < 5; --r) {
+            if (freq[static_cast<std::size_t>(r)] == count) {
+                e.kickers[static_cast<std::size_t>(ki++)] = static_cast<std::uint8_t>(r);
+                top = std::max(top, count);
+                pairs += count == 2 ? 1 : 0;
+            }
+        }
+    }
+    e.rank = top == 4     ? HandRank::FourOfAKind
+             : top == 3   ? HandRank::ThreeOfAKind
+             : pairs >= 2 ? HandRank::TwoPair
+             : pairs == 1 ? HandRank::OnePair
+                          : HandRank::HighCard;
     return e;
 }
 
@@ -234,7 +237,7 @@ HandEvaluation evaluate_best_hand(const std::vector<Card>& cards) {
         return HandEvaluation{};
     }
     if (cards.size() < 5) {
-        return partial_high_card(cards);
+        return partial_hand(cards);
     }
     HandEvaluation best{};
     bool init = false;

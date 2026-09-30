@@ -15,8 +15,10 @@ export function parseSignatures(dtsPath) {
   }
   body = body.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
+  // Members sit one level in; match that indent exactly so nested object types are skipped.
+  const indent = body.match(/\n([ \t]+)\S/)?.[1] ?? '  ';
   const sigs = new Map();
-  const re = /(^|\n)\s{2}([A-Za-z_]\w*)\s*(<[^>]*>)?\(/g;
+  const re = new RegExp(`(^|\\n)${indent}([A-Za-z_]\\w*)\\s*(<[^>]*>)?\\(`, 'g');
   let m;
   while ((m = re.exec(body))) {
     const name = m[2];

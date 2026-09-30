@@ -184,23 +184,30 @@ ShortDeckEvaluation evaluate_five_array(std::array<Card, 5> five) {
     return evaluate_sorted_five(std::vector<Card>(five.begin(), five.end()));
 }
 
-ShortDeckEvaluation partial_high(const std::vector<Card>& cards) {
-    ShortDeckEvaluation e{};
-    e.rank = ShortDeckRank::HighCard;
-    std::vector<Card> v = cards;
-    std::sort(v.begin(), v.end(), [](const Card& a, const Card& b) {
-        if (a.rank() != b.rank()) {
-            return a.rank() > b.rank();
-        }
-        return a.suit() < b.suit();
-    });
-    int ki = 0;
-    for (const Card& c : v) {
-        if (ki >= 5) {
-            break;
-        }
-        e.kickers[static_cast<std::size_t>(ki++)] = c.rank();
+// Under five cards: pairs, two pair, trips and quads still count; made ranks first, then the rest.
+ShortDeckEvaluation partial_hand(const std::vector<Card>& cards) {
+    std::array<int, 13> freq{};
+    for (const Card& c : cards) {
+        freq[static_cast<std::size_t>(c.rank())]++;
     }
+    ShortDeckEvaluation e{};
+    int ki = 0;
+    int top = 0;
+    int pairs = 0;
+    for (int count = 4; count >= 1; --count) {
+        for (int r = 12; r >= 0 && ki < 5; --r) {
+            if (freq[static_cast<std::size_t>(r)] == count) {
+                e.kickers[static_cast<std::size_t>(ki++)] = static_cast<std::uint8_t>(r);
+                top = std::max(top, count);
+                pairs += count == 2 ? 1 : 0;
+            }
+        }
+    }
+    e.rank = top == 4     ? ShortDeckRank::FourOfAKind
+             : top == 3   ? ShortDeckRank::ThreeOfAKind
+             : pairs >= 2 ? ShortDeckRank::TwoPair
+             : pairs == 1 ? ShortDeckRank::OnePair
+                          : ShortDeckRank::HighCard;
     return e;
 }
 
@@ -552,7 +559,7 @@ ShortDeckEvaluation evaluate_short_deck_five(std::vector<Card> five) {
 ShortDeckEvaluation evaluate_short_deck_best_hand(const std::vector<Card>& cards) {
     require_short_deck_cards(cards, "evaluateShortDeckBestHand", 1, 7);
     if (cards.size() < 5) {
-        return partial_high(cards);
+        return partial_hand(cards);
     }
     ShortDeckEvaluation best{};
     bool init = false;
