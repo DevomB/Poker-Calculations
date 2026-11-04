@@ -147,14 +147,37 @@ test('every export that takes a weighted range is covered here', async () => {
   }
 });
 
-// Powers of two scale exactly in binary floating point, so every output must be either unchanged
-// or multiplied by exactly s. 2^±600 lies beyond the internal rescaling threshold (2^±256); 2^100
-// does not. Results are compared field by field.
+// Fields reported in the caller's weight units. They must scale exactly with the weights; every
+// other numeric field (probabilities, frequencies, EVs, entropies, counts, combo and card indices)
+// must not change at all.
+const WEIGHT_UNIT_FIELDS = {
+  handPotentialBreakdown: /^n(Ahead|Tied|Behind)$/,
+  materializeVillainRangeAfterBlockers: /^(weights1326\.\d+|weightSum)$/,
+  rangeTopCombos: /^\d+\.weight$/,
+  rangeBucketWeightsByHandClass: /^(pairs|suitedBroadways|offsuitBroadways|suitedConnectors|suitedAces|other)$/,
+  rangeBucketWeightsByNotation: /^\d+\.weight$/,
+  rangeBlockerPressureByCard: /^\d+$/,
+  blockerMatrixByCard: /^\d+$/,
+  applySuitPermToRange1326: /^\d+$/,
+  solveHuRiverCheckBetTree: /^topBetCombos\.\d+\.weight$/,
+};
+
+test('every weight-unit field pattern names fields that exist', () => {
+  for (const [name, pattern] of Object.entries(WEIGHT_UNIT_FIELDS)) {
+    assert.ok(CASES[name], `${name} is not a scale case`);
+    assert.ok(leaves(CASES[name](1)).some(([k]) => pattern.test(k)), `${name}: ${pattern} matches no field`);
+  }
+});
+
+// Powers of two scale exactly in binary floating point, and every calculation scales its weights by
+// a power of two, so the expectations are exact: probabilities and other scale-free fields are
+// bit-identical, and weight-unit fields are multiplied by exactly s.
 test('scaling every weight preserves the represented distribution', () => {
   const failures = [];
   for (const [name, call] of Object.entries(CASES)) {
     const base = leaves(call(1));
     assert.ok(base.length > 0, `${name} returned no numbers`);
+    const units = WEIGHT_UNIT_FIELDS[name];
     for (const s of [2 ** 100, 2 ** 600, 2 ** -600]) {
       let got;
       try {
@@ -168,15 +191,46 @@ test('scaling every weight preserves the represented distribution', () => {
         continue;
       }
       base.forEach(([k, x], i) => {
-        const y = got[i][1];
-        const tol = 1e-12 * (1 + Math.abs(x));
-        const same = Math.abs(y - x) <= tol;
-        const inUnits = Number.isFinite(y) && Math.abs(y / s - x) <= tol;
-        if (!same && !inUnits) failures.push(`${name}.${k} at 2^${Math.log2(s)}: ${x} became ${y}`);
+        const [k2, y] = got[i];
+        const expected = units && units.test(k) ? x * s : x;
+        if (k2 !== k || !Object.is(y, expected)) {
+          failures.push(`${name}.${k} at 2^${Math.log2(s)}: expected ${expected}, got ${y}`);
+        }
       });
     }
   }
   assert.deepEqual(failures, []);
+});
+
+test('materialized totals agree with their arrays', () => {
+  const check = (r, label) => {
+    const w = Array.from(r.weights1326);
+    assert.equal(r.weightSum, w.reduce((a, b) => a + b, 0), `${label}: weightSum is the sum of weights1326`);
+    assert.equal(r.liveComboCount, w.filter((x) => x > 0).length, `${label}: liveComboCount counts positive weights`);
+    const m = Math.max(...w);
+    const p = w.map((x) => x / m).filter((x) => x > 0); // below 2^-1074 of the maximum adds nothing
+    const z = p.reduce((a, b) => a + b, 0);
+    const h = -p.reduce((acc, x) => acc + (x / z) * Math.log(x / z), 0);
+    near(r.shannonEntropy, h, 1e-12, `${label}: entropy of the normalized array`);
+  };
+  check(poker.materializeVillainRangeAfterBlockers(scaled(1), HERO, FLOP), 'dense');
+  check(poker.materializeVillainRangeAfterBlockers(scaled(2 ** 600), HERO, FLOP), 'dense ×2^600');
+  check(poker.materializeVillainRangeAfterBlockers(sparse([['Qh', 'Qd', 3], ['7d', '6d', 2]]), HERO, FLOP), 'sparse');
+  // A combo listed twice is one combo carrying the sum of its weights.
+  const dup = {
+    indices: [id('Qh'), id('Qd'), id('7d'), id('6d'), id('Qd'), id('Qh')],
+    weights: [2, 1, 3],
+  };
+  const r = poker.materializeVillainRangeAfterBlockers(dup, HERO, FLOP);
+  check(r, 'duplicates');
+  assert.equal(r.weights1326[comboIndex(id('Qh'), id('Qd'))], 5);
+  assert.equal(r.liveComboCount, 2);
+  assert.equal(r.weightSum, 6);
+  // Weights 1e200 and 1e-200 are both representable and both survive.
+  const wide = poker.materializeVillainRangeAfterBlockers(sparse([['Qh', 'Qd', 1e200], ['7d', '6d', 1e-200]]), HERO, FLOP);
+  check(wide, 'wide');
+  assert.equal(wide.weights1326[comboIndex(id('Qh'), id('Qd'))], 1e200);
+  assert.equal(wide.weights1326[comboIndex(id('7d'), id('6d'))], 1e-200);
 });
 
 test('the reported overflow: [1, 1] and [1e308, 1e308] are the same range', () => {
@@ -326,4 +380,150 @@ test('impossible overlapping ranges stop at their attempt budget', () => {
     () => poker.simulateEquityVsRanges(['Kc', 'Kd'], FLOP, [allAces, allAces], 3000, 2, { maxAttempts: 3000 }),
     /card-disjoint in 3000 attempts/,
   );
+});
+
+// A scale must come from the combos that take part in a calculation. Each range below adds one combo
+// that hero's Ah blocks, weighted 2^2000 times the others: scaling by it would zero every combo that
+// is left. The results must equal those of the live combos alone, bit for bit (2^-1000 is exact).
+test('a dominant combo that drops out does not erase the combos that remain', () => {
+  const live = [['Qh', 'Qd', 3], ['7d', '6d', 2], ['Tc', '9d', 0.5]];
+  const withBlocked = (scale) => sparse([...live.map(([a, b, w]) => [a, b, w * scale]), ['Ah', 'As', 2 ** 1000]]);
+  const plain = sparse(live);
+  const tiny = withBlocked(2 ** -1000);
+  assert.equal(poker.exactHuEquityVsRange(HERO, RIVER, tiny), poker.exactHuEquityVsRange(HERO, RIVER, plain));
+  assert.equal(poker.exactHuEquityVsRange(HERO, TURN, tiny), poker.exactHuEquityVsRange(HERO, TURN, plain));
+  assert.equal(poker.exactRangeDominatedComboFraction(HERO, RIVER, tiny), poker.exactRangeDominatedComboFraction(HERO, RIVER, plain));
+  assert.equal(poker.equityDeltaIfCardRemoved(HERO, TURN, tiny, id('9c')), poker.equityDeltaIfCardRemoved(HERO, TURN, plain, id('9c')));
+  assert.equal(poker.handStrengthVsRange(HERO, FLOP, tiny), poker.handStrengthVsRange(HERO, FLOP, plain));
+  const hp = poker.handPotentialBreakdown(HERO, FLOP, plain);
+  const hpTiny = poker.handPotentialBreakdown(HERO, FLOP, tiny);
+  for (const k of ['hs', 'ppot', 'npot', 'ehs', 'ehs2']) assert.equal(hpTiny[k], hp[k], `potential ${k}`);
+  for (const k of ['nAhead', 'nTied', 'nBehind']) assert.equal(hpTiny[k], hp[k] * 2 ** -1000, `${k} in caller units`);
+  // Monte Carlo draws only from live combos, so the same seed picks the same hands.
+  assert.equal(poker.simulateEquityVsRange(HERO, FLOP, tiny, 3000, 5), poker.simulateEquityVsRange(HERO, FLOP, plain, 3000, 5));
+  assert.deepEqual(
+    poker.simulateEquityVsRanges(HERO, FLOP, [tiny, withBlocked(2 ** -900)], 3000, 5),
+    poker.simulateEquityVsRanges(HERO, FLOP, [plain, plain], 3000, 5),
+  );
+  const m = poker.materializeVillainRangeAfterBlockers(tiny, HERO, FLOP);
+  assert.deepEqual(Array.from(m.weights1326), Array.from(poker.materializeVillainRangeAfterBlockers(plain, HERO, FLOP).weights1326, (w) => w * 2 ** -1000));
+  assert.equal(m.liveComboCount, 3);
+  // A combo outside every bucket (blocked by the board) cannot set the scale for the rest.
+  const boardBlocked = sparse([...live.map(([a, b, w]) => [a, b, w * 2 ** -1000]), ['Qs', 'Kc', 2 ** 1000]]);
+  assert.deepEqual(poker.bucketMassFromRange(boardBlocked, BUCKETS(), 20), poker.bucketMassFromRange(plain, BUCKETS(), 20));
+  // Omaha: the 2^1000 combo holds hero's Ah.
+  const omaha = (w) => ({ packed: Uint8Array.of(4, 9, 14, 19, 6, 11, 16, 21, id('Ah'), 8, 13, 18), weights: [w, 2 * w, 2 ** 1000] });
+  const omahaHero = ['Ah', 'Kd', 'Jh', 'Tc'];
+  assert.equal(
+    poker.simulateOmahaEquityVsRange(omahaHero, FLOP, omaha(2 ** -1000), 400, 3),
+    poker.simulateOmahaEquityVsRange(omahaHero, FLOP, OMAHA(1), 400, 3),
+  );
+  // Short deck: every AA combo is dead (hero AhAd, board AsAc).
+  const sdHero = ['Ah', 'Ad'];
+  const sdBoard = ['As', 'Ac', 'Kd'];
+  assert.equal(
+    poker.simulateShortDeckEquityVsRange(sdHero, sdBoard, { AA: 2 ** 1000, KQs: 2 ** -1000, 77: 3 * 2 ** -1000 }, 400, 3),
+    poker.simulateShortDeckEquityVsRange(sdHero, sdBoard, { KQs: 1, 77: 3 }, 400, 3),
+  );
+});
+
+// The reported CFR case: each range's 1e200 combo (KhKd) conflicts with the other's, so only the
+// two cross pairs carry weight (1e200 × 1e-200 = 1 each) and bettor EV is (112.5 + 12.5) / 2.
+test('river CFR weighs card-compatible pairs, not each range on its own scale', () => {
+  const board = ['2c', '7d', '9s', 'Jc', 'Qh'];
+  const bettor = { indices: [id('Kh'), id('Kd'), id('3c'), id('4d')], weights: [1e200, 1e-200] };
+  const defender = { indices: [id('Kh'), id('Kd'), id('5c'), id('6d')], weights: [1e200, 1e-200] };
+  assert.deepEqual(poker.evOfStrategyProfile(100, 50, bettor, defender, board, 0.5, 0.5), { evBettor: 62.5, evDefender: 37.5 });
+  const pow = (r, s) => ({ indices: r.indices, weights: r.weights.map((w) => w * s) });
+  for (const s of [2 ** 100, 2 ** -100]) {
+    assert.deepEqual(poker.evOfStrategyProfile(100, 50, pow(bettor, s), pow(defender, s), board, 0.5, 0.5), { evBettor: 62.5, evDefender: 37.5 });
+  }
+  // The same holds for every solver on these ranges: they agree with the equal-weight pairs.
+  const ev = poker.exploitabilityRiver(100, 50, bettor, defender, board, 0.5, 0.5);
+  assert.ok(Number.isFinite(ev) && ev >= 0, `exploitability ${ev}`);
+  // A class average uses its own members: the air class is 3c4d alone (1e-200), so its bet rate is
+  // 3c4d's own, even though the range's largest weight is 1e200.
+  const tree = poker.solveHuRiverCheckBetTree(100, 50, bettor, defender, board, 40);
+  const air = tree.topBetCombos.find((c) => c.comboIndex === comboIndex(id('3c'), id('4d')));
+  assert.equal(air.weight, 1e-200);
+  assert.ok(air.betFrequency > 0);
+  near(tree.classes.airBet, air.betFrequency, 1e-15, 'air class bet rate');
+  assert.equal(tree.betMix[air.comboIndex], air.betFrequency);
+  // No pair can be dealt: rejected rather than reported as EV 0.
+  const kings = { indices: [id('Kh'), id('Kd')], weights: [1] };
+  assert.throws(() => poker.evOfStrategyProfile(100, 50, kings, kings, board, 0.5, 0.5), /shares a card with every/);
+});
+
+// One call per native range parser (each binding file), taking the range as `r`.
+const PARSER_CASES = {
+  exactHuEquityVsRange: (r) => poker.exactHuEquityVsRange(HERO, RIVER, r),
+  simulateEquityVsRanges: (r) => poker.simulateEquityVsRanges(HERO, FLOP, [r], 500, 3),
+  exactRangeDominatedComboFraction: (r) => poker.exactRangeDominatedComboFraction(HERO, RIVER, r),
+  exactEquityCardRemovalGradient: (r) => poker.exactEquityCardRemovalGradient(HERO, TURN, r),
+  exactInformationRegretVsClairvoyant: (r) => poker.exactInformationRegretVsClairvoyant(HERO, TURN, r, 100, 20),
+  materializeVillainRangeAfterBlockers: (r) => poker.materializeVillainRangeAfterBlockers(r, HERO, FLOP),
+  handPotentialBreakdown: (r) => poker.handPotentialBreakdown(HERO, FLOP, r),
+  bucketMassFromRange: (r) => poker.bucketMassFromRange(r, BUCKETS(), 20),
+  evOfStrategyProfile: (r) => poker.evOfStrategyProfile(100, 50, r, r, RIVER, 0.5, 0.5),
+  normalizeSparseRange: (r) => poker.normalizeSparseRange(r),
+  rangeShannonEntropy: (r) => poker.rangeShannonEntropy(r),
+};
+const PARSER_HANDS = [['Qh', 'Qd', 3], ['7d', '6d', 2], ['Tc', '9d', 0.5], ['Ac', 'Ks', 1]];
+
+test('number[], Int32Array, and Uint32Array indices give identical results everywhere', () => {
+  const base = sparse(PARSER_HANDS);
+  const plain = Array.from(base.indices);
+  for (const [name, call] of Object.entries(PARSER_CASES)) {
+    const expected = call(base);
+    assert.deepEqual(call({ indices: plain, weights: Array.from(base.weights) }), expected, `${name}: number[]`);
+    assert.deepEqual(call({ indices: Uint32Array.from(plain), weights: base.weights }), expected, `${name}: Uint32Array`);
+    assert.deepEqual(call(dense(PARSER_HANDS)), expected, `${name}: dense`);
+  }
+});
+
+test('a combo listed more than once is one combo carrying the summed weight', () => {
+  // Same combos and order as `sparse(PARSER_HANDS)`, with QhQd split over two entries (reversed).
+  const split = sparse(PARSER_HANDS);
+  const indices = [...split.indices, id('Qd'), id('Qh')];
+  const weights = [...split.weights];
+  const qqIndex = comboIndex(id('Qh'), id('Qd'));
+  const qq = weights.findIndex((_, i) => comboIndex(indices[2 * i], indices[2 * i + 1]) === qqIndex);
+  assert.ok(qq >= 0);
+  weights[qq] = 1;
+  weights.push(2);
+  for (const [name, call] of Object.entries(PARSER_CASES)) {
+    assert.deepEqual(call({ indices, weights }), call(sparse(PARSER_HANDS)), name);
+  }
+  assert.throws(
+    () => poker.exactHuEquityVsRange(HERO, RIVER, { indices: [id('Qh'), id('Qd'), id('Qd'), id('Qh')], weights: [1.5e308, 1.5e308] }),
+    /listed more than once/,
+  );
+});
+
+test('malformed deck ids are rejected before they can become another card', () => {
+  for (const bad of [NaN, 1.9, -1, 52, 2 ** 31, 4294967297, Infinity, '3', null]) {
+    for (const [name, call] of Object.entries(PARSER_CASES)) {
+      assert.throws(() => call({ indices: [bad, id('Qd')], weights: [1] }), /indices\[0\] must be an integer deck id 0\.\.51/, `${name}: ${bad}`);
+    }
+  }
+  assert.throws(() => poker.exactHuEquityVsRange(HERO, RIVER, { indices: Int32Array.of(-1, 5), weights: [1] }), /indices\[0\]/);
+  assert.throws(() => poker.exactHuEquityVsRange(HERO, RIVER, { indices: Uint32Array.of(5, 52), weights: [1] }), /indices\[1\]/);
+  assert.throws(() => poker.exactHuEquityVsRange(HERO, RIVER, { indices: Float64Array.of(5, 9), weights: [1] }), /number\[\], Int32Array, or Uint32Array/);
+  // Packed Omaha and Big O combos: checked as numbers, and a combo cannot repeat a card.
+  const omahaHero = ['Ah', 'Kd', 'Jh', 'Tc'];
+  for (const bad of [NaN, 1.5, -1, 52, 4294967300]) {
+    assert.throws(() => poker.simulateOmahaEquityVsRange(omahaHero, FLOP, { packed: [bad, 9, 14, 19] }, 10, 1), /integer 0\.\.51/, `omaha ${bad}`);
+    assert.throws(() => poker.simulateBigOEquityVsRange([...omahaHero, '9s'], FLOP, { packed: [4, 9, 14, 19, bad] }, 10, 1), /integer 0\.\.51/, `big O ${bad}`);
+  }
+  assert.throws(() => poker.simulateOmahaEquityVsRange(omahaHero, FLOP, { packed: [4, 9, 9, 19] }, 10, 1), /repeats a card/);
+});
+
+test('the attempt budget is honoured or the call is rejected', () => {
+  const one = sparse([['Qh', 'Qd', 1]]);
+  assert.throws(() => poker.simulateEquityVsRanges(HERO, FLOP, [one], 100, 1, { maxAttempts: 1 }), /at least numSimulations/);
+  assert.throws(() => poker.simulateEquityVsRanges(HERO, FLOP, [one], 100, 1, { maxAttempts: 99 }), /at least numSimulations/);
+  // One range never collides with itself, so exactly one attempt per sample is enough.
+  const r = poker.simulateEquityVsRanges(HERO, FLOP, [one], 100, 1, { maxAttempts: 100 });
+  assert.equal(r.n, 100);
+  assert.equal(r.attempts, 100);
 });

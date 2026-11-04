@@ -2,6 +2,7 @@
 
 #include "binding_cards.hpp"
 #include "binding_common.hpp"
+#include "binding_range_input.hpp"
 #include "binding_numeric.hpp"
 #include "poker/cfr_subgame.hpp"
 #include "poker/deck_bitset.hpp"
@@ -17,64 +18,9 @@ using poker_bind::write_f64_vector;
 
 namespace {
 
-bool parse_sparse_range(const Napi::Env, const Napi::Value& v, const poker::DeckBitset& dead,
+bool parse_sparse_range(const Napi::Env /*env*/, const Napi::Value& v, const poker::DeckBitset& dead,
                         poker::SparseRange& out, std::string* err) {
-    if (v.IsTypedArray()) {
-        const Napi::TypedArray ta = v.As<Napi::TypedArray>();
-        if (ta.TypedArrayType() != napi_float64_array || ta.ElementLength() != 1326) {
-            if (err) {
-                *err = "dense range must be Float64Array of length 1326";
-            }
-            return false;
-        }
-        const double* data = static_cast<const double*>(poker_bind::typed_array_data(ta));
-        out = poker::sparse_range_from_dense1326(data, 1326, dead.mask);
-        return true;
-    }
-    if (!v.IsObject()) {
-        if (err) {
-            *err = "range must be Float64Array(1326) or { indices, weights }";
-        }
-        return false;
-    }
-    const Napi::Object o = v.As<Napi::Object>();
-    std::vector<int> indices;
-    std::vector<double> weights;
-    const Napi::Value iv = o.Get("indices");
-    if (iv.IsTypedArray()) {
-        const Napi::TypedArray ta = iv.As<Napi::TypedArray>();
-        const std::size_t n = ta.ElementLength();
-        indices.resize(n);
-        if (ta.TypedArrayType() == napi_int32_array) {
-            std::memcpy(indices.data(), poker_bind::typed_array_data(ta), n * sizeof(int32_t));
-        } else if (ta.TypedArrayType() == napi_uint32_array) {
-            const auto* src = static_cast<const std::uint32_t*>(poker_bind::typed_array_data(ta));
-            for (std::size_t i = 0; i < n; ++i) {
-                indices[i] = static_cast<int>(src[i]);
-            }
-        } else {
-            if (err) {
-                *err = "indices must be Int32Array or Uint32Array";
-            }
-            return false;
-        }
-    } else if (iv.IsArray()) {
-        const Napi::Array a = iv.As<Napi::Array>();
-        indices.resize(a.Length());
-        for (uint32_t i = 0; i < a.Length(); ++i) {
-            indices[i] = a.Get(i).As<Napi::Number>().Int32Value();
-        }
-    } else {
-        if (err) {
-            *err = "sparse range needs indices array";
-        }
-        return false;
-    }
-    if (!read_f64_vector(o.Get("weights"), "weights", weights, err)) {
-        return false;
-    }
-    out = poker::sparse_range_from_arrays(indices, weights, dead.mask);
-    return true;
+    return poker_bind::parse_sparse_range_spec(v, dead.mask, out, err);
 }
 
 bool parse_mix(const Napi::Value& v, std::vector<double>& out, std::string* err) {

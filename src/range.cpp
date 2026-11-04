@@ -2,6 +2,7 @@
 
 #include "poker/deck_bitset.hpp"
 
+#include <array>
 #include <cmath>
 #include <stdexcept>
 
@@ -19,6 +20,7 @@ SparseRange sparse_range_from_arrays(const std::vector<int>& pair_indices,
     }
     SparseRange out;
     out.combos.reserve(n);
+    std::array<int, kHoleComboCount> slot{};  // 1 + position in out.combos, 0 = not seen yet
     for (std::size_t i = 0; i < n; ++i) {
         const int a = pair_indices[i * 2];
         const int b = pair_indices[i * 2 + 1];
@@ -31,9 +33,23 @@ SparseRange sparse_range_from_arrays(const std::vector<int>& pair_indices,
             w == 0.0) {
             continue;
         }
+        int& pos = slot[static_cast<std::size_t>(combo_index_1326_unchecked(a, b))];
+        if (pos != 0) {
+            // A combo listed more than once is one combo whose weight is the sum of its entries.
+            double& merged = out.combos[static_cast<std::size_t>(pos - 1)].weight;
+            merged += w;
+            if (!std::isfinite(merged)) {
+                throw std::invalid_argument(
+                    "range weights are too large: a combo listed more than once sums past the largest double");
+            }
+            continue;
+        }
         out.combos.push_back(WeightedHoleCombo{a, b, w});
+        pos = static_cast<int>(out.combos.size());
     }
-    out.weight_sum = rescale_range_weights(out.combos, &out.weight_shift);
+    for (const WeightedHoleCombo& c : out.combos) {
+        out.weight_sum += c.weight;
+    }
     if (out.combos.empty()) {
         throw std::invalid_argument("sparse range has no valid combos after blockers");
     }
@@ -56,9 +72,9 @@ SparseRange sparse_range_from_dense1326(const double* weights, const std::size_t
                 continue;
             }
             out.combos.push_back(WeightedHoleCombo{a, b, w});
+            out.weight_sum += w;
         }
     }
-    out.weight_sum = rescale_range_weights(out.combos, &out.weight_shift);
     if (out.combos.empty()) {
         throw std::invalid_argument("dense range has no valid combos after blockers");
     }

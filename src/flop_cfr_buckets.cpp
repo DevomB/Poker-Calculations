@@ -97,14 +97,26 @@ std::vector<double> bucket_mass_from_range(const std::vector<double>& range_1326
         throw std::invalid_argument("range and buckets must have length 1326");
     }
     std::vector<double> mass(static_cast<std::size_t>(k), 0.0);
-    double z = 0.0;
-    for (int i = 0; i < kComboCount; ++i) {
+    const auto counts = [&](int i) {
         const int b = combo_buckets[static_cast<std::size_t>(i)];
         const double w = range_1326[static_cast<std::size_t>(i)];
-        if (!std::isfinite(w) || w <= 0.0 || b < 0 || b >= k) {
+        return std::isfinite(w) && w > 0.0 && b >= 0 && b < k;
+    };
+    // Scale by the largest weight that lands in a bucket (exact; see weight_scale_exponent).
+    double largest = 0.0;
+    for (int i = 0; i < kComboCount; ++i) {
+        if (counts(i)) {
+            largest = std::max(largest, range_1326[static_cast<std::size_t>(i)]);
+        }
+    }
+    const int scale = weight_scale_exponent(largest);
+    double z = 0.0;
+    for (int i = 0; i < kComboCount; ++i) {
+        if (!counts(i)) {
             continue;
         }
-        mass[static_cast<std::size_t>(b)] += w;
+        const double w = std::ldexp(range_1326[static_cast<std::size_t>(i)], scale);
+        mass[static_cast<std::size_t>(combo_buckets[static_cast<std::size_t>(i)])] += w;
         z += w;
     }
     if (z <= 0.0) {

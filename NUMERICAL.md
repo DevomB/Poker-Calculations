@@ -90,14 +90,30 @@ A trial pays hero `X` in [0, 1]: 1 for a win, `1/k` for a k-way chop, 0 for a lo
 ## Range weights
 
 A weighted range is a distribution: only ratios of weights matter. Every range input is checked
-first (weights must be finite and non-negative). When the largest weight is outside
-`[2^-256, 2^256]`, all weights are multiplied by one power of two that brings the largest into
-`[0.5, 1)`. That is exact in binary floating point, so the distribution is unchanged, and totals,
-products with probabilities, and the pairwise products of two ranges in the CFR subgames stay
-finite and normal. Ordinary ranges are never touched. Results reported in weight units
-(`handPotentialBreakdown` counts, `materializeVillainRangeAfterBlockers` weights, CFR top-combo
-weights, class and per-card totals) are converted back to the caller's units, and throw rather than
-return Infinity when that total exceeds the largest double.
+first: weights must be finite and non-negative, and sparse `indices` must be integer deck ids 0..51
+(checked before any conversion). A combo listed more than once is one combo whose weight is the sum
+of its entries; a sum past the largest double is rejected.
+
+Ranges keep the caller's weights. Each calculation multiplies the weights it uses by one power of
+two `2^k`, chosen so the largest weight **among the combos that take part** lands in `[0.5, 1)`:
+the combos left after hero, the board, and dead cards (and, in the river CFR subgames, each
+card-compatible bettor and defender pair). Scaling by a power of two is exact in binary floating
+point, so ordinary ranges give bit-identical results, while totals over all combos and runouts stay
+finite. A weight more than `2^1074` times smaller than the largest active weight contributes less
+than one part in `2^1022` of the total, so its underflow cannot change a result. Taking the scale
+from a combo that later drops out could zero every combo that remains, which is why the scale is
+never global.
+
+Sums of products are kept as mantissa and exponent. The river CFR subgames weight a pair of hands
+by `w_bettor × w_defender` (for example `1e200 × 1e-200`), and the bet-node values weight bettor
+combos by `w × P(bet)`; both are accumulated relative to the largest term seen so far, so each
+conditional average (per hand, per hand class, per pair) is scaled by its own members.
+
+Results reported in weight units (`handPotentialBreakdown` counts, `materializeVillainRangeAfterBlockers`
+weights and `weightSum`, CFR top-combo weights, class and per-card totals) are in the caller's
+units, and throw rather than return Infinity when such a total exceeds the largest double.
+`materializeVillainRangeAfterBlockers` reports `weightSum` as the sum of its `weights1326` array and
+`liveComboCount` as the number of positive entries.
 
 ## Multiway range equity
 
@@ -110,7 +126,8 @@ ranges after removing earlier cards does not: it weights each earlier hand by it
 than by how many compatible completions it has. The board is then completed uniformly from the
 remaining deck, and payoffs and uncertainty are those of the Monte Carlo uncertainty section. The
 sampler stops with an error after `maxAttempts` draws (default `100 n + 10000`), so it fails rather
-than slows down when the acceptance rate `n / attempts` falls below about 1%. Results are showdown
+than slows down when the acceptance rate `n / attempts` falls below about 1%. Every accepted sample
+costs at least one draw, so a `maxAttempts` below `n` is rejected up front. Results are showdown
 equity only; side-pot payouts need `exactMultiwaySidePotChipEv` or the side-pot helpers.
 
 ## Floating point

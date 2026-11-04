@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -54,38 +55,83 @@ inline void require_range_weight(double w) {
 }
 
 /**
- * Only relative weights matter. When the largest weight lies outside [2^-256, 2^256], every weight
- * is multiplied by the same power of two (exact in binary floating point) so the largest lands in
- * [0.5, 1); otherwise nothing changes. Totals of any number of combos, their products with
- * probabilities and runout counts, and the pairwise products of two ranges summed over every pair
- * (the CFR subgames) then stay finite and normal: [1, 1] and [1e308, 1e308] are the same
- * distribution. Validates every weight first. Returns the total of the (possibly rescaled) weights.
+ * Only relative weights matter, so a calculation may multiply every weight it uses by one power of
+ * two. `weight_scale_exponent(largest)` is the k for which `largest * 2^k` lies in [0.5, 1); scaling
+ * by 2^k is exact, so ordinary inputs give bit-identical results, while totals of up to a few
+ * thousand weights and their products with probabilities and runout counts stay finite. `largest`
+ * must be the largest weight among the combos that actually take part in the calculation (after
+ * blockers and card conflicts): a weight that is tiny next to that maximum contributes less than
+ * 2^-1022 of the total, so its underflow cannot change the result, but scaling by a combo that later
+ * drops out could zero every remaining weight. Returns 0 when `largest` is not positive and finite.
  */
-template <typename Combo>
-double rescale_range_weights(std::vector<Combo>& combos, int* shift_out = nullptr) {
-    double max_w = 0.0;
-    for (const Combo& c : combos) {
-        require_range_weight(c.weight);
-        max_w = std::max(max_w, c.weight);
+[[nodiscard]] inline int weight_scale_exponent(double largest) noexcept {
+    if (!(largest > 0.0) || !std::isfinite(largest)) {
+        return 0;
     }
-    int shift = 0;
-    if (max_w > 0.0 && (max_w > 0x1p256 || max_w < 0x1p-256)) {
-        int e = 0;
-        (void)std::frexp(max_w, &e);  // max_w = f * 2^e with f in [0.5, 1)
-        shift = -e;
-    }
-    double total = 0.0;
-    for (Combo& c : combos) {
-        if (shift != 0) {
-            c.weight = std::ldexp(c.weight, shift);
-        }
-        total += c.weight;
-    }
-    if (shift_out) {
-        *shift_out = shift;
-    }
-    return total;
+    int e = 0;
+    (void)std::frexp(largest, &e);  // largest = f * 2^e with f in [0.5, 1)
+    return -e;
 }
+
+/**
+ * Accumulates `sum(a * x[k])` for each of N values and `sum(a)` over non-negative terms
+ * `a = m * 2^e`, given as (m, e) so products of range weights such as 1e200 * 1e200, or a weight
+ * times a small strategy probability, never overflow or underflow on the way in. Both sums are kept
+ * relative to a power of two that tracks the largest term seen so far (exact rescaling), so a term
+ * is lost only when it is below 2^-1074 of that largest term and cannot change any ratio
+ * `num[k] / den`. For inputs whose raw products are representable the ratios are bit-identical to
+ * plain accumulation.
+ */
+template <std::size_t N>
+struct ScaledWeightedSums {
+    std::array<double, N> num{};
+    double den{0.0};
+    int exp{0};
+    bool any{false};
+
+    void add(double m, int e, const std::array<double, N>& x) {
+        if (!(m > 0.0)) {
+            return;
+        }
+        int g = 0;
+        m = std::frexp(m, &g);
+        rebase(e + g);
+        const double a = std::ldexp(m, e + g - exp);
+        for (std::size_t k = 0; k < N; ++k) {
+            num[k] += a * x[k];
+        }
+        den += a;
+    }
+
+    /// Adds another accumulator's totals (as if its terms had been added here, grouped).
+    void merge(const ScaledWeightedSums& o) {
+        if (!o.any) {
+            return;
+        }
+        rebase(o.exp);
+        for (std::size_t k = 0; k < N; ++k) {
+            num[k] += std::ldexp(o.num[k], o.exp - exp);
+        }
+        den += std::ldexp(o.den, o.exp - exp);
+    }
+
+    [[nodiscard]] double ratio(std::size_t k = 0) const { return den > 0.0 ? num[k] / den : 0.0; }
+
+private:
+    void rebase(int e) {
+        if (any && e <= exp) {
+            return;
+        }
+        if (any) {
+            for (double& v : num) {
+                v = std::ldexp(v, exp - e);
+            }
+            den = std::ldexp(den, exp - e);
+        }
+        exp = e;
+        any = true;
+    }
+};
 
 /// Villain hole as two deck indices (0..51) with non-negative weight.
 struct WeightedHoleCombo {
@@ -94,15 +140,25 @@ struct WeightedHoleCombo {
     double weight{0.0};
 };
 
-/// Sparse villain range: combos with positive weights (blockers removed by the builder). Builders
-/// apply `rescale_range_weights`, so `weight_sum` is always finite.
+/// Sparse villain range: one entry per distinct combo with a positive weight, in the caller's units
+/// (blockers removed by the builder; a combo listed twice is merged by adding its weights).
+/// `weight_sum` is the total of those weights and is +infinity when it exceeds the largest double,
+/// so calculations scale with `weight_scale_exponent` over their active combos instead of dividing
+/// by it.
 struct SparseRange {
     std::vector<WeightedHoleCombo> combos;
     double weight_sum{0.0};
-    /// The input weights were multiplied by 2^weight_shift; `std::ldexp(x, -weight_shift)` turns a
-    /// weighted total back into input units (0 for ordinary ranges).
-    int weight_shift{0};
 };
+
+/// Largest weight among `combos` (0 when empty).
+template <typename Combo>
+[[nodiscard]] double max_combo_weight(const std::vector<Combo>& combos) noexcept {
+    double m = 0.0;
+    for (const Combo& c : combos) {
+        m = std::max(m, c.weight);
+    }
+    return m;
+}
 
 /// Build sparse range from parallel `indices` (2*n) and `weights` (n), excluding `dead` bitset.
 [[nodiscard]] SparseRange sparse_range_from_arrays(const std::vector<int>& pair_indices,

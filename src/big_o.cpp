@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <stdexcept>
 #include <string>
 
@@ -254,7 +255,12 @@ float simulate_big_o_equity_vs_range(const std::vector<Card>& hero, const std::v
         }
         live.push_back(c);
     }
-    wsum = rescale_range_weights(live);
+    // Scale by the largest live weight (exact; see weight_scale_exponent).
+    const int scale = weight_scale_exponent(max_combo_weight(live));
+    for (auto& c : live) {
+        c.weight = std::ldexp(c.weight, scale);
+        wsum += c.weight;
+    }
     if (live.empty() || wsum <= 0.0) {
         throw std::invalid_argument("simulateBigOEquityVsRange: no live combos");
     }

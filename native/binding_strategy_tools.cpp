@@ -2,6 +2,7 @@
 
 #include "binding_cards.hpp"
 #include "binding_common.hpp"
+#include "binding_range_input.hpp"
 #include "binding_numeric.hpp"
 #include "binding_state.hpp"
 
@@ -47,109 +48,7 @@ int combo_index(int a, int b) { return poker::combo_index_1326(a, b); }
 std::pair<int, int> combo_cards(int idx) { return poker::combo_cards_1326(idx); }
 
 bool read_range_dense(const Napi::Value& v, std::vector<double>& out, std::string* err) {
-    out.assign(kCombos, 0.0);
-    if (v.IsTypedArray()) {
-        const Napi::TypedArray ta = v.As<Napi::TypedArray>();
-        if (ta.TypedArrayType() != napi_float64_array || ta.ElementLength() != kCombos) {
-            if (err) {
-                *err = "range must be Float64Array(1326) or { indices, weights }";
-            }
-            return false;
-        }
-        std::memcpy(out.data(), poker_bind::typed_array_data(ta), kCombos * sizeof(double));
-        for (const double w : out) {
-            if (!std::isfinite(w) || w < 0.0) {
-                if (err) {
-                    *err = "range weights must be finite and non-negative";
-                }
-                return false;
-            }
-        }
-        return true;
-    }
-    if (!v.IsObject()) {
-        if (err) {
-            *err = "range must be Float64Array(1326) or { indices, weights }";
-        }
-        return false;
-    }
-    const Napi::Object o = v.As<Napi::Object>();
-    if (!o.Has("indices") || !o.Has("weights")) {
-        if (err) {
-            *err = "range object needs indices and weights";
-        }
-        return false;
-    }
-    std::vector<double> weights;
-    if (!read_f64_vector(o.Get("weights"), "weights", weights, err)) {
-        return false;
-    }
-    std::vector<int> indices;
-    const Napi::Value iv = o.Get("indices");
-    if (iv.IsTypedArray()) {
-        const Napi::TypedArray ta = iv.As<Napi::TypedArray>();
-        indices.resize(ta.ElementLength());
-        if (ta.TypedArrayType() == napi_int32_array) {
-            std::memcpy(indices.data(), poker_bind::typed_array_data(ta), indices.size() * sizeof(std::int32_t));
-        } else if (ta.TypedArrayType() == napi_uint32_array) {
-            const auto* p = static_cast<const std::uint32_t*>(poker_bind::typed_array_data(ta));
-            for (std::size_t i = 0; i < indices.size(); ++i) {
-                indices[i] = static_cast<int>(p[i]);
-            }
-        } else {
-            if (err) {
-                *err = "indices must be Int32Array, Uint32Array, or number[]";
-            }
-            return false;
-        }
-    } else if (iv.IsArray()) {
-        const Napi::Array a = iv.As<Napi::Array>();
-        indices.reserve(a.Length());
-        for (uint32_t i = 0; i < a.Length(); ++i) {
-            if (!a.Get(i).IsNumber()) {
-                if (err) {
-                    *err = "indices must contain numbers";
-                }
-                return false;
-            }
-            indices.push_back(a.Get(i).As<Napi::Number>().Int32Value());
-        }
-    } else {
-        if (err) {
-            *err = "indices must be Int32Array, Uint32Array, or number[]";
-        }
-        return false;
-    }
-    if (indices.size() % 2 != 0 || weights.size() != indices.size() / 2) {
-        if (err) {
-            *err = "range indices must contain two deck ids per weight";
-        }
-        return false;
-    }
-    for (std::size_t i = 0; i < weights.size(); ++i) {
-        const int idx = combo_index(indices[i * 2], indices[i * 2 + 1]);
-        const double w = weights[i];
-        if (idx < 0) {
-            if (err) {
-                *err = "invalid deck index in sparse range";
-            }
-            return false;
-        }
-        if (!std::isfinite(w) || w < 0.0) {
-            if (err) {
-                *err = "range weights must be finite and non-negative";
-            }
-            return false;
-        }
-        out[static_cast<std::size_t>(idx)] += w;  // a combo listed twice adds up
-        if (!std::isfinite(out[static_cast<std::size_t>(idx)])) {
-            if (err) {
-                *err = "range weights are too large: a combo listed twice exceeds the largest double";
-            }
-            return false;
-        }
-    }
-    return true;
+    return poker_bind::read_dense_range_spec(v, out, err);
 }
 
 Napi::Value write_dense(Napi::Env env, const std::vector<double>& data) {
@@ -169,22 +68,25 @@ double sum_positive(const std::vector<double>& v) {
 }
 
 std::vector<double> normalized(std::vector<double> v) {
-    // Rescale by one power of two first (poker::rescale_range_weights) so a range such as
-    // [1e308, 1e308] normalizes like [1, 1] instead of overflowing its total.
-    struct W {
-        double weight;
-    };
-    std::vector<W> w;
-    w.reserve(v.size());
-    for (double x : v) {
-        w.push_back(W{std::isfinite(x) && x > 0.0 ? x : 0.0});
+    // Scale by the largest weight first (exact; see poker::weight_scale_exponent) so a range such
+    // as [1e308, 1e308] normalizes like [1, 1] instead of overflowing its total.
+    double largest = 0.0;
+    for (const double x : v) {
+        if (std::isfinite(x) && x > 0.0) {
+            largest = std::max(largest, x);
+        }
     }
-    const double s = poker::rescale_range_weights(w);
+    const int scale = poker::weight_scale_exponent(largest);
+    double s = 0.0;
+    for (double& x : v) {
+        x = std::isfinite(x) && x > 0.0 ? std::ldexp(x, scale) : 0.0;
+        s += x;
+    }
     if (s <= 0.0) {
         return v;
     }
-    for (std::size_t i = 0; i < v.size(); ++i) {
-        v[i] = w[i].weight / s;
+    for (double& x : v) {
+        x /= s;
     }
     return v;
 }
@@ -355,7 +257,17 @@ Napi::Value PruneRangeByMinWeight(const Napi::CallbackInfo& info) {
             weights.push_back(r[static_cast<std::size_t>(i)]);
         }
     }
-    const double s = std::accumulate(weights.begin(), weights.end(), 0.0);
+    // Kept weights sum to 1; scaled by their maximum first so huge weights cannot overflow the total.
+    double largest = 0.0;
+    for (const double w : weights) {
+        largest = std::max(largest, w);
+    }
+    const int scale = poker::weight_scale_exponent(largest);
+    double s = 0.0;
+    for (double& w : weights) {
+        w = std::ldexp(w, scale);
+        s += w;
+    }
     if (s > 0.0) {
         for (double& w : weights) {
             w /= s;
@@ -382,19 +294,32 @@ Napi::Value MergeSparseRanges(const Napi::CallbackInfo& info) {
     const double wa = get_number(info, 2, 0.5);
     const double wb = get_number(info, 3, 0.5);
     if (!std::isfinite(wa) || !std::isfinite(wb)) POKER_FAIL_RANGE(env, "weightA and weightB must be finite");
-    // One power-of-two scale for both inputs (exact) so the mixture cannot overflow.
-    struct W {
-        double weight;
-    };
-    std::vector<W> both;
-    both.reserve(a.size() + b.size());
-    for (double x : a) both.push_back(W{x});
-    for (double x : b) both.push_back(W{x});
-    int shift = 0;
-    (void)poker::rescale_range_weights(both, &shift);
+    // Each mixed weight wa * a + wb * b is formed as mantissa * 2^exponent, then everything is scaled
+    // by the largest result (exact), so neither the products nor the sums can overflow and a
+    // component is never zeroed by the other range's scale (for example when weightA is 0).
+    std::vector<double> mant(a.size(), 0.0);
+    std::vector<int> expo(a.size(), 0);
+    int top = 0;
+    bool any = false;
     for (std::size_t i = 0; i < a.size(); ++i) {
-        a[i] = std::max(0.0, wa * both[i].weight + wb * both[a.size() + i].weight);
-        if (!std::isfinite(a[i])) POKER_FAIL_RANGE(env, "mergeSparseRanges: weighted mixture exceeds the largest double");
+        int e_wa = 0, e_a = 0, e_wb = 0, e_b = 0;
+        const double pa = std::frexp(wa, &e_wa) * std::frexp(a[i], &e_a);
+        const double pb = std::frexp(wb, &e_wb) * std::frexp(b[i], &e_b);
+        const int ea = e_wa + e_a;
+        const int eb = e_wb + e_b;
+        const int base = pa == 0.0 ? eb : (pb == 0.0 ? ea : std::max(ea, eb));
+        const double t = std::ldexp(pa, ea - base) + std::ldexp(pb, eb - base);
+        if (!(t > 0.0)) {
+            continue;  // a mixture weight at or below zero drops the combo
+        }
+        int g = 0;
+        mant[i] = std::frexp(t, &g);
+        expo[i] = base + g;
+        top = any ? std::max(top, expo[i]) : expo[i];
+        any = true;
+    }
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        a[i] = mant[i] > 0.0 ? std::ldexp(mant[i], expo[i] - top) : 0.0;
     }
     return write_dense(env, normalized(a));
 }
@@ -706,9 +631,12 @@ Napi::Value RangeFromNotationWeights(const Napi::CallbackInfo& info) {
             continue;
         }
         const double w = e.Get("weight").As<Napi::Number>().DoubleValue();
+        if (!std::isfinite(w) || w < 0.0) POKER_FAIL_RANGE(env, "range weights must be finite and non-negative");
         for (int idx : idxs) {
             if (idx >= 0) {
-                out[static_cast<std::size_t>(idx)] += w / std::max<std::size_t>(1, idxs.size());
+                double& slot = out[static_cast<std::size_t>(idx)];
+                slot += w / static_cast<double>(std::max<std::size_t>(1, idxs.size()));
+                if (!std::isfinite(slot)) POKER_FAIL_RANGE(env, "range weights are too large: a combo total exceeds the largest double");
             }
         }
     }

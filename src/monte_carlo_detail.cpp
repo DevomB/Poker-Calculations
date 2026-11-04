@@ -136,6 +136,10 @@ McRangesEquityResult simulate_equity_vs_ranges(const std::vector<Card>& player_h
     if (num_simulations < 1) {
         throw std::invalid_argument("numSimulations must be at least 1");
     }
+    if (max_attempts < num_simulations) {
+        // Every accepted sample costs at least one attempt, so a smaller budget cannot be honoured.
+        throw std::invalid_argument("maxAttempts must be at least numSimulations (each sample needs one attempt)");
+    }
     const std::size_t k = villain_ranges.size();
     if (k < 1 || k > 9) {
         throw std::invalid_argument("ranges must have 1 to 9 entries");
@@ -157,20 +161,25 @@ McRangesEquityResult simulate_equity_vs_ranges(const std::vector<Card>& player_h
     };
     std::vector<LiveRange> live(k);
     for (std::size_t i = 0; i < k; ++i) {
-        double acc = 0.0;
+        double largest = 0.0;
         for (const WeightedHoleCombo& c : villain_ranges[i].combos) {
             if (!(c.weight > 0.0) || known.test(c.card_a) || known.test(c.card_b)) {
                 continue;
             }
-            acc += c.weight;
+            largest = std::max(largest, c.weight);
             live[i].combos.push_back(&c);
-            live[i].cumulative.push_back(acc);
         }
         if (live[i].combos.empty()) {
             throw std::invalid_argument("ranges[" + std::to_string(i) + "] has no combo left after blockers");
         }
+        // Each range is drawn on its own, so its weights are scaled by its own live maximum.
+        const int scale = weight_scale_exponent(largest);
+        double acc = 0.0;
+        for (const WeightedHoleCombo* c : live[i].combos) {
+            acc += std::ldexp(c->weight, scale);
+            live[i].cumulative.push_back(acc);
+        }
     }
-    max_attempts = std::max<std::int64_t>(max_attempts, num_simulations);
 
     McRangesEquityResult out{};
     PayoffMoments moments;
@@ -257,22 +266,27 @@ float simulate_equity_vs_range(const std::vector<Card>& player_hand,
     if (num_simulations <= 0 || villain_range.combos.empty()) {
         return 0.0F;
     }
+    // The builder already removed combos that hero or the board block, so every combo takes part.
+    const int scale = weight_scale_exponent(max_combo_weight(villain_range.combos));
+    std::vector<double> cumulative;
+    cumulative.reserve(villain_range.combos.size());
+    double acc = 0.0;
+    for (const WeightedHoleCombo& c : villain_range.combos) {
+        acc += std::ldexp(c.weight, scale);
+        cumulative.push_back(acc);
+    }
     double sum = 0.0;
     for (int i = 0; i < num_simulations; ++i) {
         if (i > 0 && (i % kCancelCheckInterval) == 0) {
             throw_if_cancelled(cancel);
         }
-        std::uniform_real_distribution<double> dist(0.0, villain_range.weight_sum);
+        std::uniform_real_distribution<double> dist(0.0, acc);
         const double pick = dist(rng);
-        double acc = 0.0;
-        const WeightedHoleCombo* chosen = &villain_range.combos.back();
-        for (const WeightedHoleCombo& c : villain_range.combos) {
-            acc += c.weight;
-            if (pick <= acc) {
-                chosen = &c;
-                break;
-            }
-        }
+        // First combo whose cumulative weight reaches `pick`.
+        const auto it = std::lower_bound(cumulative.begin(), cumulative.end(), pick);
+        const std::size_t at = std::min<std::size_t>(static_cast<std::size_t>(it - cumulative.begin()),
+                                                     cumulative.size() - 1);
+        const WeightedHoleCombo* chosen = &villain_range.combos[at];
         sum += static_cast<double>(simulate_hand_outcome_vs_villain_holes(
             player_hand, community_cards, chosen->card_a, chosen->card_b, 1, rng, cancel));
     }

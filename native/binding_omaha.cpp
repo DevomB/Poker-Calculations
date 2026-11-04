@@ -6,6 +6,7 @@
 
 #include "poker/omaha.hpp"
 
+#include <cmath>
 #include <cstdint>
 #include <random>
 #include <stdexcept>
@@ -78,10 +79,11 @@ bool parse_omaha_range(const Napi::Value& v, std::vector<poker::OmahaRangeCombo>
                 }
                 return false;
             }
-            const int x = a.Get(i).As<Napi::Number>().Int32Value();
-            if (x < 0 || x > 51) {
+            // Checked as a double so NaN, fractions, and values past 2^31 are not converted to a card.
+            const double x = a.Get(i).As<Napi::Number>().DoubleValue();
+            if (!(x >= 0.0 && x <= 51.0) || std::floor(x) != x) {
                 if (err) {
-                    *err = "packed deck id must be 0..51";
+                    *err = "packed deck id must be an integer 0..51";
                 }
                 return false;
             }
@@ -125,6 +127,14 @@ bool parse_omaha_range(const Napi::Value& v, std::vector<poker::OmahaRangeCombo>
                 return false;
             }
             out[i].cards[k] = id;
+            for (int prev = 0; prev < k; ++prev) {
+                if (out[i].cards[prev] == id) {
+                    if (err) {
+                        *err = "packed combo " + std::to_string(i) + " repeats a card";
+                    }
+                    return false;
+                }
+            }
         }
         out[i].weight = weights[i];
     }

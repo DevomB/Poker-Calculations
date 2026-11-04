@@ -1,5 +1,34 @@
 # Changelog
 
+## 4.1.2
+
+Fixes a range-weight regression introduced in 4.1.1, and closes gaps in range input handling and the TypeScript declarations.
+
+### Fixed — results change
+
+- **Range weights are scaled per calculation, from the combos that take part.** 4.1.1 rescaled a whole range by its largest weight before blockers and card conflicts were applied, so a positive, representable weight could become 0 once the dominant combo dropped out: `materializeVillainRangeAfterBlockers` turned `[1e200, 1e-200]` into `[1e200, 0]`, and `evOfStrategyProfile` with bettor `KhKd × 1e200, 3c4d × 1e-200` against defender `KhKd × 1e200, 5c6d × 1e-200` on `2c 7d 9s Jc Qh` returned EV 0 / 0 instead of 62.5 / 37.5. Ranges now keep the caller's weights; each calculation scales by the largest weight among its live combos, and the river CFR subgames accumulate pair weights (`w_bettor × w_defender`) and bet-weighted values as mantissa and exponent, so every conditional average is scaled by its own members. This covers exact and Monte Carlo Hold'em range equity, hand potential and EHS tables, bucket mass, the dominated-combo fraction, materialization, the CFR subgames, Omaha, Big O, and short-deck ranges, and the dense range tools. Ordinary ranges give bit-identical results to 4.1.1. See [NUMERICAL.md](NUMERICAL.md#range-weights).
+- **A combo listed more than once in a sparse range is one combo with the summed weight**, in every export. `materializeVillainRangeAfterBlockers` used to report weights 2 and 3 for one combo as a dense weight of 3, a `weightSum` of 5, two live combos, and a nonzero entropy; it now reports 5, 5, one combo, and entropy 0, and `weightSum` is always the sum of `weights1326`.
+- **`mergeSparseRanges`** forms each mixed weight without a shared scale, so a range is no longer zeroed by a much larger other range (for example with `weightA` 0), and huge mixing weights (`weightA = weightB = 1e308`) are normalized instead of rejected. **`pruneRangeByMinWeight`** normalizes the kept weights without overflowing (very large weights came back as 0).
+- **`simulateShortDeckEquityVsRange`** draws only from combos that hero and the board leave possible, instead of drawing blocked combos and discarding the trial; results for a seed change when the range contains blocked combos.
+
+### Now rejected
+
+- Sparse range `indices` entries that are not integer deck ids 0..51. `NaN`, `1.9`, and `4294967297` used to be converted to other, valid cards by integer conversion; every entry is now checked as given, for `number[]`, `Int32Array`, and `Uint32Array` alike. Packed Omaha and Big O combos get the same check, and a packed combo that repeats a card (silently skipped before) is rejected.
+- `simulateEquityVsRanges` with `maxAttempts` below `numSimulations`. The budget was silently raised to `numSimulations`; each sample needs at least one draw, so such a budget cannot be honoured.
+- River CFR subgames (`cfrRiverBetCallFoldSolve`, `fictitiousPlayRiver`, `evOfStrategyProfile`, `bestResponseRiver`, `exploitabilityRiver`, `solveHuRiverCheckBetTree`) in which every bettor combo shares a card with every defender combo; they returned EV 0.
+- `rangeFromNotationWeights` entries whose weight is NaN, infinite, or negative.
+
+### Fixed — no result change for valid input
+
+- **One sparse range parser.** `exactRangeDominatedComboFraction`, `exactHeroEquityRunoutQuantiles`, `exactEquityCardRemovalGradient` (and their async forms), `exactInformationRegretVsClairvoyant`, and `materializeVillainRangeAfterBlockers` accepted only `Int32Array` indices; every export that takes a `SparseRangeSpec` now accepts `number[]`, `Int32Array`, and `Uint32Array` with the same validation and messages.
+- **TypeScript.** `evaluateBestHand`, `evaluateOmahaBestHand`, `evaluateBigOBestHand`, `evaluateStudBestHand`, and `evaluateRazzHand` with `{ format: 'slim' }` are typed `HandEvalResultSlim` (the full-result overload matched first, promising `rank` and `kickers` that are not there); options only known at runtime give the union. `runBotPolicyBatch` returns `Array<DecisionDiagnosticResult | DecisionBatchErrorRow>`, so a row must be narrowed (`row.error !== undefined`) before its decision fields are read. New exported types: `EvaluateBestHandSlimOptions`, `EvaluateBestHandFullOptions`, `DecisionBatchErrorRow`.
+- **C++ library.** `SparseRange` holds the caller's weights (`weight_sum` may be +infinity) and no longer has `weight_shift`; `rescale_range_weights` is replaced by `weight_scale_exponent`, `max_combo_weight`, and `ScaledWeightedSums` in `poker/range.hpp`.
+
+### Tooling
+
+- The scaling test in `test/range-consistency.test.js` now gives every field an exact expectation: scale-free fields (probabilities, frequencies, EVs, entropies, counts, indices) must be bit-identical at 2^100, 2^600, and 2^-600, and fields in weight units (listed per export) must scale by exactly that factor. New tests cover materialized totals against their arrays, a dominant combo that drops out, the CFR pair case above, duplicate combos, malformed indices, all three index formats in every native range parser, and the attempt budget; they fail on 4.1.1.
+- `test/types/consumer.ts` checks the slim overloads and batch row narrowing; the installed-tarball smoke check covers the cases above.
+
 ## 4.1.1
 
 Bug fixes. Some intervals change, and inputs that used to give meaningless results now throw.

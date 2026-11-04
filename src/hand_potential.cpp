@@ -100,7 +100,7 @@ void apply_transitions(HandPotentialBreakdown& out, const double hp[3][3]) {
 }
 
 void accumulate_exact(int h0, int h1, const int* board, int board_n, int need,
-                      const SparseRange& range, std::uint64_t hero_board_mask,
+                      const SparseRange& range, std::uint64_t hero_board_mask, int scale,
                       HandPotentialBreakdown& out, const CancelPredicate* cancel) {
     double hp[3][3]{};
     std::size_t steps = 0;
@@ -111,15 +111,16 @@ void accumulate_exact(int h0, int h1, const int* board, int board_n, int need,
         if ((hero_board_mask & vil_mask) != 0) {
             continue;
         }
+        const double w = std::ldexp(combo.weight, scale);
         const std::uint64_t vil_now =
             strength_ids(combo.card_a, combo.card_b, board, board_n, nullptr, 0);
         const int now = outcome_of(hero_now, vil_now);
         if (now == kAhead) {
-            out.n_ahead += combo.weight;
+            out.n_ahead += w;
         } else if (now == kTied) {
-            out.n_tied += combo.weight;
+            out.n_tied += w;
         } else {
-            out.n_behind += combo.weight;
+            out.n_behind += w;
         }
 
         std::vector<int> live;
@@ -149,10 +150,10 @@ void accumulate_exact(int h0, int h1, const int* board, int board_n, int need,
         if (runouts <= 0) {
             continue;
         }
-        const double scale = combo.weight / static_cast<double>(runouts);
+        const double per_runout = w / static_cast<double>(runouts);
         for (int a = 0; a < 3; ++a) {
             for (int b = 0; b < 3; ++b) {
-                hp[a][b] += combo_hp[a][b] * scale;
+                hp[a][b] += combo_hp[a][b] * per_runout;
             }
         }
     }
@@ -160,7 +161,7 @@ void accumulate_exact(int h0, int h1, const int* board, int board_n, int need,
 }
 
 void accumulate_mc(int h0, int h1, const int* board, int board_n, int need, const SparseRange& range,
-                   std::uint64_t hero_board_mask, std::size_t trials, std::uint32_t seed,
+                   std::uint64_t hero_board_mask, int scale, std::size_t trials, std::uint32_t seed,
                    HandPotentialBreakdown& out, const CancelPredicate* cancel) {
     std::vector<const WeightedHoleCombo*> live_combos;
     live_combos.reserve(range.combos.size());
@@ -172,17 +173,18 @@ void accumulate_mc(int h0, int h1, const int* board, int board_n, int need, cons
         if ((hero_board_mask & vil_mask) != 0) {
             continue;
         }
+        const double w = std::ldexp(combo.weight, scale);
         live_combos.push_back(&combo);
-        live_sum += combo.weight;
+        live_sum += w;
         const std::uint64_t vil_now =
             strength_ids(combo.card_a, combo.card_b, board, board_n, nullptr, 0);
         const int now = outcome_of(hero_now, vil_now);
         if (now == kAhead) {
-            out.n_ahead += combo.weight;
+            out.n_ahead += w;
         } else if (now == kTied) {
-            out.n_tied += combo.weight;
+            out.n_tied += w;
         } else {
-            out.n_behind += combo.weight;
+            out.n_behind += w;
         }
     }
     if (live_combos.empty() || live_sum <= 0.0 || trials == 0) {
@@ -200,7 +202,7 @@ void accumulate_mc(int h0, int h1, const int* board, int board_n, int need, cons
         double acc = 0.0;
         const WeightedHoleCombo* combo = live_combos.back();
         for (const WeightedHoleCombo* c : live_combos) {
-            acc += c->weight;
+            acc += std::ldexp(c->weight, scale);
             if (pick <= acc) {
                 combo = c;
                 break;
@@ -243,24 +245,39 @@ void accumulate_mc(int h0, int h1, const int* board, int board_n, int need, cons
     }
     const double trial_n = static_cast<double>(trials);
     const double mass = out.n_ahead + out.n_tied + out.n_behind;
-    const double scale = mass > 0.0 ? mass / trial_n : 1.0 / trial_n;
+    const double per_trial = mass > 0.0 ? mass / trial_n : 1.0 / trial_n;
     for (int a = 0; a < 3; ++a) {
         for (int b = 0; b < 3; ++b) {
-            hp[a][b] *= scale;
+            hp[a][b] *= per_trial;
         }
     }
     apply_transitions(out, hp);
 }
 
+/// Weighted counts in the result are in units of 2^-scale times the caller's (`scale_out`); the
+/// ratios do not depend on it. The scale comes from the combos hero and the board leave live.
 HandPotentialBreakdown compute_for_ids(int h0, int h1, const int* board, int board_n, int need,
                                        const SparseRange& range, std::uint64_t hero_board_mask,
                                        std::size_t trials, std::uint32_t seed,
-                                       const CancelPredicate* cancel) {
+                                       const CancelPredicate* cancel, int* scale_out = nullptr) {
+    double largest = 0.0;
+    for (const WeightedHoleCombo& combo : range.combos) {
+        const std::uint64_t vil_mask =
+            (std::uint64_t{1} << combo.card_a) | (std::uint64_t{1} << combo.card_b);
+        if ((hero_board_mask & vil_mask) == 0) {
+            largest = std::max(largest, combo.weight);
+        }
+    }
+    const int scale = weight_scale_exponent(largest);
+    if (scale_out) {
+        *scale_out = scale;
+    }
     HandPotentialBreakdown out{};
     if (trials > 0) {
-        accumulate_mc(h0, h1, board, board_n, need, range, hero_board_mask, trials, seed, out, cancel);
+        accumulate_mc(h0, h1, board, board_n, need, range, hero_board_mask, scale, trials, seed, out,
+                      cancel);
     } else {
-        accumulate_exact(h0, h1, board, board_n, need, range, hero_board_mask, out, cancel);
+        accumulate_exact(h0, h1, board, board_n, need, range, hero_board_mask, scale, out, cancel);
     }
     finish_breakdown(out);
     return out;
@@ -289,14 +306,14 @@ HandPotentialBreakdown hand_potential_breakdown(const std::vector<Card>& hero_ho
         used.set(board[i]);
     }
     const int need = streets == PotentialStreets::Two ? 2 : 1;
-    HandPotentialBreakdown out =
-        compute_for_ids(h0, h1, board, board_n, need, villain_range, used.mask, 0, 0, should_cancel);
-    // The weighted counts are reported in the caller's units; the ratios do not depend on scale.
-    if (villain_range.weight_shift != 0) {
-        out.n_ahead = std::ldexp(out.n_ahead, -villain_range.weight_shift);
-        out.n_tied = std::ldexp(out.n_tied, -villain_range.weight_shift);
-        out.n_behind = std::ldexp(out.n_behind, -villain_range.weight_shift);
-    }
+    int scale = 0;
+    HandPotentialBreakdown out = compute_for_ids(h0, h1, board, board_n, need, villain_range, used.mask,
+                                                 0, 0, should_cancel, &scale);
+    // Weighted counts go back to the caller's units (+infinity when a total exceeds the largest
+    // double); the ratios were computed on scaled weights and do not depend on the scale.
+    out.n_ahead = std::ldexp(out.n_ahead, -scale);
+    out.n_tied = std::ldexp(out.n_tied, -scale);
+    out.n_behind = std::ldexp(out.n_behind, -scale);
     return out;
 }
 

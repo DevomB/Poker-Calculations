@@ -357,6 +357,13 @@ double exact_range_dominated_combo_fraction(const std::vector<Card>& hero_hole_c
     double total = 0.0;
     std::uint8_t vil_r[7]{};
     std::uint8_t vil_s[7]{};
+    double largest = 0.0;  // over the combos hero and the board do not block
+    for (const WeightedHoleCombo& c : villain_range.combos) {
+        if (!used.test(c.card_a) && !used.test(c.card_b)) {
+            largest = std::max(largest, c.weight);
+        }
+    }
+    const int scale = weight_scale_exponent(largest);
     for (const WeightedHoleCombo& c : villain_range.combos) {
         throw_if_cancelled(cancel);
         if (used.test(c.card_a) || used.test(c.card_b)) {
@@ -370,9 +377,10 @@ double exact_range_dominated_combo_fraction(const std::vector<Card>& hero_hole_c
             vil_r[2 + bi] = board_cards[bi].rank();
             vil_s[2 + bi] = board_cards[bi].suit();
         }
-        total += c.weight;
+        const double w = std::ldexp(c.weight, scale);
+        total += w;
         if (evaluate_seven_strength_fast(vil_r, vil_s) < hero_st) {
-            dominated += c.weight;
+            dominated += w;
         }
     }
     if (total <= 0.0) {
@@ -441,7 +449,6 @@ CardRemovalGradientResult exact_equity_card_removal_gradient(
         }
         SparseRange filtered;
         filtered.weight_sum = 0.0;
-        filtered.weight_shift = villain_range.weight_shift;
         const std::uint64_t dead = base_dead.mask | (std::uint64_t{1} << c);
         for (const WeightedHoleCombo& combo : villain_range.combos) {
             if ((dead & (std::uint64_t{1} << combo.card_a)) != 0 ||

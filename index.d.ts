@@ -117,6 +117,16 @@ declare namespace api {
     format?: EvaluateBestHandFormat;
   }
 
+  /** Options selecting the slim result (`HandEvalResultSlim`). */
+  export interface EvaluateBestHandSlimOptions {
+    format: 'slim';
+  }
+
+  /** Options selecting the full result (`HandEvalResult`); the default. */
+  export interface EvaluateBestHandFullOptions {
+    format?: 'full';
+  }
+
   export type ParseCompactCardListFormat = 'strings' | 'packed';
 
   export interface ParseCompactCardListOptions {
@@ -141,11 +151,14 @@ declare namespace api {
   }
 
   /**
-   * Sparse villain range: parallel `indices` (two deck ids per combo) and `weights`. Weights in any
-   * range input (sparse, dense `Float64Array(1326)`, Omaha / Big O / short-deck specs) must be finite
-   * and non-negative; only their ratios matter, so `[1, 1]` and `[1e308, 1e308]` give the same
-   * result. Outputs reported in weight units (weighted totals, materialized weights) throw when the
-   * total cannot be represented as a double.
+   * Sparse villain range: parallel `indices` (two deck ids per combo) and `weights`. Every export
+   * that takes a range accepts all three `indices` forms; each entry must be an integer deck id
+   * 0..51 (NaN, fractions, and out-of-range values are rejected, never converted). A combo listed
+   * more than once is one combo carrying the sum of its weights. Weights in any range input (sparse,
+   * dense `Float64Array(1326)`, Omaha / Big O / short-deck specs) must be finite and non-negative;
+   * only their ratios matter, so `[1, 1]` and `[1e308, 1e308]` give the same result, and weights far
+   * apart (`1e200` and `1e-200`) both count. Outputs reported in weight units (weighted totals,
+   * materialized weights) throw when the total cannot be represented as a double.
    */
   export interface SparseRangeSpec {
     indices: number[] | Int32Array | Uint32Array;
@@ -153,7 +166,7 @@ declare namespace api {
   }
 
   /**
-   * Sparse PLO range. `packed` is 4 deck ids (0..51) per combo (`length === 4 * n`).
+   * Sparse PLO range. `packed` is 4 distinct integer deck ids (0..51) per combo (`length === 4 * n`).
    * Full C(52,4)=270725 is not accepted as a dense vector — pass only live combos.
    * Omitted `weights` default to 1 per combo.
    */
@@ -171,7 +184,7 @@ declare namespace api {
   }
 
   /**
-   * Sparse Big O range. `packed` is 5 deck ids (0..51) per combo (`length === 5 * n`).
+   * Sparse Big O range. `packed` is 5 distinct integer deck ids (0..51) per combo (`length === 5 * n`).
    * Omitted `weights` default to 1 per combo.
    */
   export interface BigORangeSpec {
@@ -292,7 +305,10 @@ declare namespace api {
   export interface RangesEquityOptions {
     /** Known dead cards (mucked or exposed); no range combo or runout uses them. */
     deadCards?: CardInput;
-    /** Opponent-hand draws allowed before giving up (default `100 × numSimulations + 10000`). */
+    /**
+     * Opponent-hand draws allowed before giving up (default `100 × numSimulations + 10000`). Each
+     * sample needs at least one draw, so a value below `numSimulations` throws.
+     */
     maxAttempts?: number;
   }
 
@@ -671,13 +687,19 @@ declare namespace api {
     toCall: number;
   }
 
-  /** `legalActions` are hero's; `ev` is not populated. Batch rows that fail carry only `error`. */
+  /** `legalActions` are hero's; `ev` is not populated. */
   export interface DecisionDiagnosticResult {
     decision: DecisionResult;
     legalActions: LegalActionSummaryResult;
     ev?: ActionEvBreakdownResult;
     reason: string;
-    error?: string;
+    /** Never set on a decision; lets `row.error !== undefined` tell batch error rows apart. */
+    error?: undefined;
+  }
+
+  /** A `runBotPolicyBatch` row for a state that is invalid or cannot be acted on: only `error`. */
+  export interface DecisionBatchErrorRow {
+    error: string;
   }
 
   /**
@@ -688,11 +710,9 @@ declare namespace api {
    * `bigO*`, `shortDeck*`, `stud*` / `razz*`, `deuceSeven*`.
    */
   export interface PokerCalculations {
-    evaluateBestHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult;
-    evaluateBestHand(
-      cards: CardInput,
-      options: { format: 'slim' }
-    ): HandEvalResultSlim;
+    evaluateBestHand(cards: CardInput, options: EvaluateBestHandSlimOptions): HandEvalResultSlim;
+    evaluateBestHand(cards: CardInput, options?: EvaluateBestHandFullOptions): HandEvalResult;
+    evaluateBestHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult | HandEvalResultSlim;
     /**
      * Encoded strength as `number` (`uint64` bit layout: rank in high bits + five kicker nibbles).
      * Exact integer in IEEE double for sort/compare loops.
@@ -1881,7 +1901,7 @@ declare namespace api {
       states: Array<NativePokerState | PokerStateBytes>,
       config: NativeBotConfig,
       opponentModels?: Array<NativeOpponentModel | null>
-    ): DecisionDiagnosticResult[];
+    ): Array<DecisionDiagnosticResult | DecisionBatchErrorRow>;
     /**
      * PKO knockout matrix, entry `i*n+j` = P(i collects j's bounty). P(j busts) = 1 − stack_j/total
      * (Harville first place). Given a bust, collectors are weighted by stack_i × stack_i/(stack_i+stack_j)
@@ -2362,13 +2382,18 @@ declare namespace api {
     evaluateOmahaBestHand(
       holeCards: CardInput,
       boardCards: CardInput,
-      options?: EvaluateBestHandOptions
+      options: EvaluateBestHandSlimOptions
+    ): HandEvalResultSlim;
+    evaluateOmahaBestHand(
+      holeCards: CardInput,
+      boardCards: CardInput,
+      options?: EvaluateBestHandFullOptions
     ): HandEvalResult;
     evaluateOmahaBestHand(
       holeCards: CardInput,
       boardCards: CardInput,
-      options: { format: 'slim' }
-    ): HandEvalResultSlim;
+      options?: EvaluateBestHandOptions
+    ): HandEvalResult | HandEvalResultSlim;
 
     /**
      * Omaha Hi strength using the same `pack_hand_strength` encoding as `evaluateHandStrength`
@@ -2448,13 +2473,18 @@ declare namespace api {
     evaluateBigOBestHand(
       holeCards: CardInput,
       boardCards: CardInput,
-      options?: EvaluateBestHandOptions
+      options: EvaluateBestHandSlimOptions
+    ): HandEvalResultSlim;
+    evaluateBigOBestHand(
+      holeCards: CardInput,
+      boardCards: CardInput,
+      options?: EvaluateBestHandFullOptions
     ): HandEvalResult;
     evaluateBigOBestHand(
       holeCards: CardInput,
       boardCards: CardInput,
-      options: { format: 'slim' }
-    ): HandEvalResultSlim;
+      options?: EvaluateBestHandOptions
+    ): HandEvalResult | HandEvalResultSlim;
 
     /**
      * Big O strength using the same `pack_hand_strength` encoding as `evaluateHandStrength`
@@ -2743,8 +2773,9 @@ declare namespace api {
      * 7-card stud hi. Best 5-card high from **3–7** cards. Same `HandEvalResult` as
      * `evaluateBestHand`.
      */
-    evaluateStudBestHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult;
-    evaluateStudBestHand(cards: CardInput, options: { format: 'slim' }): HandEvalResultSlim;
+    evaluateStudBestHand(cards: CardInput, options: EvaluateBestHandSlimOptions): HandEvalResultSlim;
+    evaluateStudBestHand(cards: CardInput, options?: EvaluateBestHandFullOptions): HandEvalResult;
+    evaluateStudBestHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult | HandEvalResultSlim;
 
     /**
      * Razz (7-card A-to-5 low). Aces low. Straights and flushes do **not** count.
@@ -2752,8 +2783,9 @@ declare namespace api {
      * `kickers` are ace-low values (A=0 … K=12), unlike the hold'em evaluators; hands with fewer
      * than 5 cards pad with 13. Distinct from 2-7 lowball.
      */
-    evaluateRazzHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult;
-    evaluateRazzHand(cards: CardInput, options: { format: 'slim' }): HandEvalResultSlim;
+    evaluateRazzHand(cards: CardInput, options: EvaluateBestHandSlimOptions): HandEvalResultSlim;
+    evaluateRazzHand(cards: CardInput, options?: EvaluateBestHandFullOptions): HandEvalResult;
+    evaluateRazzHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult | HandEvalResultSlim;
 
     /** True iff the best 5-card A-5 low is A2345 (suited wheel still counts). */
     razzWheelIsNuts(cards: CardInput): boolean;

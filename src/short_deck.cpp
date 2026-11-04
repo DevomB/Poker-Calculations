@@ -752,26 +752,38 @@ double simulate_short_deck_equity_vs_range(const std::vector<Card>& hero_hole, c
     const int h0 = deck_index_from_card(hero_hole[0]);
     const int h1 = deck_index_from_card(hero_hole[1]);
     const int need_board = 5 - static_cast<int>(board.size());
+    // Draw only from combos hero and the board leave possible, with weights scaled by the largest of
+    // them (exact; see weight_scale_exponent).
+    std::vector<const WeightedHoleCombo*> live_combos;
+    double largest = 0.0;
+    for (const WeightedHoleCombo& c : villain_range.combos) {
+        if (((dead >> c.card_a) & 1ULL) != 0 || ((dead >> c.card_b) & 1ULL) != 0 || c.card_a < kLiveLo ||
+            c.card_b < kLiveLo || !(c.weight > 0.0)) {
+            continue;
+        }
+        live_combos.push_back(&c);
+        largest = std::max(largest, c.weight);
+    }
+    if (live_combos.empty()) {
+        throw std::invalid_argument("simulateShortDeckEquityVsRange: no unblocked combos");
+    }
+    const int scale = weight_scale_exponent(largest);
+    std::vector<double> cumulative;
+    cumulative.reserve(live_combos.size());
+    double total = 0.0;
+    for (const WeightedHoleCombo* c : live_combos) {
+        total += std::ldexp(c->weight, scale);
+        cumulative.push_back(total);
+    }
     double sum = 0.0;
     int used = 0;
     for (int t = 0; t < num_simulations; ++t) {
-        std::uniform_real_distribution<double> dist(0.0, villain_range.weight_sum);
+        std::uniform_real_distribution<double> dist(0.0, total);
         const double pick = dist(rng);
-        double acc = 0.0;
-        const WeightedHoleCombo* chosen = &villain_range.combos.back();
-        for (const WeightedHoleCombo& c : villain_range.combos) {
-            acc += c.weight;
-            if (pick <= acc) {
-                chosen = &c;
-                break;
-            }
-        }
-        if (((dead >> chosen->card_a) & 1ULL) != 0 || ((dead >> chosen->card_b) & 1ULL) != 0) {
-            continue;
-        }
-        if (chosen->card_a < kLiveLo || chosen->card_b < kLiveLo) {
-            continue;
-        }
+        const auto it = std::lower_bound(cumulative.begin(), cumulative.end(), pick);
+        const WeightedHoleCombo* chosen =
+            live_combos[std::min<std::size_t>(static_cast<std::size_t>(it - cumulative.begin()),
+                                              live_combos.size() - 1)];
         std::uint64_t used_mask = dead | (1ULL << chosen->card_a) | (1ULL << chosen->card_b);
         std::vector<int> live = live_indices(used_mask);
         if (static_cast<int>(live.size()) < need_board) {
@@ -827,10 +839,10 @@ SparseRange short_deck_range_from_class_weights(const std::array<double, kShortD
                     continue;
                 }
                 out.combos.push_back(WeightedHoleCombo{i0, i1, w});
+                out.weight_sum += w;
             }
         }
     }
-    out.weight_sum = rescale_range_weights(out.combos, &out.weight_shift);
     return out;
 }
 

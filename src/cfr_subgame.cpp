@@ -53,7 +53,9 @@ struct LiveCombo {
     int card_a{0};
     int card_b{0};
     int index{0};
-    double weight{0.0};
+    double weight{0.0};  // caller's units
+    double mant{0.0};    // weight = mant * 2^exp, mant in [0.5, 1): weight products stay representable
+    int exp{0};
     std::uint64_t strength{0};
     std::uint64_t mask{0};
     HandRank category{HandRank::HighCard};
@@ -77,6 +79,7 @@ struct LiveCombo {
         live.card_b = c.card_b;
         live.index = combo_index_1326(c.card_a, c.card_b);
         live.weight = c.weight;
+        live.mant = std::frexp(c.weight, &live.exp);
         live.mask = (std::uint64_t{1} << c.card_a) | (std::uint64_t{1} << c.card_b);
         if (eval_strength) {
             const std::vector<Card> hole{card_from_deck_index(c.card_a), card_from_deck_index(c.card_b)};
@@ -129,18 +132,6 @@ void write_mix_1326(std::vector<double>& dest, const std::vector<LiveCombo>& com
     return fold_p * pot + call_p * ev_call;
 }
 
-struct PairAcc {
-    double z{0.0};
-    double ev_check{0.0};
-    double ev_bet{0.0};
-};
-
-void add_pair_check_bet(PairAcc& acc, double w, double eq, double pot, double bet, double call_p) {
-    acc.z += w;
-    acc.ev_check += w * (eq * pot);
-    acc.ev_bet += w * bettor_leaf(eq, pot, bet, call_p);
-}
-
 [[nodiscard]] double defender_call_ev(double eq_bettor, double pot, double bet) {
     return (1.0 - eq_bettor) * (pot + 2.0 * bet) - bet;
 }
@@ -173,143 +164,132 @@ struct RiverWorkspace {
     ws.bettor = live_combos(bettor_range, board, true);
     ws.defender = live_combos(defender_range, board, true);
     ws.eq.assign(ws.bettor.size() * ws.defender.size(), -1.0);
+    bool any_pair = false;
     for (std::size_t i = 0; i < ws.bettor.size(); ++i) {
         for (std::size_t j = 0; j < ws.defender.size(); ++j) {
             if (!overlap(ws.bettor[i], ws.defender[j])) {
                 ws.eq[i * ws.defender.size() + j] = river_equity(ws.bettor[i], ws.defender[j]);
+                any_pair = true;
             }
         }
+    }
+    if (!any_pair) {
+        throw std::invalid_argument("every bettor combo shares a card with every defender combo");
     }
     return ws;
 }
 
 void values_for_bettor(const RiverWorkspace& ws, std::size_t i, const std::vector<double>& call_p, double& v_check,
                        double& v_bet) {
-    PairAcc acc;
+    // Averages over the defender combos that can be dealt with bettor combo i, weighted by range weight.
+    ScaledWeightedSums<2> acc;
     for (std::size_t j = 0; j < ws.defender.size(); ++j) {
         const double e = ws.equity(i, j);
         if (e < 0.0) {
             continue;
         }
-        add_pair_check_bet(acc, ws.defender[j].weight, e, ws.pot, ws.bet, call_p[j]);
+        acc.add(ws.defender[j].mant, ws.defender[j].exp,
+                {e * ws.pot, bettor_leaf(e, ws.pot, ws.bet, call_p[j])});
     }
-    if (acc.z <= 0.0) {
-        v_check = 0.0;
-        v_bet = 0.0;
-        return;
-    }
-    v_check = acc.ev_check / acc.z;
-    v_bet = acc.ev_bet / acc.z;
+    v_check = acc.ratio(0);
+    v_bet = acc.ratio(1);
 }
 
 void values_for_defender(const RiverWorkspace& ws, std::size_t j, const std::vector<double>& bet_p, double& v_fold,
                          double& v_call) {
     v_fold = 0.0;
-    double z = 0.0;
-    double ev_call = 0.0;
+    // Bettor combos that can face defender combo j, weighted by range weight times bet frequency.
+    ScaledWeightedSums<1> acc;
     for (std::size_t i = 0; i < ws.bettor.size(); ++i) {
         const double e = ws.equity(i, j);
         if (e < 0.0) {
             continue;
         }
-        const double w = ws.bettor[i].weight * bet_p[i];
-        if (w <= 0.0) {
-            continue;
-        }
-        z += w;
-        ev_call += w * defender_call_ev(e, ws.pot, ws.bet);
+        acc.add(ws.bettor[i].mant * bet_p[i], ws.bettor[i].exp, {defender_call_ev(e, ws.pot, ws.bet)});
     }
-    v_call = z > 0.0 ? ev_call / z : 0.0;
+    v_call = acc.ratio();
 }
 
 [[nodiscard]] RiverProfileEv profile_ev(const RiverWorkspace& ws, const std::vector<double>& bet_p,
                                         const std::vector<double>& call_p) {
-    double z = 0.0;
-    double ev_b = 0.0;
+    // Pairs weighted by the product of both range weights, kept as mantissa * 2^exponent.
+    ScaledWeightedSums<1> acc;
     for (std::size_t i = 0; i < ws.bettor.size(); ++i) {
         for (std::size_t j = 0; j < ws.defender.size(); ++j) {
             const double e = ws.equity(i, j);
             if (e < 0.0) {
                 continue;
             }
-            const double w = ws.bettor[i].weight * ws.defender[j].weight;
-            z += w;
             const double check_ev = e * ws.pot;
             const double bet_ev = bettor_leaf(e, ws.pot, ws.bet, call_p[j]);
-            ev_b += w * ((1.0 - bet_p[i]) * check_ev + bet_p[i] * bet_ev);
+            acc.add(ws.bettor[i].mant * ws.defender[j].mant, ws.bettor[i].exp + ws.defender[j].exp,
+                    {(1.0 - bet_p[i]) * check_ev + bet_p[i] * bet_ev});
         }
     }
     RiverProfileEv out;
-    if (z <= 0.0) {
+    if (acc.den <= 0.0) {
         return out;
     }
-    out.ev_bettor = ev_b / z;
+    out.ev_bettor = acc.ratio();
     out.ev_defender = ws.pot - out.ev_bettor;
     return out;
 }
 
 [[nodiscard]] double range_weighted_freq(const std::vector<LiveCombo>& combos, const std::vector<double>& p) {
-    double z = 0.0;
-    double s = 0.0;
+    ScaledWeightedSums<1> acc;
     for (std::size_t i = 0; i < combos.size(); ++i) {
-        z += combos[i].weight;
-        s += combos[i].weight * p[i];
+        acc.add(combos[i].mant, combos[i].exp, {p[i]});
     }
-    return z > 0.0 ? s / z : 0.0;
+    return acc.ratio();
 }
 
 void br_bettor_mix(const RiverWorkspace& ws, const std::vector<double>& call_p, std::vector<double>& bet_p,
                    double& value) {
     bet_p.assign(ws.bettor.size(), 0.0);
-    double z = 0.0;
-    double ev = 0.0;
+    ScaledWeightedSums<1> acc;
     for (std::size_t i = 0; i < ws.bettor.size(); ++i) {
         double v_check = 0.0;
         double v_bet = 0.0;
         values_for_bettor(ws, i, call_p, v_check, v_bet);
         bet_p[i] = v_bet >= v_check ? 1.0 : 0.0;
-        double row = 0.0;
+        // Combo i's weight times the total weight of the defender combos it can face.
+        ScaledWeightedSums<0> row;
         for (std::size_t j = 0; j < ws.defender.size(); ++j) {
             if (ws.equity(i, j) >= 0.0) {
-                row += ws.defender[j].weight;
+                row.add(ws.defender[j].mant, ws.defender[j].exp, {});
             }
         }
-        const double w = ws.bettor[i].weight * row;
-        z += w;
-        ev += w * std::max(v_check, v_bet);
+        if (row.any) {
+            acc.add(ws.bettor[i].mant * row.den, ws.bettor[i].exp + row.exp, {std::max(v_check, v_bet)});
+        }
     }
-    value = z > 0.0 ? ev / z : 0.0;
+    value = acc.ratio();
 }
 
 void br_defender_mix(const RiverWorkspace& ws, const std::vector<double>& bet_p, std::vector<double>& call_p,
                      double& value) {
     call_p.assign(ws.defender.size(), 0.0);
-    double z = 0.0;
-    double ev = 0.0;
+    ScaledWeightedSums<1> acc;
     for (std::size_t j = 0; j < ws.defender.size(); ++j) {
         double v_fold = 0.0;
         double v_call = 0.0;
         values_for_defender(ws, j, bet_p, v_fold, v_call);
         call_p[j] = v_call >= v_fold ? 1.0 : 0.0;
         // Defender EV includes check-back mass, not only the bet node.
-        double pair_z = 0.0;
-        double pair_ev = 0.0;
+        ScaledWeightedSums<1> column;
         for (std::size_t i = 0; i < ws.bettor.size(); ++i) {
             const double e = ws.equity(i, j);
             if (e < 0.0) {
                 continue;
             }
-            const double w = ws.bettor[i].weight * ws.defender[j].weight;
-            pair_z += w;
             const double check_ev = (1.0 - e) * ws.pot;
             const double mixed = (1.0 - bet_p[i]) * check_ev +
                                  bet_p[i] * (call_p[j] > 0.5 ? defender_call_ev(e, ws.pot, ws.bet) : 0.0);
-            pair_ev += w * mixed;
+            column.add(ws.bettor[i].mant * ws.defender[j].mant, ws.bettor[i].exp + ws.defender[j].exp, {mixed});
         }
-        z += pair_z;
-        ev += pair_ev;
+        acc.merge(column);
     }
-    value = z > 0.0 ? ev / z : 0.0;
+    value = acc.ratio();
 }
 
 void fill_local_mix(const std::vector<double>& mix, const std::vector<LiveCombo>& combos,
@@ -555,29 +535,25 @@ HuRiverCheckBetTreeResult solve_hu_river_check_bet_tree(double pot, double bet_s
     fill_local_mix(out.solve.bet_mix_1326, ws.bettor, bet_p);
     fill_local_mix(out.solve.call_mix_1326, ws.defender, call_p);
 
-    double bet_z[4]{};
-    double bet_s[4]{};
-    double call_z[4]{};
-    double call_s[4]{};
+    // Each class average is scaled by its own members, so a class of small weights keeps its value.
+    std::array<ScaledWeightedSums<1>, 4> bet_cls{};
+    std::array<ScaledWeightedSums<1>, 4> call_cls{};
     for (std::size_t i = 0; i < ws.bettor.size(); ++i) {
-        const int b = class_bucket(ws.bettor[i].category);
-        bet_z[b] += ws.bettor[i].weight;
-        bet_s[b] += ws.bettor[i].weight * bet_p[i];
+        bet_cls[static_cast<std::size_t>(class_bucket(ws.bettor[i].category))].add(ws.bettor[i].mant,
+                                                                                   ws.bettor[i].exp, {bet_p[i]});
     }
     for (std::size_t j = 0; j < ws.defender.size(); ++j) {
-        const int b = class_bucket(ws.defender[j].category);
-        call_z[b] += ws.defender[j].weight;
-        call_s[b] += ws.defender[j].weight * call_p[j];
+        call_cls[static_cast<std::size_t>(class_bucket(ws.defender[j].category))].add(
+            ws.defender[j].mant, ws.defender[j].exp, {call_p[j]});
     }
-    auto avg = [](double s, double z) { return z > 0.0 ? s / z : 0.0; };
-    out.classes.air_bet = avg(bet_s[0], bet_z[0]);
-    out.classes.draw_bet = avg(bet_s[1], bet_z[1]);
-    out.classes.made_bet = avg(bet_s[2], bet_z[2]);
-    out.classes.strong_bet = avg(bet_s[3], bet_z[3]);
-    out.classes.air_call = avg(call_s[0], call_z[0]);
-    out.classes.draw_call = avg(call_s[1], call_z[1]);
-    out.classes.made_call = avg(call_s[2], call_z[2]);
-    out.classes.strong_call = avg(call_s[3], call_z[3]);
+    out.classes.air_bet = bet_cls[0].ratio();
+    out.classes.draw_bet = bet_cls[1].ratio();
+    out.classes.made_bet = bet_cls[2].ratio();
+    out.classes.strong_bet = bet_cls[3].ratio();
+    out.classes.air_call = call_cls[0].ratio();
+    out.classes.draw_call = call_cls[1].ratio();
+    out.classes.made_call = call_cls[2].ratio();
+    out.classes.strong_call = call_cls[3].ratio();
 
     std::vector<std::size_t> order(ws.bettor.size());
     for (std::size_t i = 0; i < order.size(); ++i) {
@@ -598,7 +574,7 @@ HuRiverCheckBetTreeResult solve_hu_river_check_bet_tree(double pot, double bet_s
         row.card_a = c.card_a;
         row.card_b = c.card_b;
         row.bet_frequency = bet_p[order[static_cast<std::size_t>(t)]];
-        row.weight = std::ldexp(c.weight, -bettor_range.weight_shift);  // in the caller's units
+        row.weight = c.weight;  // in the caller's units
         out.top_bet_combos.push_back(row);
     }
     return out;

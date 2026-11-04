@@ -23,6 +23,20 @@ function checkReleaseFixes(poker, encode) {
     assert.equal(poker.exactHuEquityVsRange(['Ah', 'Kd'], ['Qs', '7c', '2d', '9h', '3s'], range), 0.5, `range scale ${s}`);
   }
   assert.throws(() => poker.exactHuEquityVsRange(['Ah', 'Kd'], ['Qs', '7c', '2d', '9h', '3s'], new Float64Array(1326).fill(NaN)), /finite and non-negative/);
+  // Scales come from the combos that take part: 1e200 combos that conflict cannot erase the rest.
+  const riverBoard = ['2c', '7d', '9s', 'Jc', 'Qh'];
+  const bettor = { indices: [id('Kh'), id('Kd'), id('3c'), id('4d')], weights: [1e200, 1e-200] };
+  const defender = { indices: Uint32Array.of(id('Kh'), id('Kd'), id('5c'), id('6d')), weights: [1e200, 1e-200] };
+  assert.deepEqual(poker.evOfStrategyProfile(100, 50, bettor, defender, riverBoard, 0.5, 0.5), { evBettor: 62.5, evDefender: 37.5 });
+  const wide = poker.materializeVillainRangeAfterBlockers(bettor, ['As', 'Ad'], []);
+  assert.equal(wide.weights1326[ci(id('3c'), id('4d'))], 1e-200);
+  // A combo listed twice is one combo; deck ids are checked before conversion.
+  const dup = poker.materializeVillainRangeAfterBlockers({ indices: [id('Kh'), id('Kd'), id('Kd'), id('Kh')], weights: [2, 3] }, ['As', 'Ad'], []);
+  assert.deepEqual([dup.weightSum, dup.liveComboCount, dup.shannonEntropy], [5, 1, 0]);
+  for (const bad of [Number.NaN, 1.9, 4294967297]) {
+    assert.throws(() => poker.exactRangeDominatedComboFraction(['As', 'Ad'], riverBoard, { indices: [bad, 5], weights: [1] }), /integer deck id/);
+  }
+  assert.throws(() => poker.simulateEquityVsRanges(['As', 'Ad'], [], [{ indices: [id('Kh'), id('Kd')], weights: [1] }], 100, 1, { maxAttempts: 1 }), /at least numSimulations/);
   // Wilson interval: 100 of 100 reaches 1.
   const w = poker.wilsonScoreInterval(100, 100, 1.96);
   assert.equal(w.upper, 1);

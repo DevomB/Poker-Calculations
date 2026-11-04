@@ -5,6 +5,7 @@
 #include "poker/deck_bitset.hpp"
 #include "poker/fast_evaluator.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <stdexcept>
@@ -135,6 +136,15 @@ double exact_hu_equity_vs_range(const std::vector<Card>& hero_hole_cards,
     double total = 0.0;
     throw_if_cancelled(should_cancel);
 
+    // Scale by the largest weight among the combos that take part (exact; see weight_scale_exponent).
+    double largest = 0.0;
+    for (const WeightedHoleCombo& combo : villain_range.combos) {
+        if (!used.test(combo.card_a) && !used.test(combo.card_b)) {
+            largest = std::max(largest, combo.weight);
+        }
+    }
+    const int scale = weight_scale_exponent(largest);
+
     for (const WeightedHoleCombo& combo : villain_range.combos) {
         throw_if_cancelled(should_cancel);
         if (used.test(combo.card_a) || used.test(combo.card_b)) {
@@ -144,7 +154,7 @@ double exact_hu_equity_vs_range(const std::vector<Card>& hero_hole_cards,
         u2.set(combo.card_a);
         u2.set(combo.card_b);
         const std::vector<int> after_villain = u2.unused_indices();
-        const double w = combo.weight;
+        const double w = std::ldexp(combo.weight, scale);
         std::uint8_t hero_r[7]{};
         std::uint8_t hero_s[7]{};
         std::uint8_t vil_r[7]{};
@@ -202,7 +212,6 @@ double equity_delta_if_card_removed(const std::vector<Card>& hero_hole_cards,
     const std::uint64_t dead = extra_dead.mask;
     SparseRange filtered;
     filtered.weight_sum = 0.0;
-    filtered.weight_shift = villain_range.weight_shift;
     for (const WeightedHoleCombo& c : villain_range.combos) {
         if ((dead & (std::uint64_t{1} << c.card_a)) != 0 || (dead & (std::uint64_t{1} << c.card_b)) != 0) {
             continue;
