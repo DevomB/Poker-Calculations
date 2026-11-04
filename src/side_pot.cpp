@@ -7,6 +7,7 @@
 #include <iterator>
 #include <numeric>
 #include <stdexcept>
+#include <string>
 
 namespace poker {
 
@@ -64,8 +65,14 @@ std::vector<double> layered_pot_chip_ev_from_equities(
     }
     const std::size_t n_players = equity_player_by_layer.size();
     const std::size_t n_layers = layer_pot_chips.size();
-    if (equity_player_by_layer[0].size() != n_layers) {
-        throw std::invalid_argument("equity columns must match number of pot layers");
+    // Every row is checked before any is indexed: a short row would be read past its end.
+    for (std::size_t i = 0; i < n_players; ++i) {
+        if (equity_player_by_layer[i].size() != n_layers) {
+            throw std::invalid_argument("equity row " + std::to_string(i) + " has " +
+                                        std::to_string(equity_player_by_layer[i].size()) +
+                                        " entries; every row needs one per pot layer (" +
+                                        std::to_string(n_layers) + ")");
+        }
     }
     for (double p : layer_pot_chips) {
         if (!std::isfinite(p) || p < 0.0) {

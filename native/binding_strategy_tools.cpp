@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <numeric>
 #include <optional>
 #include <stdexcept>
@@ -167,14 +168,11 @@ bool notation_to_combos(const std::string& notation, std::vector<int>& indices) 
     return true;
 }
 
-double equity_vs_range_safe(const std::vector<poker::Card>& hero, const std::vector<poker::Card>& board,
-                            const std::vector<double>& range) {
-    try {
-        const auto sparse = sparse_from_dense(range, dead_mask_from_groups(hero, board));
-        return poker::exact_hu_equity_vs_range(hero, board, sparse);
-    } catch (...) {
-        return 0.0;
-    }
+/// Exact equity vs a dense range; invalid cards, an empty range, and other errors propagate.
+double equity_vs_dense_range(const std::vector<poker::Card>& hero, const std::vector<poker::Card>& board,
+                             const std::vector<double>& range) {
+    const auto sparse = sparse_from_dense(range, dead_mask_from_groups(hero, board));
+    return poker::exact_hu_equity_vs_range(hero, board, sparse);
 }
 
 /// Legal actions for `player_index` (poker::legal_actions_for), reported as `actingIndex`.
@@ -680,23 +678,36 @@ Napi::Value RangeRemovalSensitivityVsHero(const Napi::CallbackInfo& info) {
     if (!read_range_dense(info[2], r, &err)) {
         POKER_FAIL_TYPE(env, err);
     }
-    const double base = equity_vs_range_safe(hero, board, r);
-    std::vector<double> out(52, 0.0);
-    const std::uint64_t dead = dead_mask_from_groups(hero, board);
-    for (int c = 0; c < 52; ++c) {
-        if ((dead & (std::uint64_t{1} << c)) != 0) {
-            continue;
-        }
-        std::vector<double> blocked = r;
-        for (int i = 0; i < static_cast<int>(blocked.size()); ++i) {
-            const auto [a, b] = combo_cards(i);
-            if (a == c || b == c) {
-                blocked[static_cast<std::size_t>(i)] = 0.0;
+    try {
+        const double base = equity_vs_dense_range(hero, board, r);
+        std::vector<double> out(52, 0.0);
+        const std::uint64_t dead = dead_mask_from_groups(hero, board);
+        for (int c = 0; c < 52; ++c) {
+            if ((dead & (std::uint64_t{1} << c)) != 0) {
+                continue;  // hero's and the board's cards: villain cannot hold them anyway
             }
+            std::vector<double> blocked = r;
+            bool any_left = false;
+            for (int i = 0; i < static_cast<int>(blocked.size()); ++i) {
+                const auto [a, b] = combo_cards(i);
+                double& w = blocked[static_cast<std::size_t>(i)];
+                if (a == c || b == c) {
+                    w = 0.0;
+                } else if (w > 0.0 && (dead & ((std::uint64_t{1} << a) | (std::uint64_t{1} << b))) == 0) {
+                    any_left = true;
+                }
+            }
+            // Every live combo holds this card: "villain does not hold it" is impossible, so the
+            // change is undefined (NaN) rather than an invented equity of 0.
+            out[static_cast<std::size_t>(c)] =
+                any_left ? equity_vs_dense_range(hero, board, blocked) - base
+                         : std::numeric_limits<double>::quiet_NaN();
         }
-        out[static_cast<std::size_t>(c)] = equity_vs_range_safe(hero, board, blocked) - base;
+        return write_dense(env, out);
+    } catch (const std::exception& e) {
+        Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+        return env.Null();
     }
-    return write_dense(env, out);
 }
 
 Napi::Value BlockerMatrixByCard(const Napi::CallbackInfo& info) {

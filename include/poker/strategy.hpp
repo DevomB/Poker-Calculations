@@ -15,9 +15,11 @@ namespace poker {
 [[nodiscard]] int hero_player_index(const PokerGameState& state, int hero_seat);
 
 /**
- * Rule-based no-limit decision from Monte Carlo equity (`cfg.monte_carlo_simulations` >= 1 trials
- * against `cfg.monte_carlo_villains` random hands), pot odds, and call EV. A short stack's call is
- * priced on the chips it can actually win (side-pot layers) and costs only its stack. Raises are
+ * Rule-based no-limit decision from Monte Carlo equity (`cfg.monte_carlo_simulations` >= 1 trials),
+ * pot odds, and call EV. With nothing to call, equity is against `cfg.monte_carlo_villains` random
+ * hands. A call is priced on side-pot layers (`side_pot_ladder_from_commitments` after hero's chips
+ * go in): hero's expected winnings from each layer it can win, against random hands for that
+ * layer's live players, minus the call (its stack when short). Raises are
  * sized inside the legal range. Throws std::invalid_argument when the simulation count is below 1,
  * the hero seat is empty, or hero cannot act (hand over, folded, or all-in). The optional
  * `OpponentModel` shifts equity by `(aggression_factor - 0.5) * cfg.opponent_aggression_weight`, a

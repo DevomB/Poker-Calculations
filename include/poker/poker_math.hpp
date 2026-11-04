@@ -57,16 +57,19 @@ enum class Multiway_symmetric_pot_share_model {
 [[nodiscard]] double rule_of_two_equity(double outs);
 
 /**
- * Implied-odds breakeven: average extra future win (beyond current pot + call) so a call is
- * neutral. Returns +infinity if `equity <= 0`.
+ * Implied-odds breakeven: the average extra chips hero must win later for a call to break even,
+ * `max(0, to_call / equity - pot - to_call)` with `pot` including villain's bet. Inverse of
+ * `implied_odds_required_equity_from_future_win` where positive. Returns +infinity if `equity <= 0`.
  */
 [[nodiscard]] double implied_breakeven_future_win(double pot_before_call, double to_call,
                                                   double equity);
 
-/// Polarized river ratio `bet / (pot + 2*bet)` before hero's bet.
+/// Bluffs per value bet that make a bluff catcher indifferent to calling a polarized bet:
+/// `bet / (pot + bet)` (1/2 for a pot-sized bet). The bluff share of all bets is
+/// `bet / (pot + 2 bet)`, which is `breakeven_call_equity(pot + bet, bet)`. 0 when `bet` is 0.
 [[nodiscard]] double bluff_to_value_ratio(double pot_before_bet, double bet_size);
 
-/// `1 / bluff_to_value_ratio`; returns +infinity when bluff ratio is `0`.
+/// Value bets per bluff, `(pot + bet) / bet` = `1 / bluff_to_value_ratio`; +infinity when `bet` is 0.
 [[nodiscard]] double value_to_bluff_ratio(double pot_before_bet, double bet_size);
 
 // --- Sizing & commitment ---
@@ -319,6 +322,8 @@ struct Wilson_interval {
 [[nodiscard]] double breakeven_call_equity_with_rake(double pot_before_call, double to_call,
                                                      double rake_fraction, double rake_cap);
 
+/// Fold equity where `expected_value_raise_with_rake` is 0: a fold wins `pot - rake(pot + bet)`, a
+/// call pays `equity * (total - rake(total)) - bet`. 0 when the called branch is already profitable.
 [[nodiscard]] double breakeven_fold_equity_semi_bluff_with_rake(double pot_before_hero_bet,
                                                                 double hero_bet_size,
                                                                 double equity_when_called,
@@ -327,8 +332,9 @@ struct Wilson_interval {
                                                                 double rake_cap);
 
 /**
- * pure-bluff breakeven FE when a fold wins `pot_before + hero_bet - rake` (rake on chips
- * shipped after villain folds).
+ * Pure-bluff breakeven fold equity `bet / (pot - rake(pot + bet) + bet)`: a fold wins the pot
+ * before the bet less the rake on pot + bet (as in `expected_value_raise_with_rake`), a call loses
+ * the bet. With no rake this is `breakeven_fold_equity_pure_bluff`.
  */
 [[nodiscard]] double breakeven_fold_equity_pure_bluff_with_rake(double pot_before_hero_bet,
                                                                 double hero_bet_or_call_size,

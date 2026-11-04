@@ -42,6 +42,18 @@ void validate_holdem_spot(const std::vector<Card>& player_hand,
                                           int villains = 1,
                                           const CancelPredicate* cancel = nullptr);
 
+/**
+ * Hero's mean showdown share against nested sets of random opponents, from the same deals: each
+ * trial deals `max(opponent_counts)` random hands and completes the board, and `out[i]` averages
+ * hero's share against the first `opponent_counts[i]` of them (1 when that count is 0). Used to
+ * price side-pot layers, whose eligible players are nested.
+ */
+[[nodiscard]] std::vector<double> simulate_nested_showdown_shares(const std::vector<Card>& player_hand,
+                                                                  const std::vector<Card>& community_cards,
+                                                                  const std::vector<int>& opponent_counts,
+                                                                  int num_simulations, std::mt19937& rng,
+                                                                  const CancelPredicate* cancel = nullptr);
+
 /// Same as repeated `simulate_hand_outcome`, split across `num_threads` workers.
 [[nodiscard]] float parallel_hand_simulation(const std::vector<Card>& player_hand,
                                              const std::vector<Card>& community_cards,

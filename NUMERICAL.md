@@ -52,8 +52,33 @@
   `breakevenCallEquity(pot, toCall) = toCall / (pot + toCall)`.
 - Final pot after a heads-up call is `pot + toCall`; after hero bets `b` and is called it is `pot + 2b`.
   Rake variants take rake from that final pot and reduce to their unraked base at zero rake.
+- Bets with rake (`expectedValueRaiseWithRake` and the breakeven solvers that match it): when villain
+  folds, hero's bet comes back and hero wins `pot − rake(pot + b)`; when called, hero gets
+  `e × (T − rake(T)) − b` for final pot `T`. So the pure-bluff threshold is
+  `b / (pot − rake(pot + b) + b)` (1/3 for a half-pot bet without rake), and the semi-bluff threshold
+  solves `fe × (pot − rake(pot + b)) + (1 − fe) × (e × (T − rake(T)) − b) = 0`.
+- Implied odds: a call breaks even when hero later wins `W = toCall / e − pot − toCall` more
+  (`impliedBreakevenFutureWin`, floored at 0), the inverse of
+  `impliedOddsRequiredEquityFromFutureWin(pot, toCall, W) = toCall / (pot + toCall + W)`.
+- Polarized bets: a bluff catcher calling `b` to win `pot + b` is indifferent when bluffs make up
+  `b / (pot + 2b)` of the bets, i.e. `bluffToValueRatio = b / (pot + b)` bluffs per value bet and
+  `valueToBluffRatio = (pot + b) / b` (1/2 and 2 for a pot-sized bet). With rake the caller wins
+  `pot + 2b − rake − b`, so the ratio is `b / (pot + b − rake)`.
 - Multi-street pure bluffs: a fold on street *k* wins the pot plus villain's earlier calls; being
   called down loses the sum of hero's bets. The `*SameFoldEquity` solvers return the root of that EV.
+
+## Runout statistics against a range
+
+A future board is not uniform once villain's range is known: the cards villain holds cannot come.
+Given hero, the board, and range weights `w(h)`, a completion `r` has probability proportional to
+`m(r) = Σ_{h ∩ r = ∅} w(h)` (every compatible hand leaves the same number of completions), and
+hero's equity on it is the exact equity against the hands compatible with `r`. Weighting by `m(r)`
+makes the average equity over runouts equal the direct equity on the current board.
+`exactHeroEquityRunoutQuantiles` with a range reports these predictive statistics (runouts with
+`m(r) = 0` cannot happen and are skipped); against one random hand every `m(r)` is equal.
+`exactInformationRegretVsClairvoyant` is `Σ_r m(r) max(0, EV_call(e_r)) / Σ_r m(r) −
+max(0, EV_call(e))`: both sides may fold, so it is never negative and is 0 when no runout makes a
+call profitable.
 
 ## PKO knockout matrix
 
@@ -134,16 +159,27 @@ equity only; side-pot payouts need `exactMultiwaySidePotChipEv` or the side-pot 
 
 - Most APIs return `double`; batch MC paths may use `float` internally then widen.
 
-## Short-stack calls (`decideAction`)
+## Calls into side pots (`decideAction`)
 
-When hero's stack `S` is below `toCall`, a call costs `S` and can only win what each player has put
-in up to hero's matched level. With this street's commitments `c_j`, hero's level after the call
-`h = c_hero + S`, and `side_pot_ladder_from_commitments` layers, the call is priced with
-`pot' = (pot - Σ c_j) + Σ_j min(c_j, h) - S` (hero's own term counted as `h`) and `toCall' = S`;
-earlier streets are fully matched by anyone who still has chips. Heads-up, villain's unmatched excess is returned. Example: villain bets
-100 into 10 and hero has 10 left, so `pot' = 20`, `toCall' = 10`, and at 40% equity the call is
-worth `0.4 × 20 − 0.6 × 10 = +2` (the raw `pot = 110, toCall = 100` would give −16). Hero's single
-equity estimate is applied to every layer hero can win. With a full call `pot' = pot`.
+A call is priced on the pot layers it can win. Hero's call (its stack, if that is less than
+`toCall`) is added to the commitments and `side_pot_ladder_from_commitments` splits them into
+layers; layers above hero's level are side pots hero cannot win or chips returned uncalled. Each
+layer is contested by the players who put chips into it and have not folded, and those sets are
+nested, so one simulation deals random hands to the deepest set and scores hero against each
+layer's players. The call's value is `Σ_L chips_L × share_L − cost`; the equity compared with the
+pot odds is `Σ_L chips_L × share_L / Σ_L chips_L`. Chips from earlier streets form one layer
+contested by every player still in the hand, unless `totalCommittedHand` is consistent
+(each at least `committedThisStreet` and summing to `pot`), in which case whole-hand commitments
+are layered. When every layer is contested by exactly `monteCarloVillains` opponents this is the
+plain equity estimate applied to the pot, as for heads-up spots.
+
+Example (royal flush on board, so everyone ties): commitments `[10, 1, 100]`, hero calls 90 with 90
+behind. The main pot is 3 chips three ways and the side pot 198 chips two ways, so hero collects
+`1 + 99 = 100` for 90. One three-way equity (1/3) on the whole 201-chip pot would value the call at
+`67 − 90 = −23`. Short stacks follow the same rule: villain bets 100 into 10 and hero has 10 left, so
+hero puts in 10 to contest 30 chips (the 10 in the middle, 10 of villain's bet, and its own 10; the
+other 90 go back to villain). At 40% equity that is `0.4 × 30 − 10 = +2`, where the raw
+`pot = 110, toCall = 100` would give −16.
 
 ## No-limit betting rules
 

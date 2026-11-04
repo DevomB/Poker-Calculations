@@ -206,15 +206,22 @@ double implied_breakeven_future_win(double pot_before_call, double to_call, doub
     if (e <= 0.0) {
         return std::numeric_limits<double>::infinity();
     }
-    const double immediate_win_total = pot_before_call + to_call;
-    return std::max(0.0, ((1.0 - e) * to_call) / e - immediate_win_total);
+    // Extra chips W hero must win later so that calling breaks even under the package convention
+    // (`pot` already holds villain's bet): e * (pot + W) - (1 - e) * toCall = 0, i.e.
+    // W = toCall / e - pot - toCall. Inverse of implied_odds_required_equity_from_future_win.
+    return std::max(0.0, to_call / e - pot_before_call - to_call);
 }
 
 double bluff_to_value_ratio(double pot_before_bet, double bet_size) {
     assert_non_neg_finite("potBeforeBet", pot_before_bet);
     assert_non_neg_finite("betSize", bet_size);
-    const double denom = pot_before_bet + 2.0 * bet_size;
-    return denom <= 0.0 ? 0.0 : bet_size / denom;
+    // A bluff catcher calling `bet` to win `pot + bet` is indifferent when bluffs make up
+    // bet / (pot + 2 bet) of the bets; bluffs per value bet are then bet / (pot + bet).
+    const double denom = pot_before_bet + bet_size;
+    if (bet_size == 0.0) {
+        return 0.0;
+    }
+    return bet_size / denom;
 }
 
 double value_to_bluff_ratio(double pot_before_bet, double bet_size) {
@@ -794,30 +801,37 @@ double breakeven_fold_equity_semi_bluff_with_rake(double pot_before_hero_bet, do
     }
     assert_positive_finite("totalPotIfCalled", total_pot_if_called);
     const double e = clamp01(equity_when_called);
-    const double rake = rake_from_pot(total_pot_if_called, rake_fraction, rake_cap);
-    const double net_when_called =
-        e * (total_pot_if_called - rake) - hero_bet_size;
+    // Terminal payouts of expected_value_raise_with_rake: called, hero gets e of the raked final pot
+    // and pays the bet; on a fold hero wins the pot before the bet, less the rake on pot + bet.
+    const double rake_called = rake_from_pot(total_pot_if_called, rake_fraction, rake_cap);
+    const double net_when_called = e * (total_pot_if_called - rake_called) - hero_bet_size;
     if (net_when_called >= 0.0) {
         return 0.0;
     }
-    const double den = net_when_called - pot_before_hero_bet;
-    if (std::abs(den) < 1e-15) {
-        throw std::invalid_argument("breakevenFoldEquitySemiBluffWithRake: degenerate (net equals pot)");
+    const double win_on_fold =
+        pot_before_hero_bet - rake_from_pot(pot_before_hero_bet + hero_bet_size, rake_fraction, rake_cap);
+    if (win_on_fold < 0.0) {
+        throw std::invalid_argument(
+            "breakevenFoldEquitySemiBluffWithRake: the rake exceeds the pot hero wins on a fold");
     }
-    return net_when_called / den;
+    // fe * win_on_fold + (1 - fe) * net_when_called = 0.
+    return -net_when_called / (win_on_fold - net_when_called);
 }
 
 double breakeven_fold_equity_pure_bluff_with_rake(double pot_before_hero_bet, double hero_bet_or_call_size,
                                                  double rake_fraction, double rake_cap) {
     assert_non_neg_finite("potBeforeHeroBet", pot_before_hero_bet);
     assert_non_neg_finite("heroBetOrCallSize", hero_bet_or_call_size);
-    const double shipped = pot_before_hero_bet + hero_bet_or_call_size;
-    const double rake = rake_from_pot(shipped, rake_fraction, rake_cap);
-    const double win_net = shipped - rake;
-    if (win_net + hero_bet_or_call_size <= 0.0) {
-        throw std::invalid_argument("pure bluff with rake: win net plus risk must be positive");
+    // A fold wins the pot before the bet (hero's own bet comes back), less the rake the package
+    // takes on pot + bet, as in expected_value_raise_with_rake; a call loses the bet.
+    const double win_on_fold =
+        pot_before_hero_bet -
+        rake_from_pot(pot_before_hero_bet + hero_bet_or_call_size, rake_fraction, rake_cap);
+    if (win_on_fold < 0.0) {
+        throw std::invalid_argument("pure bluff with rake: the rake exceeds the pot hero wins on a fold");
     }
-    return hero_bet_or_call_size / (win_net + hero_bet_or_call_size);
+    const double denom = win_on_fold + hero_bet_or_call_size;
+    return denom <= 0.0 ? 0.0 : hero_bet_or_call_size / denom;
 }
 
 double multiway_symmetric_breakeven_call_equity(double pot_before, double to_call,
@@ -1453,11 +1467,17 @@ double bluff_to_value_ratio_with_rake(double pot_before_bet, double bet_size, do
                                       double rake_cap) {
     assert_non_neg_finite("potBeforeBet", pot_before_bet);
     assert_non_neg_finite("betSize", bet_size);
-    // Bluff-catcher indifference: villain calls `bet` to win `pot + bet` less rake on the final
-    // pot, so bluff share = bet / (pot + 2 bet - rake). Zero rake reduces to bet/(pot + 2 bet).
+    // Bluff-catcher indifference: villain calls `bet` to win the raked final pot, so bluffs make up
+    // bet / (pot + 2 bet - rake) of the bets and bluffs per value bet are bet / (pot + bet - rake).
+    // Zero rake reduces to bluff_to_value_ratio.
+    if (bet_size == 0.0) {
+        return 0.0;
+    }
     const double final_pot = final_pot_after_hu_bet(pot_before_bet, bet_size);
-    const double net = net_pot_after_rake(final_pot, rake_fraction, rake_cap);
-    return net <= 0.0 ? 0.0 : bet_size / net;
+    const double value_share_denominator = net_pot_after_rake(final_pot, rake_fraction, rake_cap) - bet_size;
+    // When the rake leaves no more than the bet, calling never pays: any number of bluffs works.
+    return value_share_denominator <= 0.0 ? std::numeric_limits<double>::infinity()
+                                          : bet_size / value_share_denominator;
 }
 
 double value_to_bluff_ratio_with_rake(double pot_before_bet, double bet_size, double rake_fraction,
@@ -1467,7 +1487,7 @@ double value_to_bluff_ratio_with_rake(double pot_before_bet, double bet_size, do
     if (b == 0.0) {
         return std::numeric_limits<double>::infinity();
     }
-    return 1.0 / b;
+    return 1.0 / b;  // 0 when any number of bluffs is unprofitable to call
 }
 
 double spr_after_bet(double pot_before_bet, double bet_size, double effective_stack_before_bet) {

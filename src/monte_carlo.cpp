@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <future>
 #include <random>
+#include <stdexcept>
 #include <vector>
 
 namespace poker {
@@ -260,6 +261,74 @@ float parallel_hand_simulation(const std::vector<Card>& player_hand,
         return 0.0F;
     }
     return static_cast<float>(weighted / static_cast<double>(total));
+}
+
+std::vector<double> simulate_nested_showdown_shares(const std::vector<Card>& player_hand,
+                                                    const std::vector<Card>& community_cards,
+                                                    const std::vector<int>& opponent_counts,
+                                                    int num_simulations, std::mt19937& rng,
+                                                    const CancelPredicate* cancel) {
+    if (num_simulations < 1) {
+        throw std::invalid_argument("numSimulations must be at least 1");
+    }
+    int max_opp = 0;
+    for (int k : opponent_counts) {
+        if (k < 0) {
+            throw std::invalid_argument("opponent counts must be non-negative");
+        }
+        max_opp = std::max(max_opp, k);
+    }
+    std::vector<double> sums(opponent_counts.size(), 0.0);
+    if (max_opp == 0) {
+        return std::vector<double>(opponent_counts.size(), 1.0);  // nobody else can win any layer
+    }
+    validate_holdem_spot(player_hand, community_cards, max_opp);
+    throw_if_cancelled(cancel);
+    std::vector<bool> known(52, false);
+    collect_known(player_hand, community_cards, known);
+    std::vector<Card> pool = remaining_deck(known);
+    std::vector<std::uint64_t> strengths(static_cast<std::size_t>(max_opp) + 1);
+    std::uint8_t ranks[7]{};
+    std::uint8_t suits[7]{};
+    for (int i = 0; i < num_simulations; ++i) {
+        if (i > 0 && (i % kCancelCheckInterval) == 0) {
+            throw_if_cancelled(cancel);
+        }
+        std::shuffle(pool.begin(), pool.end(), rng);
+        std::size_t idx = 2 * static_cast<std::size_t>(max_opp);  // opponents take pool[0 .. 2m)
+        for (std::size_t b = 0; b < 5; ++b) {
+            const Card c = b < community_cards.size() ? community_cards[b] : pool[idx++];
+            ranks[2 + b] = c.rank();
+            suits[2 + b] = c.suit();
+        }
+        ranks[0] = player_hand[0].rank();
+        suits[0] = player_hand[0].suit();
+        ranks[1] = player_hand[1].rank();
+        suits[1] = player_hand[1].suit();
+        strengths[0] = evaluate_seven_strength_fast(ranks, suits);
+        for (int v = 0; v < max_opp; ++v) {
+            const std::size_t at = 2 * static_cast<std::size_t>(v);
+            ranks[0] = pool[at].rank();
+            suits[0] = pool[at].suit();
+            ranks[1] = pool[at + 1].rank();
+            suits[1] = pool[at + 1].suit();
+            strengths[static_cast<std::size_t>(v) + 1] = evaluate_seven_strength_fast(ranks, suits);
+        }
+        for (std::size_t l = 0; l < opponent_counts.size(); ++l) {
+            // hero_showdown_share over hero and the first opponent_counts[l] opponents.
+            int tied = 1;
+            bool beaten = false;
+            for (int v = 1; v <= opponent_counts[l] && !beaten; ++v) {
+                beaten = strengths[static_cast<std::size_t>(v)] > strengths[0];
+                tied += strengths[static_cast<std::size_t>(v)] == strengths[0] ? 1 : 0;
+            }
+            sums[l] += beaten ? 0.0 : 1.0 / static_cast<double>(tied);
+        }
+    }
+    for (double& x : sums) {
+        x /= static_cast<double>(num_simulations);
+    }
+    return sums;
 }
 
 void simulate_hand_outcome_batch(const std::vector<SimSpot>& spots, std::vector<float>& out_equities) {

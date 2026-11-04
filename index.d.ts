@@ -76,6 +76,10 @@ declare namespace api {
     riskTolerance?: number;
     /** Monte Carlo trials per decision (default 800). Must be at least 1: there is no non-simulated fallback. */
     monteCarloSimulations?: number;
+    /**
+     * Random opponent hands for the equity used when hero has nothing to call (default 1). Calls are
+     * priced against the players actually left in each pot layer.
+     */
     monteCarloVillains?: number;
     raisePotFraction?: number;
     opponentAggressionWeight?: number;
@@ -823,8 +827,11 @@ declare namespace api {
     decodePokerState(bytes: PokerStateBytes): NativePokerState;
     /**
      * Rule-based no-limit Hold'em action for hero (`heroSeat`, else the acting player) from Monte
-     * Carlo equity vs `monteCarloVillains` random hands, pot odds, and call EV. A call that puts hero
-     * all-in for less is priced on the chips hero can win (side-pot layers) and costs only the stack.
+     * Carlo equity, pot odds, and call EV. With nothing to call, equity is against
+     * `monteCarloVillains` random hands. A call is priced pot layer by pot layer: hero wins only the
+     * layers it contributes to, each against random hands for the players still in that layer, and an
+     * all-in for less costs only the stack (NUMERICAL.md, calls into side pots). When every layer has
+     * `monteCarloVillains` opponents this is the plain equity estimate.
      * `raiseBy` (chips above the call) stays within the legal raise range. Throws when
      * `monteCarloSimulations` < 1, the seat is empty, or hero cannot act (hand over, folded, all-in).
      */
@@ -906,9 +913,20 @@ declare namespace api {
     estimatedOutsFromRuleOfTwo(equity: number, unseenCards: number): number;
     /** Same for two streets vs the rule-of-four line: `equity * unseen / 4` clamped to `[0, unseen]`. */
     estimatedOutsFromRuleOfFour(equity: number, unseenCards: number): number;
+    /**
+     * Extra chips hero must win later for a call to break even: `max(0, toCall / equity − potBeforeCall
+     * − toCall)` (`potBeforeCall` includes villain's bet). Inverse of
+     * `impliedOddsRequiredEquityFromFutureWin` where positive; `Infinity` when `equity` is 0.
+     */
     impliedBreakevenFutureWin(potBeforeCall: number, toCall: number, equity: number): number;
+    /**
+     * Bluffs per value bet that make a bluff catcher indifferent to calling a polarized bet:
+     * `betSize / (potBeforeBet + betSize)` (1/2 for a pot-sized bet). Before 4.1.2 this returned the
+     * bluff share of all bets, `betSize / (potBeforeBet + 2·betSize)`, which is
+     * `breakevenCallEquity(potBeforeBet + betSize, betSize)`. 0 when `betSize` is 0.
+     */
     bluffToValueRatio(potBeforeBet: number, betSize: number): number;
-    /** `1 / bluffToValueRatio`; `Infinity` when `betSize` is 0. */
+    /** Value bets per bluff, `(potBeforeBet + betSize) / betSize` (2 for a pot-sized bet); `Infinity` when `betSize` is 0. */
     valueToBluffRatio(potBeforeBet: number, betSize: number): number;
     betAsPotFraction(potBeforeBet: number, betSize: number): number;
     /**
@@ -1074,7 +1092,12 @@ declare namespace api {
       rakeFraction: number,
       rakeCap: number
     ): number;
-    /** semi-bluff FE with rake on `totalPotIfCalled`. */
+    /**
+     * Fold equity at which `expectedValueRaiseWithRake` is 0, with the same payouts: a fold wins
+     * `potBeforeHeroBet − rake(potBeforeHeroBet + heroBetSize)`, a call pays
+     * `equityWhenCalled × (totalPotIfCalled − rake(totalPotIfCalled)) − heroBetSize`. 0 when the called
+     * branch alone is profitable.
+     */
     breakevenFoldEquitySemiBluffWithRake(
       potBeforeHeroBet: number,
       heroBetSize: number,
@@ -1083,7 +1106,11 @@ declare namespace api {
       rakeFraction: number,
       rakeCap: number
     ): number;
-    /** pure-bluff breakeven FE when fold wins `pot+bet` minus rake on shipped pot. */
+    /**
+     * Pure-bluff breakeven fold equity `bet / (pot − rake(pot + bet) + bet)`: a fold wins the pot before
+     * the bet (hero's bet comes back) less rake, a call loses the bet. Matches
+     * `expectedValueRaiseWithRake` at equity 0; with no rake it is `breakevenFoldEquityPureBluff`.
+     */
     breakevenFoldEquityPureBluffWithRake(
       potBeforeHeroBet: number,
       heroBetOrCallSize: number,
@@ -1426,6 +1453,13 @@ declare namespace api {
       numBluffCombos: number,
       mdf?: number
     ): RiverIndifferenceBetResult;
+    /**
+     * Value of seeing the rest of the board before deciding to call: the average over runouts of
+     * `max(0, callEV)` with hero's equity on that runout, minus `max(0, callEV)` with hero's equity
+     * now. Runouts are weighted by their probability given the range (the range mass that does not
+     * use their cards), so the clairvoyant's average equity equals hero's equity now. Never
+     * negative; 0 on the river.
+     */
     exactInformationRegretVsClairvoyant(
       heroHoleCards: CardInput,
       boardCards: CardInput,
@@ -1468,6 +1502,14 @@ declare namespace api {
       boardCards: CardInput,
       range: Float64Array | SparseRangeSpec
     ): number;
+    /**
+     * Distribution of hero's exact equity over every completion of a board of at most 3 cards.
+     * Without `range` (one random hand) every runout is equally likely. With `range` the statistics
+     * are predictive: each runout is weighted by the range mass that does not use its cards, runouts
+     * no combo can coexist with are skipped, and `mean` equals `exactHuEquityVsRange` on the current
+     * board. `n` counts the runouts used; quantiles interpolate the weighted distribution (equal
+     * weights give the usual `q·(n − 1)` interpolation).
+     */
     exactHeroEquityRunoutQuantiles(
       heroHoleCards: CardInput,
       boardCards: CardInput,
@@ -1479,6 +1521,11 @@ declare namespace api {
       range?: Float64Array | SparseRangeSpec,
       options?: AsyncOptions
     ): Promise<HeroEquityRunoutQuantilesResult>;
+    /**
+     * `gradient[c]` = `baseEquity` minus hero's exact equity with card `c` dead (out of villain's range
+     * and the runout). 0 for hero's and the board's cards; `NaN` when every live combo holds `c`, so
+     * that condition is impossible.
+     */
     exactEquityCardRemovalGradient(
       heroHoleCards: CardInput,
       boardCards: CardInput,
@@ -1626,12 +1673,19 @@ declare namespace api {
       rakeFraction: number,
       rakeCap: number
     ): number;
+    /**
+     * `bluffToValueRatio` when the caller wins the raked final pot: `betSize / (potBeforeBet + betSize −
+     * rake)`, rake taken on `potBeforeBet + 2·betSize`. `Infinity` when the rake leaves the caller
+     * nothing to gain (any number of bluffs is unprofitable to call). The old bluff share is
+     * `breakevenCallEquityWithRake(potBeforeBet + betSize, betSize, rakeFraction, rakeCap)`.
+     */
     bluffToValueRatioWithRake(
       potBeforeBet: number,
       betSize: number,
       rakeFraction: number,
       rakeCap: number
     ): number;
+    /** `1 / bluffToValueRatioWithRake`: value bets per bluff (0 when the ratio is `Infinity`). */
     valueToBluffRatioWithRake(
       potBeforeBet: number,
       betSize: number,
@@ -1844,6 +1898,12 @@ declare namespace api {
     rangeBucketWeightsByNotation(range: SparseRangeSpec | Float64Array): RangeNotationWeight[];
     rangeFromNotationWeights(entries: RangeNotationWeight[]): Float64Array;
     rangeBlockerPressureByCard(range: SparseRangeSpec | Float64Array, deadCards?: CardInput): Float64Array;
+    /**
+     * Per card `c`: hero's exact equity when villain's combos holding `c` are removed (`c` can still
+     * come on the board), minus hero's equity against the full range. 0 for hero's and the board's
+     * cards; `NaN` when every live combo holds `c` (villain cannot lack it). Invalid cards or a range
+     * with no live combo throw.
+     */
     rangeRemovalSensitivityVsHero(
       heroHoleCards: CardInput,
       boardCards: CardInput,

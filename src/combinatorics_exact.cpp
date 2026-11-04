@@ -12,8 +12,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <numeric>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace poker {
@@ -132,32 +134,116 @@ DeckBitset dead_from_cards(const std::vector<Card>& hero, const std::vector<Card
     return u;
 }
 
-HeroEquityRunoutQuantilesResult quantiles_from_samples(std::vector<double>& samples) {
+/// Weighted mean, variance, and quantiles of `samples` (equity, weight). Quantiles interpolate
+/// between sorted samples placed at `(S_k - w_k) / (S_n - w_n)` on [0, 1], where S_k is the running
+/// weight, so equal weights give the usual `q * (n - 1)` linear interpolation. Samples with zero
+/// weight are impossible and are dropped; `n` counts the rest.
+HeroEquityRunoutQuantilesResult quantiles_from_weighted(std::vector<std::pair<double, double>> samples) {
+    samples.erase(std::remove_if(samples.begin(), samples.end(), [](const auto& x) { return !(x.second > 0.0); }),
+                  samples.end());
     HeroEquityRunoutQuantilesResult r;
     r.n = samples.size();
     if (samples.empty()) {
         return r;
     }
-    const double sum = std::accumulate(samples.begin(), samples.end(), 0.0);
-    r.mean = sum / static_cast<double>(samples.size());
-    double var_acc = 0.0;
-    for (double x : samples) {
-        const double d = x - r.mean;
-        var_acc += d * d;
+    double wsum = 0.0;
+    double xsum = 0.0;
+    for (const auto& [x, w] : samples) {
+        wsum += w;
+        xsum += w * x;
     }
-    r.variance = var_acc / static_cast<double>(samples.size());
-    std::sort(samples.begin(), samples.end());
+    r.mean = xsum / wsum;
+    double var_acc = 0.0;
+    for (const auto& [x, w] : samples) {
+        const double d = x - r.mean;
+        var_acc += w * d * d;
+    }
+    r.variance = var_acc / wsum;
+    std::stable_sort(samples.begin(), samples.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::vector<double> pos(samples.size(), 0.0);
+    const double span = wsum - samples.back().second;
+    double run = 0.0;
+    for (std::size_t k = 0; k < samples.size(); ++k) {
+        pos[k] = span > 0.0 ? run / span : 0.0;
+        run += samples[k].second;
+    }
+    const bool uniform = std::all_of(samples.begin(), samples.end(),
+                                     [&](const auto& x) { return x.second == samples.front().second; });
     auto at_q = [&](double q) {
-        const double pos = q * static_cast<double>(samples.size() - 1);
-        const std::size_t lo = static_cast<std::size_t>(pos);
-        const std::size_t hi = std::min(lo + 1, samples.size() - 1);
-        const double t = pos - static_cast<double>(lo);
-        return samples[lo] * (1.0 - t) + samples[hi] * t;
+        if (samples.size() == 1 || !(span > 0.0)) {
+            return samples.back().first;
+        }
+        if (uniform) {  // the usual q * (n - 1) interpolation, computed exactly as before
+            const double p = q * static_cast<double>(samples.size() - 1);
+            const std::size_t lo = static_cast<std::size_t>(p);
+            const std::size_t hi = std::min(lo + 1, samples.size() - 1);
+            const double t = p - static_cast<double>(lo);
+            return samples[lo].first * (1.0 - t) + samples[hi].first * t;
+        }
+        const auto it = std::upper_bound(pos.begin(), pos.end(), q);
+        const std::size_t hi = std::min<std::size_t>(static_cast<std::size_t>(it - pos.begin()), samples.size() - 1);
+        const std::size_t lo = hi == 0 ? 0 : hi - 1;
+        const double width = pos[hi] - pos[lo];
+        const double t = width > 0.0 ? std::clamp((q - pos[lo]) / width, 0.0, 1.0) : 1.0;
+        return samples[lo].first * (1.0 - t) + samples[hi].first * t;
     };
     r.p05 = at_q(0.05);
     r.p50 = at_q(0.50);
     r.p95 = at_q(0.95);
     return r;
+}
+
+HeroEquityRunoutQuantilesResult quantiles_from_samples(const std::vector<double>& samples) {
+    std::vector<std::pair<double, double>> weighted;
+    weighted.reserve(samples.size());
+    for (double x : samples) {
+        weighted.emplace_back(x, 1.0);
+    }
+    return quantiles_from_weighted(std::move(weighted));
+}
+
+/// Every completion of `board` to five cards with its predictive weight given villain's range, and
+/// hero's exact equity on that full board. A runout's probability is proportional to the range
+/// mass that does not use its cards (each compatible combo leaves the same number of runouts), so
+/// the weighted mean of these equities is the direct exact equity on `board`. Runouts that every
+/// combo conflicts with cannot happen and are skipped.
+std::vector<std::pair<double, double>> runout_equities_vs_range(const std::vector<Card>& hero,
+                                                                const std::vector<Card>& board,
+                                                                const SparseRange& range,
+                                                                const CancelPredicate* cancel) {
+    const DeckBitset used = dead_from_cards(hero, board, {});
+    double largest = 0.0;
+    for (const WeightedHoleCombo& c : range.combos) {
+        if (!used.test(c.card_a) && !used.test(c.card_b)) {
+            largest = std::max(largest, c.weight);
+        }
+    }
+    if (!(largest > 0.0)) {
+        throw std::invalid_argument("villain range has no combo left after hero and board cards");
+    }
+    const int scale = weight_scale_exponent(largest);
+    const RunoutEnumerator en = make_runout_enumerator_from_dead_mask(used.mask, static_cast<int>(board.size()));
+    std::vector<std::pair<double, double>> out;
+    for_each_uniform_runout(en, [&](const int* run, int run_k) {
+        throw_if_cancelled(cancel);
+        std::uint64_t run_mask = 0;
+        for (int i = 0; i < run_k; ++i) {
+            run_mask |= std::uint64_t{1} << run[i];
+        }
+        double mass = 0.0;
+        for (const WeightedHoleCombo& c : range.combos) {
+            const std::uint64_t bits = (std::uint64_t{1} << c.card_a) | (std::uint64_t{1} << c.card_b);
+            if ((bits & (used.mask | run_mask)) == 0) {
+                mass += std::ldexp(c.weight, scale);
+            }
+        }
+        if (!(mass > 0.0)) {
+            return;  // no villain hand is compatible with this runout
+        }
+        const std::vector<Card> full = board_with_runout(board, run, run_k);
+        out.emplace_back(exact_hu_equity_vs_range(hero, full, range, cancel), mass);
+    }, cancel);
+    return out;
 }
 
 double equity_vs_random_on_fixed_board(const std::vector<Card>& hero, const std::vector<Card>& board,
@@ -420,16 +506,11 @@ HeroEquityRunoutQuantilesResult exact_hero_equity_runout_quantiles_vs_range(
     if (board_cards.size() > 3) {
         throw std::invalid_argument("board must have at most 3 cards for runout quantiles vs range");
     }
-    const DeckBitset used = dead_from_cards(hero_hole_cards, board_cards, {});
-    const RunoutEnumerator en =
-        make_runout_enumerator_from_dead_mask(used.mask, static_cast<int>(board_cards.size()));
-    std::vector<double> samples;
-    for_each_uniform_runout(en, [&](const int* run, int run_k) {
-        throw_if_cancelled(cancel);
-        const std::vector<Card> full = board_with_runout(board_cards, run, run_k);
-        samples.push_back(exact_hu_equity_vs_range(hero_hole_cards, full, villain_range, cancel));
-    }, cancel);
-    return quantiles_from_samples(samples);
+    if (hero_hole_cards.size() != 2) {
+        throw std::invalid_argument("hero must have exactly two cards");
+    }
+    // Predictive: runouts weighted by how likely they are given villain's range.
+    return quantiles_from_weighted(runout_equities_vs_range(hero_hole_cards, board_cards, villain_range, cancel));
 }
 
 CardRemovalGradientResult exact_equity_card_removal_gradient(
@@ -459,7 +540,8 @@ CardRemovalGradientResult exact_equity_card_removal_gradient(
             filtered.weight_sum += combo.weight;
         }
         if (filtered.combos.empty()) {
-            out.gradient[static_cast<std::size_t>(c)] = 0.0;
+            // Villain cannot hold a hand once this card is dead: the condition is impossible.
+            out.gradient[static_cast<std::size_t>(c)] = std::numeric_limits<double>::quiet_NaN();
             continue;
         }
         const double eq = exact_hu_equity_vs_range(hero_hole_cards, board_cards, filtered, cancel,
@@ -477,39 +559,28 @@ double exact_information_regret_vs_clairvoyant(const std::vector<Card>& hero_hol
     if (to_call < 0.0 || pot_before_call < 0.0) {
         throw std::invalid_argument("pot and toCall must be non-negative");
     }
+    if (board_cards.size() < 3 || board_cards.size() > 5) {
+        throw std::invalid_argument("board must have 3, 4, or 5 cards");
+    }
+    // Both sides choose the better of calling and folding (EV 0): hero now, on the current board,
+    // and a clairvoyant who first sees the rest of the board. Runouts are weighted by their
+    // probability given villain's range, so the clairvoyant's average equity is hero's equity now.
     const double realistic =
         exact_hu_equity_vs_range(hero_hole_cards, board_cards, villain_range, cancel);
     const double ev_realistic =
-        expected_value_call(realistic, pot_before_call, to_call);
-
+        std::max(0.0, expected_value_call(realistic, pot_before_call, to_call));
     if (board_cards.size() == 5) {
-        const double clair = realistic;
-        const double ev_clair =
-            expected_value_call(clair, pot_before_call, to_call);
-        return ev_clair - ev_realistic;
+        return 0.0;  // nothing left to reveal
     }
-
-    if (board_cards.size() < 3 || board_cards.size() > 4) {
-        throw std::invalid_argument("board must have 3, 4, or 5 cards");
+    double weight = 0.0;
+    double ev_clairvoyant = 0.0;
+    for (const auto& [eq, w] : runout_equities_vs_range(hero_hole_cards, board_cards, villain_range, cancel)) {
+        ev_clairvoyant += w * std::max(0.0, expected_value_call(eq, pot_before_call, to_call));
+        weight += w;
     }
-
-    const DeckBitset used = dead_from_cards(hero_hole_cards, board_cards, {});
-    const RunoutEnumerator en =
-        make_runout_enumerator_from_dead_mask(used.mask, static_cast<int>(board_cards.size()));
-    double sum_clair_ev = 0.0;
-    double count = 0.0;
-    for_each_uniform_runout(en, [&](const int* run, int run_k) {
-        throw_if_cancelled(cancel);
-        const std::vector<Card> full = board_with_runout(board_cards, run, run_k);
-        const double eq = exact_hu_equity_vs_range(hero_hole_cards, full, villain_range, cancel);
-        const double ev_fold = 0.0;
-        const double ev_call =
-            expected_value_call(eq, pot_before_call, to_call);
-        sum_clair_ev += std::max(ev_fold, ev_call);
-        count += 1.0;
-    }, cancel);
-    const double ev_clairvoyant = count > 0.0 ? sum_clair_ev / count : 0.0;
-    return ev_clairvoyant - ev_realistic;
+    ev_clairvoyant /= weight;
+    // Non-negative in exact arithmetic (the best decision per runout is at least as good on average).
+    return std::max(0.0, ev_clairvoyant - ev_realistic);
 }
 
 }  // namespace poker

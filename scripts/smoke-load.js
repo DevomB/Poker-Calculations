@@ -37,6 +37,21 @@ function checkReleaseFixes(poker, encode) {
     assert.throws(() => poker.exactRangeDominatedComboFraction(['As', 'Ad'], riverBoard, { indices: [bad, 5], weights: [1] }), /integer deck id/);
   }
   assert.throws(() => poker.simulateEquityVsRanges(['As', 'Ad'], [], [{ indices: [id('Kh'), id('Kd')], weights: [1] }], 100, 1, { maxAttempts: 1 }), /at least numSimulations/);
+  // Side-pot helpers validate every row; a call into side pots is priced layer by layer.
+  assert.throws(() => poker.layeredPotChipEvFromEquities([100, 50], [[0.5, 0.5], []]), /equity row 1/);
+  const sidePots = {
+    players: [
+      { holeCards: ['2c', '3d'], stack: 90, seat: 0, committedThisStreet: 10 },
+      { holeCards: [], stack: 0, seat: 1, committedThisStreet: 1 },
+      { holeCards: [], stack: 500, seat: 2, committedThisStreet: 100 },
+    ],
+    communityCards: ['Ah', 'Kh', 'Qh', 'Jh', 'Th'], phase: 'river', pot: 111, currentBet: 100, actingIndex: 0, actedThisStreet: [false, true, true],
+  };
+  assert.equal(poker.decideAction(sidePots, { monteCarloSimulations: 100, monteCarloVillains: 2, rngSeed: 1 }, null, 0).action, 'call');
+  // Chip-math thresholds agree with their EV functions.
+  assert.ok(Math.abs(poker.breakevenFoldEquityPureBluffWithRake(100, 50, 0, 0) - 1 / 3) < 1e-15);
+  assert.equal(poker.impliedBreakevenFutureWin(100, 50, 0.25), 50);
+  assert.deepEqual([poker.bluffToValueRatio(100, 100), poker.valueToBluffRatio(100, 100)], [0.5, 2]);
   // Wilson interval: 100 of 100 reaches 1.
   const w = poker.wilsonScoreInterval(100, 100, 1.96);
   assert.equal(w.upper, 1);

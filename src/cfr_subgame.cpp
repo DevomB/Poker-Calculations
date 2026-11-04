@@ -205,7 +205,11 @@ void values_for_defender(const RiverWorkspace& ws, std::size_t j, const std::vec
         if (e < 0.0) {
             continue;
         }
-        acc.add(ws.bettor[i].mant * bet_p[i], ws.bettor[i].exp, {defender_call_ev(e, ws.pot, ws.bet)});
+        // Split the bet frequency too: a tiny frequency times the weight's mantissa could underflow
+        // before the accumulator rescales it.
+        int bet_exp = 0;
+        const double bet_mant = std::frexp(bet_p[i], &bet_exp);
+        acc.add(ws.bettor[i].mant * bet_mant, ws.bettor[i].exp + bet_exp, {defender_call_ev(e, ws.pot, ws.bet)});
     }
     v_call = acc.ratio();
 }
