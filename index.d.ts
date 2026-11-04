@@ -1484,11 +1484,22 @@ declare namespace api {
       knownDead?: CardInput,
       options?: AsyncOptions
     ): Promise<HeroRunoutVulnerabilityResult>;
+    /**
+     * For a flop or turn, the next cards that improve hero's hand (`heroImproveDeckIndices`: hero's
+     * best five gets stronger) and the next cards after which some villain hand beats hero and is
+     * stronger than any villain hand was before (`leapfrogDeckIndices`). Hands are scored on the real
+     * cards only (five or six before the river).
+     */
     exactVillainLeapfrogOutCounts(
       heroHoleCards: CardInput,
       boardCards: CardInput,
       knownDead?: CardInput
     ): VillainLeapfrogOutCountsResult;
+    /**
+     * Joint distribution of hero's hand category on the turn (six cards) and the river (seven cards)
+     * over every ordered turn-then-river deal from the live cards, so each pair of cards counts once
+     * in each order.
+     */
     exactHeroCategoryJointFlopToRiver(
       heroHoleCards: CardInput,
       flopThree: CardInput,
@@ -1503,7 +1514,8 @@ declare namespace api {
       range: Float64Array | SparseRangeSpec
     ): number;
     /**
-     * Distribution of hero's exact equity over every completion of a board of at most 3 cards.
+     * Distribution of hero's exact equity over every turn and river of a 3-card flop. Any other board
+     * length throws (the async form rejects); preflop and partial-flop boards are not enumerated.
      * Without `range` (one random hand) every runout is equally likely. With `range` the statistics
      * are predictive: each runout is weighted by the range mass that does not use its cards, runouts
      * no combo can coexist with are skipped, and `mean` equals `exactHuEquityVsRange` on the current

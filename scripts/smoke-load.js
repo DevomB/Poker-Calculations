@@ -52,6 +52,11 @@ function checkReleaseFixes(poker, encode) {
   assert.ok(Math.abs(poker.breakevenFoldEquityPureBluffWithRake(100, 50, 0, 0) - 1 / 3) < 1e-15);
   assert.equal(poker.impliedBreakevenFutureWin(100, 50, 0.25), 50);
   assert.deepEqual([poker.bluffToValueRatio(100, 100), poker.valueToBluffRatio(100, 100)], [0.5, 2]);
+  // Partial boards are scored on the cards dealt, in both dealing orders; runout quantiles need a flop.
+  const joint = poker.exactHeroCategoryJointFlopToRiver(['Ah', 'Kh'], ['2h', '7h', '9c']).jointMatrix;
+  assert.ok(Math.abs(Array.from(joint.slice(0, 9)).reduce((a, b) => a + b, 0) - 24 / 47) < 1e-12, 'turn high card');
+  assert.equal(poker.exactVillainLeapfrogOutCounts(['Ah', 'Kh'], ['2h', '7h', '9c']).heroImproveDeckIndices.length, 47);
+  assert.throws(() => poker.exactHeroEquityRunoutQuantiles(['Ah', 'Kd'], []), /3-card flop/);
   // Wilson interval: 100 of 100 reaches 1.
   const w = poker.wilsonScoreInterval(100, 100, 1.96);
   assert.equal(w.upper, 1);

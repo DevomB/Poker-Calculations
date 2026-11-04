@@ -15,6 +15,7 @@
 #include <limits>
 #include <numeric>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -22,13 +23,19 @@ namespace poker {
 
 namespace {
 
-void fill_seven(int h0, int h1, const std::vector<Card>& board, const int* run, int run_k,
-                std::uint8_t* ranks, std::uint8_t* suits) {
+/// Writes hero's two cards, the board, and the runout into `ranks` / `suits` and returns how many
+/// real cards that is (5 to 7). Evaluate exactly that many: unused slots of a zero-initialized
+/// seven-card array would read as phantom 2c cards.
+int fill_seven(int h0, int h1, const std::vector<Card>& board, const int* run, int run_k,
+               std::uint8_t* ranks, std::uint8_t* suits) {
     ranks[0] = static_cast<std::uint8_t>(h0 / 4);
     suits[0] = static_cast<std::uint8_t>(h0 % 4);
     ranks[1] = static_cast<std::uint8_t>(h1 / 4);
     suits[1] = static_cast<std::uint8_t>(h1 % 4);
     const std::size_t bn = board.size();
+    if (bn > 5 || run_k < 0 || bn + static_cast<std::size_t>(run_k) > 5) {
+        throw std::invalid_argument("a board and runout hold at most five cards");
+    }
     for (std::size_t bi = 0; bi < bn; ++bi) {
         ranks[2 + bi] = board[bi].rank();
         suits[2 + bi] = board[bi].suit();
@@ -39,6 +46,12 @@ void fill_seven(int h0, int h1, const std::vector<Card>& board, const int* run, 
         ranks[base + static_cast<std::size_t>(ri)] = static_cast<std::uint8_t>(idx / 4);
         suits[base + static_cast<std::size_t>(ri)] = static_cast<std::uint8_t>(idx % 4);
     }
+    return static_cast<int>(base) + run_k;
+}
+
+/// Packed strength of the first `n` cards (the best five of them).
+std::uint64_t strength_of(const std::uint8_t* ranks, const std::uint8_t* suits, int n) {
+    return pack_hand_strength(evaluate_best_hand_fast(ranks, suits, n));
 }
 
 std::vector<Card> board_with_runout(const std::vector<Card>& board, const int* run, int run_k) {
@@ -50,8 +63,8 @@ std::vector<Card> board_with_runout(const std::vector<Card>& board, const int* r
     return out;
 }
 
-int category_from_seven(const std::uint8_t ranks[7], const std::uint8_t suits[7]) {
-    const HandEvaluation e = evaluate_best_hand_fast(ranks, suits, 7);
+int category_of(const std::uint8_t* ranks, const std::uint8_t* suits, int n) {
+    const HandEvaluation e = evaluate_best_hand_fast(ranks, suits, n);
     return static_cast<int>(hand_category(e));
 }
 
@@ -77,7 +90,7 @@ std::uint64_t max_villain_strength_on_board(const std::vector<Card>& board, std:
             vil_r[2 + bi] = board[bi].rank();
             vil_s[2 + bi] = board[bi].suit();
         }
-        const std::uint64_t s = evaluate_seven_strength_fast(vil_r, vil_s);
+        const std::uint64_t s = strength_of(vil_r, vil_s, 2 + static_cast<int>(board.size()));
         if (s > best) {
             best = s;
         }
@@ -109,7 +122,7 @@ bool any_villain_beats_hero(const std::vector<Card>& board, std::uint64_t dead_m
             vil_r[2 + bi] = board[bi].rank();
             vil_s[2 + bi] = board[bi].suit();
         }
-        if (evaluate_seven_strength_fast(vil_r, vil_s) > hero_strength) {
+        if (strength_of(vil_r, vil_s, 2 + static_cast<int>(board.size())) > hero_strength) {
             found = true;
         }
     });
@@ -252,8 +265,7 @@ double equity_vs_random_on_fixed_board(const std::vector<Card>& hero, const std:
     const int h1 = deck_index_from_card(hero[1]);
     std::uint8_t hero_r[7]{};
     std::uint8_t hero_s[7]{};
-    fill_seven(h0, h1, board, nullptr, 0, hero_r, hero_s);
-    const std::uint64_t hero_s7 = evaluate_seven_strength_fast(hero_r, hero_s);
+    const std::uint64_t hero_s7 = strength_of(hero_r, hero_s, fill_seven(h0, h1, board, nullptr, 0, hero_r, hero_s));
     double win = 0.0;
     double total = 0.0;
     std::vector<int> deck;
@@ -275,7 +287,7 @@ double equity_vs_random_on_fixed_board(const std::vector<Card>& hero, const std:
             vil_s[2 + bi] = board[bi].suit();
         }
         total += 1.0;
-        const std::uint64_t vs = evaluate_seven_strength_fast(vil_r, vil_s);
+        const std::uint64_t vs = strength_of(vil_r, vil_s, 2 + static_cast<int>(board.size()));
         if (hero_s7 > vs) {
             win += 1.0;
         } else if (hero_s7 == vs) {
@@ -308,8 +320,8 @@ HeroRunoutVulnerabilityResult exact_hero_runout_vulnerability(
         }
         std::uint8_t hero_r[7]{};
         std::uint8_t hero_s[7]{};
-        fill_seven(h0, h1, full_board, nullptr, 0, hero_r, hero_s);
-        const std::uint64_t hero_st = evaluate_seven_strength_fast(hero_r, hero_s);
+        const std::uint64_t hero_st =
+            strength_of(hero_r, hero_s, fill_seven(h0, h1, full_board, nullptr, 0, hero_r, hero_s));
         const std::uint64_t max_vil = max_villain_strength_on_board(full_board, dead, h0, h1, cancel);
         if (hero_st >= max_vil) {
             ++nuts_count;
@@ -342,8 +354,8 @@ VillainLeapfrogResult exact_villain_leapfrog_out_counts(const std::vector<Card>&
     const int h1 = deck_index_from_card(hero_hole_cards[1]);
     std::uint8_t hero_r[7]{};
     std::uint8_t hero_s[7]{};
-    fill_seven(h0, h1, board_cards, nullptr, 0, hero_r, hero_s);
-    const std::uint64_t hero_base = evaluate_seven_strength_fast(hero_r, hero_s);
+    const std::uint64_t hero_base =
+        strength_of(hero_r, hero_s, fill_seven(h0, h1, board_cards, nullptr, 0, hero_r, hero_s));
     const std::uint64_t vil_base_max =
         max_villain_strength_on_board(board_cards, used.mask, h0, h1, cancel);
 
@@ -360,8 +372,8 @@ VillainLeapfrogResult exact_villain_leapfrog_out_counts(const std::vector<Card>&
         std::vector<Card> next_board = board_cards;
         next_board.push_back(card_from_deck_index(c));
         std::uint64_t dead = used.mask | (std::uint64_t{1} << c);
-        fill_seven(h0, h1, next_board, nullptr, 0, hero_r, hero_s);
-        const std::uint64_t hero_st = evaluate_seven_strength_fast(hero_r, hero_s);
+        const std::uint64_t hero_st =
+            strength_of(hero_r, hero_s, fill_seven(h0, h1, next_board, nullptr, 0, hero_r, hero_s));
         const std::uint64_t vil_max = max_villain_strength_on_board(next_board, dead, h0, h1, cancel);
         if (vil_max > hero_st && vil_max > vil_base_max) {
             out.leapfrog_deck_indices.push_back(c);
@@ -386,28 +398,33 @@ std::vector<double> exact_hero_category_joint_flop_to_river(
     const int h0 = deck_index_from_card(hero_hole_cards[0]);
     const int h1 = deck_index_from_card(hero_hole_cards[1]);
     std::array<double, 81> joint{};
+    // Turn category for every possible turn card (six real cards).
     const RunoutEnumerator en = make_runout_enumerator_from_dead_mask(used.mask, 3);
+    std::array<int, 52> turn_category{};
+    for (int c : en.deck_remaining) {
+        std::uint8_t r[7]{};
+        std::uint8_t su[7]{};
+        const int n = fill_seven(h0, h1, flop_three, &c, 1, r, su);
+        turn_category[static_cast<std::size_t>(c)] = std::min(category_of(r, su, n), 8);
+    }
+    // Each unordered pair {a, b} is dealt in two equally likely orders: a then b, and b then a. The
+    // river category depends only on the pair; the turn category on which card came first.
+    // 9x9 table: royal flush (category 9) is folded into straight flush (8).
     double total = 0.0;
     for_each_uniform_runout(en, [&](const int* run, int run_k) {
         throw_if_cancelled(cancel);
         if (run_k != 2) {
             return;
         }
-        std::vector<Card> turn_board = flop_three;
-        turn_board.push_back(card_from_deck_index(run[0]));
-        std::vector<Card> river_board = turn_board;
-        river_board.push_back(card_from_deck_index(run[1]));
-        std::uint8_t hero_r[7]{};
-        std::uint8_t hero_s[7]{};
-        fill_seven(h0, h1, turn_board, nullptr, 0, hero_r, hero_s);
-        const int cat_turn = category_from_seven(hero_r, hero_s);
-        fill_seven(h0, h1, river_board, nullptr, 0, hero_r, hero_s);
-        const int cat_river = category_from_seven(hero_r, hero_s);
-        // 9x9 table: royal flush (category 9) is folded into straight flush (8).
-        const int ct = std::min(cat_turn, 8);
-        const int cr = std::min(cat_river, 8);
-        joint[static_cast<std::size_t>(ct * 9 + cr)] += 1.0;
-        total += 1.0;
+        std::uint8_t r[7]{};
+        std::uint8_t su[7]{};
+        const int n = fill_seven(h0, h1, flop_three, run, 2, r, su);
+        const int cr = std::min(category_of(r, su, n), 8);
+        for (int first = 0; first < 2; ++first) {
+            const int ct = turn_category[static_cast<std::size_t>(run[first])];
+            joint[static_cast<std::size_t>(ct * 9 + cr)] += 1.0;
+            total += 1.0;
+        }
     }, cancel);
     if (total > 0.0) {
         for (double& v : joint) {
@@ -437,8 +454,8 @@ double exact_range_dominated_combo_fraction(const std::vector<Card>& hero_hole_c
     const int h1 = deck_index_from_card(hero_hole_cards[1]);
     std::uint8_t hero_r[7]{};
     std::uint8_t hero_s[7]{};
-    fill_seven(h0, h1, board_cards, nullptr, 0, hero_r, hero_s);
-    const std::uint64_t hero_st = evaluate_seven_strength_fast(hero_r, hero_s);
+    const std::uint64_t hero_st =
+        strength_of(hero_r, hero_s, fill_seven(h0, h1, board_cards, nullptr, 0, hero_r, hero_s));
     double dominated = 0.0;
     double total = 0.0;
     std::uint8_t vil_r[7]{};
@@ -465,7 +482,7 @@ double exact_range_dominated_combo_fraction(const std::vector<Card>& hero_hole_c
         }
         const double w = std::ldexp(c.weight, scale);
         total += w;
-        if (evaluate_seven_strength_fast(vil_r, vil_s) < hero_st) {
+        if (strength_of(vil_r, vil_s, 2 + static_cast<int>(board_cards.size())) < hero_st) {
             dominated += w;
         }
     }
@@ -475,15 +492,26 @@ double exact_range_dominated_combo_fraction(const std::vector<Card>& hero_hole_c
     return dominated / total;
 }
 
+void validate_runout_quantiles_spot(const std::vector<Card>& hero_hole_cards,
+                                    const std::vector<Card>& board_cards) {
+    if (hero_hole_cards.size() != 2) {
+        throw std::invalid_argument("hero must have exactly two cards");
+    }
+    // The statistics enumerate every turn and river, so they are defined for a flop. Preflop and
+    // partial flops would need three to five more cards, which the runout enumerator does not do.
+    if (board_cards.size() != 3) {
+        throw std::invalid_argument("runout equity quantiles need a 3-card flop (got " +
+                                    std::to_string(board_cards.size()) + " board cards)");
+    }
+}
+
 HeroEquityRunoutQuantilesResult exact_hero_equity_runout_quantiles_vs_random(
     const std::vector<Card>& hero_hole_cards, const std::vector<Card>& board_cards,
     const std::vector<Card>& known_dead_cards, const CancelPredicate* cancel) {
     if (hero_hole_cards.size() != 2) {
         throw std::invalid_argument("hero must have exactly two cards");
     }
-    if (board_cards.size() > 3) {
-        throw std::invalid_argument("board must have at most 3 cards for runout quantiles");
-    }
+    validate_runout_quantiles_spot(hero_hole_cards, board_cards);
     const DeckBitset used = dead_from_cards(hero_hole_cards, board_cards, known_dead_cards);
     const RunoutEnumerator en =
         make_runout_enumerator_from_dead_mask(used.mask, static_cast<int>(board_cards.size()));
@@ -503,12 +531,7 @@ HeroEquityRunoutQuantilesResult exact_hero_equity_runout_quantiles_vs_random(
 HeroEquityRunoutQuantilesResult exact_hero_equity_runout_quantiles_vs_range(
     const std::vector<Card>& hero_hole_cards, const std::vector<Card>& board_cards,
     const SparseRange& villain_range, const CancelPredicate* cancel) {
-    if (board_cards.size() > 3) {
-        throw std::invalid_argument("board must have at most 3 cards for runout quantiles vs range");
-    }
-    if (hero_hole_cards.size() != 2) {
-        throw std::invalid_argument("hero must have exactly two cards");
-    }
+    validate_runout_quantiles_spot(hero_hole_cards, board_cards);
     // Predictive: runouts weighted by how likely they are given villain's range.
     return quantiles_from_weighted(runout_equities_vs_range(hero_hole_cards, board_cards, villain_range, cancel));
 }

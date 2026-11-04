@@ -44,6 +44,8 @@ struct CardRemovalGradientResult {
     const std::vector<Card>& hero_hole_cards, const std::vector<Card>& board_cards,
     const std::vector<Card>& known_dead_cards, const CancelPredicate* cancel = nullptr);
 
+/// Hero's category on the turn x category on the river, row-major 9x9 (royal flush folded into
+/// straight flush), over every ordered (turn, river) deal from the live cards.
 [[nodiscard]] std::vector<double> exact_hero_category_joint_flop_to_river(
     const std::vector<Card>& hero_hole_cards, const std::vector<Card>& flop_three,
     const std::vector<Card>& known_dead_cards, const CancelPredicate* cancel = nullptr);
@@ -52,6 +54,12 @@ struct CardRemovalGradientResult {
     const std::vector<Card>& hero_hole_cards, const std::vector<Card>& board_cards,
     const SparseRange& villain_range, const CancelPredicate* cancel = nullptr);
 
+/// Throws std::invalid_argument unless hero has two cards and the board is a 3-card flop, the only
+/// street the runout quantiles support.
+void validate_runout_quantiles_spot(const std::vector<Card>& hero_hole_cards,
+                                    const std::vector<Card>& board_cards);
+
+/// Hero's exact equity against one random hand over every turn and river of a 3-card flop.
 [[nodiscard]] HeroEquityRunoutQuantilesResult exact_hero_equity_runout_quantiles_vs_random(
     const std::vector<Card>& hero_hole_cards, const std::vector<Card>& board_cards,
     const std::vector<Card>& known_dead_cards, const CancelPredicate* cancel = nullptr);

@@ -1,5 +1,22 @@
 # Changelog
 
+## 4.1.3
+
+Fixes for helpers that look at a flop or turn before the board is complete.
+
+### Fixed — results change
+
+- **Partial boards no longer include phantom cards.** Some helpers placed five or six real cards in a seven-card array and evaluated all seven slots, so the empty slots counted as two of clubs. With hero `Ah Kh` on `2h 7h 9c`, `exactHeroCategoryJointFlopToRiver` reported a turn high card 0% of the time (correct: 51.0638%), two pair 12.1184% and trips 12.4884% (correct: 0% each), and `exactVillainLeapfrogOutCounts` listed 9 hero-improving turn cards instead of 47. Hero and villain hands are now scored on exactly the cards dealt. Full-board results (`exactHeroRunoutVulnerability`, `exactRangeDominatedComboFraction`, runout quantiles) are unchanged.
+- **`exactHeroCategoryJointFlopToRiver` counts both dealing orders.** It enumerated unordered turn-river pairs and always treated the lower deck index as the turn. With only `3h` and `As` live, it reported a turn flush 100% of the time instead of 50% (3h first) and a turn pair 50% (As first). Each pair now counts once in each order.
+
+### Now rejected
+
+- `exactHeroEquityRunoutQuantiles` and `exactHeroEquityRunoutQuantilesAsync` with any board other than a 3-card flop, with or without a range. Empty, one-card, and two-card boards returned made-up statistics (for `Ah Kd` and no board: a 94.12% mean, zero variance, `n: 1`) because the shared runout enumerator turned completions it does not support into "no cards to come"; the async form now rejects with the same message. The enumerator itself now throws for any board outside 3 to 5 cards.
+
+### Tooling
+
+- `test/partial-boards.test.js` checks the category matrix, both dealing orders, and the leapfrog lists against a brute-force reference that scores exactly the cards dealt, and the board-length checks for the synchronous and asynchronous exports.
+
 ## 4.1.2
 
 Fixes a range-weight regression introduced in 4.1.1, a process crash in the side-pot helpers, and several chip-math and runout formulas, and closes gaps in range input handling and the TypeScript declarations.

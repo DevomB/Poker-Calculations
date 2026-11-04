@@ -13,6 +13,8 @@ struct RunoutEnumerator {
     int need_cards{0};
 };
 
+/// Live cards (not in `dead_mask`) and the number still to come for a board of `board_size` cards.
+/// Throws std::invalid_argument unless `board_size` is 3, 4, or 5 (turn and river runouts only).
 [[nodiscard]] RunoutEnumerator make_runout_enumerator_from_dead_mask(std::uint64_t dead_mask,
                                                                      int board_size);
 
