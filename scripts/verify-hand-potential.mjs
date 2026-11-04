@@ -2,40 +2,7 @@
  * Hand potential (HS / PPot / NPot / EHS / EHS2) checks.
  * Run from NPM/: `node scripts/verify-hand-potential.mjs` (requires built native addon).
  */
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(join(root, 'package.json'));
-
-let poker;
-try {
-  poker = require('./index.js');
-} catch (e) {
-  console.error('Native addon not loaded — run `npm run build:native` first.');
-  console.error(e.message);
-  process.exit(1);
-}
-
-function assertTrue(label, cond) {
-  if (!cond) throw new Error(label);
-}
-
-function assertNear(label, actual, expected, tol) {
-  if (Math.abs(actual - expected) > tol) {
-    throw new Error(`${label}: expected ${expected}, got ${actual}`);
-  }
-}
-
-function comboIndex(a, b) {
-  if (a > b) {
-    const t = a;
-    a = b;
-    b = t;
-  }
-  return a * 51 - (a * (a - 1)) / 2 + (b - a - 1);
-}
+import { poker, assertNear, assertTrue, comboIndex } from './verify-lib.mjs';
 
 function packedIds(text) {
   return Array.from(poker.parseCompactCardList(text, { outFormat: 'packed' }));

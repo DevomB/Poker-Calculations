@@ -8,6 +8,11 @@
 #
 # Auth: npm Trusted Publishing (OIDC). Configure at npmjs.com for this repo + workflow file
 # npm-publish.yml — no NPM_TOKEN. Requires Node ≥22.14 and npm CLI ≥11.5.1 on the publish job.
+#
+# Publishing needs the test gate (unit, verify scripts, types, C++ checks, crash sweep) and every
+# platform build. After a successful publish the commit is tagged v<version>. Dispatching the
+# workflow for a version that is already on npm re-runs only the tagging, against the commit npm
+# recorded for it (gitHead); an existing tag is never moved.
 
 name: npm publish
 
@@ -51,6 +56,39 @@ jobs:
 
       - id: gate
         run: node scripts/should-npm-publish.js
+
+  test:
+    name: Test gate
+    needs: release-gate
+    if: needs.release-gate.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile and stage native addon
+        run: |
+          npm run build:native
+          node scripts/stage-prebuild.js linux-x64
+
+      - name: Unit tests and verify scripts
+        run: npm test
+
+      - name: Type definitions compile for consumers
+        run: npm run test:types
+
+      - name: C++ engine and index checks
+        run: npm run test:native
+
+      - name: Crash sweep (every export x edge-case inputs)
+        run: npm run sweep
 
   build:
     needs: release-gate
@@ -251,7 +289,7 @@ jobs:
 
   publish:
     name: Publish to npm
-    needs: [release-gate, build, build-linux-x64-bullseye, build-linux-arm, build-musl-x64, build-musl-arm64]
+    needs: [release-gate, test, build, build-linux-x64-bullseye, build-linux-arm, build-musl-x64, build-musl-arm64]
     if: needs.release-gate.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -280,11 +318,50 @@ jobs:
       - name: Assemble prebuilds/
         run: node scripts/assemble-prebuilds.js _native_bins
 
+      - name: Require every platform prebuild
+        run: node scripts/check-prebuilds.js --all
+
       - name: Smoke assembled package
         run: npm run smoke
+
+      - name: Smoke the packed tarball as an installed dependency
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/consumer"
+          cd "$RUNNER_TEMP/consumer"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "$RUNNER_TEMP"/poker-calculations-*.tgz
+          node "$GITHUB_WORKSPACE/scripts/smoke-load.js" "$RUNNER_TEMP/consumer/node_modules/poker-calculations"
 
       - name: Ensure npm CLI for OIDC (≥11.5.1)
         run: npm install -g npm@^11.5.1
 
       - name: Publish to npm (trusted publishing / OIDC)
         run: npm publish --access public
+
+  tag:
+    name: Tag release
+    needs: [release-gate, publish]
+    # After a successful publish, or a manual re-run for a version that is already on npm.
+    if: >-
+      always() && (needs.publish.result == 'success' ||
+      (github.event_name == 'workflow_dispatch' && needs.release-gate.outputs.publish == 'false'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Tag the published commit
+        run: |
+          if [ "${{ needs.publish.result }}" = "success" ]; then
+            node scripts/tag-release.js --commit "$GITHUB_SHA"
+          else
+            node scripts/tag-release.js
+          fi

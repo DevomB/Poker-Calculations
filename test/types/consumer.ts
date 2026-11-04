@@ -1,6 +1,6 @@
 // Compile-only check that the published typings work for TypeScript consumers.
 import poker = require('../../index');
-import type { CardInput, NativePokerState, HandEvalResult, OmahaHiLoEquity } from '../../index';
+import type { CardInput, NativePokerState, HandEvalResult, OmahaHiLoEquity, RangesEquityResult } from '../../index';
 import encode = require('../../encode');
 
 const hole: CardInput = ['Ah', 'Kh'];
@@ -12,5 +12,6 @@ const placement: number[] | Float64Array = poker.icmHarvillePlacementProbabiliti
 const nested: number[][] = poker.icmHarvillePlacementProbabilities([3, 2, 1]);
 const state: NativePokerState = { players: [], communityCards: [], phase: 'preflop', actedThisStreet: [] };
 const bytes: Uint8Array = encode.packPokerState(state);
+const vsRanges: RangesEquityResult = poker.simulateEquityVsRanges(hole, ['Qh', 'Jh', '2c'], [new Float64Array(1326).fill(1)], 100, 1, { deadCards: ['2d'] });
 
-export { equity, best, hiLo, placement, nested, bytes };
+export { equity, best, hiLo, placement, nested, bytes, vsRanges };

@@ -3,6 +3,7 @@
 #include "poker/bit_utils.hpp"
 #include "poker/card_string.hpp"
 #include "poker/combo_enumerator.hpp"
+#include "poker/equity_matrix.hpp"
 #include "poker/hand_evaluator.hpp"
 
 #include <algorithm>
@@ -910,39 +911,14 @@ int short_deck_hand81_from_notation(const std::string& notation_raw) {
 }
 
 int short_deck_hand81_from_hand169(int hand169) {
-    if (hand169 < 0 || hand169 > 168) {
+    if (hand169 < 0 || hand169 >= kHandClassCount) {
         return -1;
     }
-    int idx = 0;
-    for (int i = 0; i < 13; ++i) {
-        for (int j = i; j < 13; ++j) {
-            if (i == j) {
-                if (idx == hand169) {
-                    if (i < kShortDeckMinRank) {
-                        return -1;
-                    }
-                    return short_deck_hand81_index(i, j, false);
-                }
-                ++idx;
-            } else {
-                if (idx == hand169) {
-                    if (i < kShortDeckMinRank || j < kShortDeckMinRank) {
-                        return -1;
-                    }
-                    return short_deck_hand81_index(j, i, true);
-                }
-                ++idx;
-                if (idx == hand169) {
-                    if (i < kShortDeckMinRank || j < kShortDeckMinRank) {
-                        return -1;
-                    }
-                    return short_deck_hand81_index(j, i, false);
-                }
-                ++idx;
-            }
-        }
+    const HandClass169 c = hand169_class(hand169);
+    if (c.low_rank < kShortDeckMinRank) {
+        return -1;
     }
-    return -1;
+    return short_deck_hand81_index(c.high_rank, c.low_rank, c.suited);
 }
 
 std::array<double, kShortDeckHandClasses> short_deck_nash_hu_jam_range(const ShortDeckNashSpec& spec) {

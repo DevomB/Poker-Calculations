@@ -2,25 +2,7 @@
  * Mixed hand-class ranges must not abort simulateEquityVsRange (exit 127).
  * Run from NPM/: `node scripts/verify-simulate-equity-vs-range.mjs` (requires built native addon).
  */
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(join(root, 'package.json'));
-
-let poker;
-try {
-  poker = require('./index.js');
-} catch (e) {
-  console.error('Native addon not loaded — run `npm run build:native` first.');
-  console.error(e.message);
-  process.exit(1);
-}
-
-function assertTrue(label, cond) {
-  if (!cond) throw new Error(label);
-}
+import { poker, assertTrue } from './verify-lib.mjs';
 
 function assertFiniteUnit(label, value) {
   assertTrue(`${label} is finite`, Number.isFinite(value));

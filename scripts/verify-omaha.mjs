@@ -7,40 +7,7 @@
  * Villain makes 8-high straight: 4c 5d + 6s 7c 8d (exactly 2 hole + 3 board).
  * Expected winner: 2h3h4c5d.
  */
-import { createRequire } from 'node:module';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(join(root, 'package.json'));
-
-let poker;
-try {
-  poker = require('./index.js');
-} catch (e) {
-  console.error('Native addon not loaded — run `npm run build:native` first.');
-  console.error(e.message);
-  process.exit(1);
-}
-
-const EPS = 1e-9;
-function assertNear(label, actual, expected, tol = EPS) {
-  if (Math.abs(actual - expected) > tol) {
-    throw new Error(`${label}: expected ${expected}, got ${actual}`);
-  }
-}
-function assertTrue(label, cond) {
-  if (!cond) throw new Error(label);
-}
-function assertThrows(label, fn) {
-  let threw = false;
-  try {
-    fn();
-  } catch {
-    threw = true;
-  }
-  if (!threw) throw new Error(`${label}: expected throw`);
-}
+import { poker, assertNear, assertTrue, assertThrows, deckId } from './verify-lib.mjs';
 
 const names = [
   'evaluateOmahaBestHand',
@@ -116,14 +83,6 @@ assertTrue('nutOuts <= outs', wrap.nutOuts <= wrap.outs);
 const flopEq = poker.evaluateOmahaBestHand(wrapHero, flop);
 assertTrue('flop eval has rank', typeof flopEq.rank === 'string');
 
-const ranks = '23456789TJQKA';
-const suits = 'cdhs';
-function deckId(card) {
-  const r = ranks.indexOf(card[0]);
-  const s = suits.indexOf(card[1]);
-  if (r < 0 || s < 0) throw new Error(`bad card ${card}`);
-  return r * 4 + s;
-}
 const packed = Uint8Array.from(villain.map(deckId));
 const vsRange = poker.simulateOmahaEquityVsRange(hero, board, { packed }, 20, 7);
 assertNear('range MC vs the river winner is 0', vsRange, 0);

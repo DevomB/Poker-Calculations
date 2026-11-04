@@ -1,5 +1,40 @@
 # Changelog
 
+## 4.1.0
+
+Correctness release for the decision, state, and Monte Carlo uncertainty APIs. Some results change, and inputs that used to produce meaningless results are now rejected.
+
+### Fixed — results change
+
+- **`simulateHandOutcomeDetailed` uncertainty.** `se` applied the Bernoulli formula to split-pot payoffs and ignored the sample variance it already tracked: when every player plays the board it reported 0.05 for payoffs that are always exactly 0.5. `se` is now the standard error from the sampled payoff variance (0.5 for a single trial), and `ciLow`/`ciHigh` is a Wilson interval at the unrounded mean instead of at a rounded success count. See [NUMERICAL.md](NUMERICAL.md#monte-carlo-uncertainty). `monteCarloStandardError` is unchanged.
+- **Short all-in calls in `decideAction`.** A call for less than the bet was priced as if hero could win the whole pot for the whole bet. It now costs hero's stack and wins only what hero matches (side-pot layers): 10 behind against a 100 bet into 10 at 40% equity is worth +2, not −16. This applies to `decideAction`, `decideActionAsync`, `decideActionWithDiagnostics`, and `runBotPolicyBatch`.
+- **Raise sizes stay legal.** `raiseBy` is at least the minimum raise and at most all-in; a large `raisePotFraction` used to return raises bigger than the stack.
+- **Short all-in raises do not reopen betting.** `legalActionSummary` and `actionMaskFromState` no longer offer a re-raise to a player who already acted and faces less than a full raise, `minRaiseTo` is all-in when the stack is shorter than a full raise, and a finished hand or a folded or all-in player has no legal actions.
+- **`decideActionWithDiagnostics`** reports hero's legal actions rather than the acting player's. **`runBotPolicyBatch`** applies `opponentModels[i]` to state `i` (they were ignored) and reports an unplayable state in that row instead of failing the batch.
+- **`rangeTopCombos` and `rangeBucketWeightsByNotation`** list equal weights in combo order on every platform (the order of ties depended on the C++ standard library).
+- **Seeds.** `rngSeed` reduces modulo 2^32 (a non-finite value keeps the default) and the per-decision seed no longer relies on signed overflow; ordinary seeds give the same results.
+- **`GameEngine` (C++ only).** Heads-up the button posts the small blind and acts first before the flop; a short big blind still leaves the full big blind to call; a short all-in raise keeps the last full raise and does not reopen betting; the hand ends when one player is left; all-in hands run out to showdown instead of stalling.
+
+### Added
+
+- **`simulateEquityVsRanges(heroHoleCards, boardCards, ranges, numSimulations, seed, options?)`**: Monte Carlo showdown equity against one weighted range per opponent (1–9), with optional dead cards. Opponent hands are drawn jointly, rejecting whole tuples that share a card (bounded by `maxAttempts`), so the estimate follows the joint range distribution rather than a sequential approximation. It returns the uncertainty fields of `simulateHandOutcomeDetailed` plus the number of draws. See [NUMERICAL.md](NUMERICAL.md#multiway-range-equity).
+
+### Now rejected
+
+- **`decideAction` with `monteCarloSimulations` below 1.** The zero-simulation fallback read an encoded hand rank as an equity and could fold a royal flush. `normalizeBotConfig` now clamps the count to at least 1.
+- **`decideAction` when hero cannot act:** an empty `heroSeat`, a folded or all-in hero, or a finished hand. Hero's missing hole cards are no longer replaced by player 0's.
+- **Inconsistent states.** Every state API (`validatePokerState`, the `decideAction` family, `legalActionSummary`, `actionMaskFromState`, `stateToFeatureVector`, `runBotPolicyBatch`, `encodePokerState`, `decodePokerState`) applies one rule set to objects and PKST bytes: integer chip fields that fit in 32 bits, checked before conversion instead of rounded or wrapped; non-negative stacks, pot, and commitments; unique seats and cards; a board length that matches the phase; one boolean `actedThisStreet` flag per player; and actor indices in range. `validatePokerState` lists every problem. Unknown opponent hands (`holeCards: []`) and finished hands are still valid snapshots; PKST cannot encode an unknown hand.
+- `simulateHandOutcomeDetailed` with `numSimulations` below 1 (it returned a zero-width interval at 0).
+- Duplicate cards in Hold'em evaluation (`evaluateBestHand`, `evaluateHandStrength`, `evaluateHandStrengthFast`, `evaluateHandCategory`, `evaluateHandStrengthFastBatch`) and exact equity (`exactHuEquityVsKnownHand`, `exactHuEquityVsRandomHand`, `exactHuEquityVsRange`, the batch form, and the exact runout and category functions). They returned numbers for impossible hands, while the Monte Carlo and variant APIs already threw.
+- Fractional counts in `betaBinomialFoldPosterior` / `opponentFoldToCbetPosterior` (they were truncated), negative counts in `opponentAggressionFactor`, and `opponentRangeElasticityFromSizing` arrays of different lengths.
+
+### Documentation and tooling
+
+- `index.d.ts` states which operations are Hold'em-only, the state and decision contracts, and what each opponent-modeling helper measures. `NativeOpponentModel.aggressionFactor` is a normalized score, unlike the `(bets + raises) / calls` ratio of `opponentAggressionFactor`.
+- `npm test` also runs the 17 `scripts/verify-*.mjs` checks, with bounded workloads; their tolerance checks no longer let NaN through. `npm run test:native` builds C++ checks for `GameEngine` and the combo and hand-class index helpers.
+- Publishing requires the unit, verify, type, C++, and crash-sweep checks and every platform binary, installs the packed tarball to smoke it, and tags the published commit `v<version>`.
+- The package no longer ships the 1.58 MB README image or `prebuilds/README.md`. `API.md` is removed: `index.d.ts` and the documentation site cover it.
+
 ## 4.0.3
 
 - **Hands under five cards are categorized.** `evaluateBestHand`, `evaluateHandCategory`, `evaluateHandStrength(Fast)`, `compareBestHands`, and `evaluateShortDeckBestHand` reported every 1–4 card hand as high card, so a pocket pair or a stud upcard pair ranked below an unpaired hand. They now report one pair, two pair, three of a kind, and four of a kind (straights, flushes, and full houses need five cards). Hands of five or more cards are unchanged.
@@ -25,7 +60,7 @@ Bug fixes found while writing runnable examples for every export.
 
 ## 4.0.0
 
-Correctness release. Several results change, 69 exports are removed, and the package is now feature-complete: later releases are bug fixes only.
+Correctness release. Several results change and 69 exports are removed. Upgrade from any of 2.2.0–3.2.0: the fast hand evaluator in those releases skewed every Monte Carlo and exact equity result (first item below).
 
 ### Fixed — results change
 
@@ -76,7 +111,7 @@ Exports that were broken, returned constants, were heuristic scores with no defe
 
 - `npm test` (Node's built-in runner) covers every fix above and runs in CI.
 - `npm run sweep` calls every export under 17 edge-case scenarios in child processes and fails if any call crashes the process.
-- `FEATURES_ADDED.md` is now [`API.md`](API.md).
+- `FEATURES_ADDED.md` was renamed `API.md`.
 
 ## Earlier releases
 

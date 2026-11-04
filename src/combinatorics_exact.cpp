@@ -126,9 +126,9 @@ void validate_board_runout(const std::vector<Card>& hero, const std::vector<Card
 DeckBitset dead_from_cards(const std::vector<Card>& hero, const std::vector<Card>& board,
                            const std::vector<Card>& dead) {
     DeckBitset u;
-    u.mark_cards(hero);
-    u.mark_cards(board);
-    u.mark_cards(dead);
+    u.mark_cards_distinct(hero, "hero, board, or dead cards");
+    u.mark_cards_distinct(board, "hero, board, or dead cards");
+    u.mark_cards_distinct(dead, "hero, board, or dead cards");
     return u;
 }
 

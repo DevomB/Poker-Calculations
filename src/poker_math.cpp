@@ -560,21 +560,30 @@ Wilson_interval wilson_score_interval(int successes, int n_trials, double z) {
     if (!std::isfinite(z) || z <= 0.0) {
         throw std::invalid_argument("z must be finite and positive");
     }
-    Wilson_interval w{};
     if (n_trials == 0) {
-        w.lower = 0.0;
-        w.upper = 1.0;
-        return w;
+        return Wilson_interval{0.0, 1.0};
     }
     const double n = static_cast<double>(n_trials);
-    const double p = static_cast<double>(successes) / n;
+    return wilson_score_interval_for_mean(static_cast<double>(successes) / n, n, z);
+}
+
+Wilson_interval wilson_score_interval_for_mean(double mean, double n_trials, double z) {
+    if (!std::isfinite(mean) || mean < 0.0 || mean > 1.0) {
+        throw std::invalid_argument("mean must lie in [0, 1]");
+    }
+    if (!std::isfinite(n_trials) || n_trials <= 0.0) {
+        throw std::invalid_argument("nTrials must be finite and positive");
+    }
+    if (!std::isfinite(z) || z <= 0.0) {
+        throw std::invalid_argument("z must be finite and positive");
+    }
+    const double n = n_trials;
+    const double p = mean;
     const double z2 = z * z;
     const double denom = 1.0 + z2 / n;
     const double center = (p + z2 / (2.0 * n)) / denom;
     const double half = z * std::sqrt((p * (1.0 - p) + z2 / (4.0 * n * n)) / n) / denom;
-    w.lower = clamp01(center - half);
-    w.upper = clamp01(center + half);
-    return w;
+    return Wilson_interval{clamp01(center - half), clamp01(center + half)};
 }
 
 Wilson_interval agresti_coull_interval(int successes, int n_trials, double z) {

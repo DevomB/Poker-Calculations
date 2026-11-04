@@ -254,6 +254,14 @@ struct Wilson_interval {
 /// Wilson score interval for binomial proportion; `z` e.g. 1.96 for ~95%.
 [[nodiscard]] Wilson_interval wilson_score_interval(int successes, int n_trials, double z);
 
+/**
+ * Wilson score bounds at a sample mean `mean` in [0, 1] of `n_trials` > 0 draws. A payoff bounded
+ * in [0, 1] with mean mu has variance at most mu (1 - mu), so for fractional payoffs (split pots)
+ * this is a conservative score interval rather than an exact binomial one. With an integer success
+ * count it equals `wilson_score_interval`.
+ */
+[[nodiscard]] Wilson_interval wilson_score_interval_for_mean(double mean, double n_trials, double z);
+
 /// Agresti–Coull interval for a binomial proportion (adds `z^2/2` pseudo-counts); `z` e.g. 1.96.
 [[nodiscard]] Wilson_interval agresti_coull_interval(int successes, int n_trials, double z);
 

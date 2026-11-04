@@ -1,7 +1,7 @@
 {
   "name": "poker-calculations",
-  "version": "4.0.3",
-  "description": "NL Hold'em library for Node: hand evaluation, Monte Carlo and exact equity, decideAction, range tools, board texture, chip/pot/rake math, ICM, side pots, opponent modeling, statistics, and more - C++20 core with prebuilt N-API binaries.",
+  "version": "4.1.0",
+  "description": "Poker math for Node.js: Hold'em hand evaluation, Monte Carlo and exact equity, ranges, pot and chip EV, ICM, side pots, push/fold, Omaha, short deck, stud, and 2-7. C++20 core with prebuilt N-API binaries.",
   "main": "index.js",
   "types": "index.d.ts",
   "exports": {
@@ -14,9 +14,6 @@
       "default": "./encode.js"
     }
   },
-  "directories": {
-    "example": "examples"
-  },
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
     "verify-lock": "node scripts/verify-package-lock.js",
@@ -25,7 +22,8 @@
     "build:native": "node scripts/build-native.js compile",
     "rebuild:native": "node scripts/build-native.js rebuild",
     "prepack": "node scripts/check-prebuilds.js",
-    "test:types": "tsc --noEmit --strict --module commonjs --skipLibCheck false test/types/consumer.ts"
+    "test:types": "tsc --noEmit --strict --module commonjs --skipLibCheck false test/types/consumer.ts",
+    "test:native": "cmake -S . -B build_native_tests -DPOKER_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release && cmake --build build_native_tests --config Release --target poker_native_test --parallel && ctest --test-dir build_native_tests -C Release --output-on-failure"
   },
   "engines": {
     "node": ">=18"
@@ -78,7 +76,6 @@
     "prebuilds",
     "README.md",
     "CHANGELOG.md",
-    "Poker-Calculations-Image.png",
     "LICENSE"
   ]
 }

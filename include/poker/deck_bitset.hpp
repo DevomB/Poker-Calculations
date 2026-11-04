@@ -5,6 +5,8 @@
 #include "poker/card_string.hpp"
 
 #include <cstdint>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace poker {
@@ -26,6 +28,17 @@ struct DeckBitset {
     void mark_cards(const std::vector<Card>& cards) {
         for (const Card& c : cards) {
             mark_card(c);
+        }
+    }
+
+    /// Marks `cards`; throws std::invalid_argument ("duplicate card in <what>") if one is already marked.
+    void mark_cards_distinct(const std::vector<Card>& cards, const char* what) {
+        for (const Card& c : cards) {
+            const int idx = deck_index_from_card(c);
+            if (test(idx)) {
+                throw std::invalid_argument(std::string("duplicate card in ") + what);
+            }
+            set(idx);
         }
     }
 

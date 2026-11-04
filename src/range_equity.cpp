@@ -91,6 +91,9 @@ void validate_hero_board(const std::vector<Card>& hero, const std::vector<Card>&
     if (board.size() > 5) {
         throw std::invalid_argument("board must have at most 5 cards");
     }
+    DeckBitset seen;
+    seen.mark_cards_distinct(hero, "hero or board");
+    seen.mark_cards_distinct(board, "hero or board");
 }
 
 }  // namespace

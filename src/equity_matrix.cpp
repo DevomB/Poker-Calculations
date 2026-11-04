@@ -3,6 +3,7 @@
 #include "poker/card_string.hpp"
 #include "poker/monte_carlo.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <random>
@@ -14,39 +15,14 @@ namespace poker {
 namespace {
 
 bool hand169_to_ranks_suited(int hand169, int& high_rank, int& low_rank, bool& suited) {
-    if (hand169 < 0 || hand169 > 168) {
+    if (hand169 < 0 || hand169 >= kHandClassCount) {
         return false;
     }
-    int idx = 0;
-    for (int i = 0; i < 13; ++i) {
-        for (int j = i; j < 13; ++j) {
-            if (i == j) {
-                if (idx == hand169) {
-                    high_rank = i;
-                    low_rank = j;
-                    suited = false;
-                    return true;
-                }
-                ++idx;
-            } else {
-                if (idx == hand169) {
-                    high_rank = j;
-                    low_rank = i;
-                    suited = true;
-                    return true;
-                }
-                ++idx;
-                if (idx == hand169) {
-                    high_rank = j;
-                    low_rank = i;
-                    suited = false;
-                    return true;
-                }
-                ++idx;
-            }
-        }
-    }
-    return false;
+    const HandClass169 c = hand169_class(hand169);
+    high_rank = c.high_rank;
+    low_rank = c.low_rank;
+    suited = c.suited;
+    return true;
 }
 
 bool pick_disjoint_holes(int hand169, int& c0, int& c1) {
@@ -110,6 +86,35 @@ bool pick_disjoint_matchup(int hero169, int vill169, int& h0, int& h1, int& v0, 
 }
 
 }  // namespace
+
+int hand169_index(int high_rank, int low_rank, bool suited) {
+    if (high_rank < 0 || high_rank > 12 || low_rank < 0 || low_rank > 12) {
+        throw std::invalid_argument("rank out of range");
+    }
+    const int high = std::max(high_rank, low_rank);
+    const int low = std::min(high_rank, low_rank);
+    if (high == low && suited) {
+        throw std::invalid_argument("pairs have no suited/offsuit suffix");
+    }
+    // Block `low` starts after the blocks of lower ranks: sum over r < low of 1 + 2 (12 - r).
+    const int block = low * (26 - low);
+    return high == low ? block : block + 1 + 2 * (high - low - 1) + (suited ? 0 : 1);
+}
+
+HandClass169 hand169_class(int hand169) {
+    if (hand169 < 0 || hand169 >= kHandClassCount) {
+        throw std::invalid_argument("hand169 must be in 0..168");
+    }
+    int low = 0;
+    while (hand169 >= (low + 1) * (25 - low)) {
+        ++low;
+    }
+    const int offset = hand169 - low * (26 - low);
+    if (offset == 0) {
+        return HandClass169{low, low, false};
+    }
+    return HandClass169{low + 1 + (offset - 1) / 2, low, (offset - 1) % 2 == 0};
+}
 
 bool hand169_to_deck_indices(int hand169, int& c0, int& c1) {
     return pick_disjoint_holes(hand169, c0, c1);

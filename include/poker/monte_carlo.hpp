@@ -4,10 +4,30 @@
 #include "poker/card.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <random>
 #include <vector>
 
 namespace poker {
+
+/// Hero's pot share at showdown. `strengths[0]` is hero; the rest are opponents. Hero receives
+/// `1 / k` when tied k ways for the best strength, otherwise `0` (NUMERICAL.md, showdown equity).
+[[nodiscard]] inline double hero_showdown_share(const std::vector<std::uint64_t>& strengths) noexcept {
+    if (strengths.empty()) {
+        return 0.0;
+    }
+    const std::uint64_t hero = strengths[0];
+    int tied_at_best = 1;
+    for (std::size_t i = 1; i < strengths.size(); ++i) {
+        if (strengths[i] > hero) {
+            return 0.0;
+        }
+        if (strengths[i] == hero) {
+            ++tied_at_best;
+        }
+    }
+    return 1.0 / static_cast<double>(tied_at_best);
+}
 
 /// Throws std::invalid_argument unless hero has 2 cards, the board has at most 5, no card repeats,
 /// and the deck still holds 2 cards per villain plus the rest of the board.

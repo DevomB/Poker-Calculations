@@ -2,34 +2,13 @@
  * Runtime checks for Future Game Simulation and ICM decision exports.
  * Run from NPM/: `node scripts/verify-fgs.mjs` (requires built native addon).
  */
-import { createRequire } from 'node:module';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { poker, assertNear, assertTrue, EPS } from './verify-lib.mjs';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(join(root, 'package.json'));
-
-let poker;
-try {
-  poker = require('./index.js');
-} catch (e) {
-  console.error('Native addon not loaded — run `npm run build:native` first.');
-  console.error(e.message);
-  process.exit(1);
-}
-
-const EPS = 1e-9;
-function assertNear(label, actual, expected, tol = 1e-9) {
-  if (!Number.isFinite(actual) || Math.abs(actual - expected) > tol) {
-    throw new Error(`${label}: expected ${expected}, got ${actual}`);
-  }
-}
-function assertTrue(label, cond) {
-  if (!cond) throw new Error(label);
-}
-
-const names = [  'icmPayoutsAfterBlindPost',  'icmCallingBubbleFactor',
-  'fgsPayoutsBlindSchedule',  'icmDeadPotDollarEv',
+const names = [
+  'icmPayoutsAfterBlindPost',
+  'icmCallingBubbleFactor',
+  'fgsPayoutsBlindSchedule',
+  'icmDeadPotDollarEv',
 ];
 for (const name of names) {
   assertTrue(`${name} is a function`, typeof poker[name] === 'function');

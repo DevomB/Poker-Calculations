@@ -136,6 +136,7 @@ Napi::Value ExactHuEquityVsKnownHand(const Napi::CallbackInfo& info);
 Napi::Value ExactHuEquityVsRange(const Napi::CallbackInfo& info);
 Napi::Value SimulateEquityVsRange(const Napi::CallbackInfo& info);
 Napi::Value SimulateHandOutcomeDetailed(const Napi::CallbackInfo& info);
+Napi::Value SimulateEquityVsRanges(const Napi::CallbackInfo& info);
 Napi::Value BuildPreflopEquityMatrix(const Napi::CallbackInfo& info);
 Napi::Value EquityDeltaIfCardRemoved(const Napi::CallbackInfo& info);
 Napi::Value IcmExpectedPayoutsWeitzman(const Napi::CallbackInfo& info);
@@ -358,6 +359,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("exactHuEquityVsKnownHand", ExactHuEquityVsKnownHand),
         Napi::PropertyDescriptor::Function("exactHuEquityVsRange", ExactHuEquityVsRange),
         Napi::PropertyDescriptor::Function("simulateEquityVsRange", SimulateEquityVsRange),
+        Napi::PropertyDescriptor::Function("simulateEquityVsRanges", SimulateEquityVsRanges),
         Napi::PropertyDescriptor::Function("simulateHandOutcomeDetailed", SimulateHandOutcomeDetailed),
         Napi::PropertyDescriptor::Function("buildPreflopEquityMatrix", BuildPreflopEquityMatrix),
         Napi::PropertyDescriptor::Function("equityDeltaIfCardRemoved", EquityDeltaIfCardRemoved),
@@ -489,7 +491,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::PropertyDescriptor::Function("geometricStreetSizingPlan", GeometricStreetSizingPlan),
         Napi::PropertyDescriptor::Function("thinValueMargin", ThinValueMargin),
         Napi::PropertyDescriptor::Function("betSizingIndifferencePoint", BetSizingIndifferencePoint),
-        Napi::PropertyDescriptor::Function("opponentFoldToCbetPosterior", OpponentFoldToCbetPosterior),
+        Napi::PropertyDescriptor::Function("opponentFoldToCbetPosterior", BetaBinomialFoldPosterior),
         Napi::PropertyDescriptor::Function("opponentAggressionFactor", OpponentAggressionFactor),
         Napi::PropertyDescriptor::Function("opponentRangeElasticityFromSizing", OpponentRangeElasticityFromSizing),
         Napi::PropertyDescriptor::Function("villainPolarizedRangeScore", VillainPolarizedRangeScore),

@@ -15,6 +15,10 @@
 
 namespace poker_bind {
 
+/// Structural parse of a state object: required fields, types, and 32-bit integers checked before
+/// conversion. Semantic checks are `parse_state_input`'s job.
+[[nodiscard]] bool parse_game_state(const Napi::Object& src, poker::PokerGameState& out,
+                                    std::vector<std::string>& errors);
 [[nodiscard]] bool parse_game_state(const Napi::Object& src, poker::PokerGameState& out, std::string* err);
 
 [[nodiscard]] poker::BotConfig parse_bot_config(const Napi::Object& o);
@@ -32,6 +36,10 @@ struct DecideActionParsed {
     std::vector<poker::Card> hero_hole;
 };
 
+/// State object or PKST bytes, then `poker::poker_state_errors` (shared by both inputs). Collects
+/// every problem; the `std::string*` form joins them with "; ".
+[[nodiscard]] bool parse_state_input(const Napi::Value& v, poker::PokerGameState& out,
+                                     std::vector<std::string>& errors);
 [[nodiscard]] bool parse_state_input(const Napi::Value& v, poker::PokerGameState& out, std::string* err);
 
 [[nodiscard]] bool parse_decide_action_inputs(const Napi::CallbackInfo& info, DecideActionParsed& out,

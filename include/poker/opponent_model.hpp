@@ -6,6 +6,9 @@
 
 namespace poker {
 
+/// Running action frequencies for one opponent. `aggression_factor` is a normalized policy score in
+/// [0, 1] (`clamp(2 * raise_rate + 0.25)`, 0.5 with no samples), not the conventional
+/// (bets + raises) / calls aggression factor. `decide_action` reads only this score.
 class OpponentModel {
 public:
     float aggression_factor{0.5F};

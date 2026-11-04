@@ -2,33 +2,7 @@
  * Exact multiway known-hand equity checks.
  * Run from NPM/: `node scripts/verify-exact-multiway.mjs` (requires built native addon).
  */
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(join(root, 'package.json'));
-
-let poker;
-try {
-  poker = require('./index.js');
-} catch (e) {
-  console.error('Native addon not loaded — run `npm run build:native` first.');
-  console.error(e.message);
-  process.exit(1);
-}
-
-const EPS = 1e-9;
-
-function assertNear(label, actual, expected, tol = EPS) {
-  if (Math.abs(actual - expected) > tol) {
-    throw new Error(`${label}: expected ${expected}, got ${actual}`);
-  }
-}
-
-function assertTrue(label, cond) {
-  if (!cond) throw new Error(label);
-}
+import { poker, assertNear, assertTrue } from './verify-lib.mjs';
 
 function sum(xs) {
   return xs.reduce((a, b) => a + b, 0);
@@ -40,7 +14,8 @@ const names = [
   'exactFourWayEquityKnownHands',
   'exactMultiwayEquityKnownHands',
   'exactMultiwayEquityWithDeadCards',
-  'exactMultiwaySidePotChipEv',  'exactMultiwayTieFrequency',
+  'exactMultiwaySidePotChipEv',
+  'exactMultiwayTieFrequency',
   'exactMultiwayRunoutCount',
   'exactMultiwayBestWorstRunout',
 ];
@@ -59,14 +34,17 @@ assertTrue('AA vs KK vs QQ length 3', aaKkQq.length === 3);
 assertNear('AA vs KK vs QQ sum', sum(aaKkQq), 1, 1e-9);
 assertTrue('AA > KK preflop 3-way', aaKkQq[0] > aaKkQq[1]);
 assertTrue('KK > QQ preflop 3-way', aaKkQq[1] > aaKkQq[2]);
+// The remaining checks use a flop (903 runouts) rather than repeating a 1.37M-board preflop enumeration.
+const checkFlop = ['8h', '4c', 'Jd'];
+const named = poker.exactThreeWayEquityKnownHands(aa, kk, qq, checkFlop);
 assertNear(
   'generic 3-way matches named',
-  sum(poker.exactMultiwayEquityKnownHands([aa, kk, qq], []).map((e, i) => Math.abs(e - aaKkQq[i]))),
+  sum(poker.exactMultiwayEquityKnownHands([aa, kk, qq], checkFlop).map((e, i) => Math.abs(e - named[i]))),
   0,
   1e-12,
 );
 
-const aaVsAir = poker.exactThreeWayEquityKnownHands(aa, twoSevenOff, twoSevenOffB, []);
+const aaVsAir = poker.exactThreeWayEquityKnownHands(aa, twoSevenOff, twoSevenOffB, checkFlop);
 assertNear('AA vs 72o vs 72o sum', sum(aaVsAir), 1, 1e-9);
 assertTrue('AA huge vs two 72o', aaVsAir[0] > 0.8);
 

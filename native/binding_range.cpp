@@ -15,6 +15,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <stdexcept>
 #include <cstring>
 #include <random>
 #include <string>
@@ -181,6 +182,77 @@ Napi::Value SimulateEquityVsRange(const Napi::CallbackInfo& info) {
     POKER_TRY(env, {
         const float eq = poker::simulate_equity_vs_range(hero, board, range, sims, rng);
         return Napi::Number::New(env, eq);
+    });
+}
+
+Napi::Value SimulateEquityVsRanges(const Napi::CallbackInfo& info) {
+    const Napi::Env env = info.Env();
+    constexpr const char* kSig =
+        "simulateEquityVsRanges(heroHoleCards, boardCards, ranges, numSimulations, seed, options?)";
+    if (info.Length() < 5 || !info[2].IsArray() || !info[3].IsNumber() || !info[4].IsNumber()) {
+        POKER_FAIL_TYPE(env, kSig);
+    }
+    std::vector<poker::Card> hero;
+    std::vector<poker::Card> board;
+    if (!poker_bind::try_parse_hole_and_board(env, info, hero, board, kSig)) {
+        return env.Null();
+    }
+    const double sims_d = info[3].As<Napi::Number>().DoubleValue();
+    if (!std::isfinite(sims_d) || std::trunc(sims_d) != sims_d || sims_d < 1.0 || sims_d > 2147483647.0) {
+        POKER_FAIL_RANGE(env, "numSimulations must be an integer of at least 1");
+    }
+    const int sims = static_cast<int>(sims_d);
+    const std::uint32_t seed = static_cast<std::uint32_t>(info[4].As<Napi::Number>().Uint32Value());
+    std::vector<poker::Card> dead_cards;
+    std::int64_t max_attempts = 100LL * sims + 10000;
+    std::string err;
+    if (info.Length() >= 6 && info[5].IsObject()) {
+        const Napi::Object opts = info[5].As<Napi::Object>();
+        if (opts.Has("deadCards") && !opts.Get("deadCards").IsUndefined()) {
+            dead_cards = parse_cards_from_js(env, opts.Get("deadCards"), &err);
+            if (!err.empty()) {
+                POKER_FAIL_TYPE(env, "deadCards: " + err);
+            }
+        }
+        if (opts.Has("maxAttempts") && !opts.Get("maxAttempts").IsUndefined()) {
+            const Napi::Value m = opts.Get("maxAttempts");
+            const double md = m.IsNumber() ? m.As<Napi::Number>().DoubleValue() : -1.0;
+            if (!std::isfinite(md) || std::trunc(md) != md || md < 1.0 || md > 9007199254740991.0) {
+                POKER_FAIL_RANGE(env, "maxAttempts must be a positive integer");
+            }
+            max_attempts = static_cast<std::int64_t>(md);
+        }
+    }
+    poker::DeckBitset dead = dead_mask_from_hero_board(hero, board);
+    dead.mark_cards(dead_cards);
+    const Napi::Array arr = info[2].As<Napi::Array>();
+    if (arr.Length() < 1 || arr.Length() > 9) {
+        POKER_FAIL_RANGE(env, "ranges must have 1 to 9 entries (one per opponent)");
+    }
+    std::vector<poker::SparseRange> ranges(arr.Length());
+    for (uint32_t i = 0; i < arr.Length(); ++i) {
+        bool ok = false;
+        try {
+            ok = parse_sparse_range(env, arr.Get(i), dead, ranges[i], &err);
+        } catch (const std::exception& e) {
+            err = e.what();  // e.g. every combo is blocked
+        }
+        if (!ok) {
+            POKER_FAIL_TYPE(env, "ranges[" + std::to_string(i) + "]: " + err);
+        }
+    }
+    std::mt19937 rng(seed);
+    POKER_TRY(env, {
+        const poker::McRangesEquityResult r =
+            poker::simulate_equity_vs_ranges(hero, board, ranges, dead_cards, sims, max_attempts, rng);
+        Napi::Object o = Napi::Object::New(env);
+        o.Set("estimate", r.equity.estimate);
+        o.Set("se", r.equity.se);
+        o.Set("ciLow", r.equity.ci_low);
+        o.Set("ciHigh", r.equity.ci_high);
+        o.Set("n", r.equity.n);
+        o.Set("attempts", static_cast<double>(r.attempts));
+        return o;
     });
 }
 

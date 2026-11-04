@@ -2,27 +2,7 @@
  * Numeric checks for Nash jam/fold exports.
  * Run from NPM/: `node scripts/verify-nash-push-fold.mjs` (requires `npm run build:native`).
  */
-import { createRequire } from 'node:module';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(join(root, 'package.json'));
-
-let poker;
-try {
-  poker = require('./index.js');
-} catch (e) {
-  console.error('Native addon not loaded — run `npm run build:native` first.');
-  console.error(e.message);
-  process.exit(1);
-}
-
-function assertTrue(label, cond) {
-  if (!cond) {
-    throw new Error(label);
-  }
-}
+import { poker, assertTrue } from './verify-lib.mjs';
 
 function jamCount(freq, thresh = 0.5) {
   let n = 0;
@@ -39,49 +19,57 @@ const names = [
   'nashHeadsUpJamRange',
   'nashHeadsUpCallRange',
   'nashHeadsUpJamCallSolve',
-  'nashBlindVsBlindSolve',  'nashJamFoldChart169',
+  'nashBlindVsBlindSolve',
+  'nashJamFoldChart169',
   'nashCallChart169',
   'nashIndifferenceStackBb',
-  'nashIcmHeadsUpJamCallSolve',];
+  'nashIcmHeadsUpJamCallSolve',
+];
 for (const name of names) {
   assertTrue(`${name} exported`, typeof poker[name] === 'function');
 }
 
-const jam10 = poker.nashHeadsUpJamRange(10, 0.5, 1, 0);
+// One deterministic equity table (40 trials per class matchup) is built once and shared by every
+// call below; the default 200-trial table would cost ~15 s for the same qualitative checks.
+const EQ = { equityIterations: 40 };
+const hu = (stackBb) => ({ stackBb, smallBlind: 0.5, bigBlind: 1, ante: 0, ...EQ });
+
+const jam10 = poker.nashHeadsUpJamRange(hu(10));
 assertTrue('jam10 length 169', jam10.length === 169);
 assertTrue(`AA jam at 10bb ~1 (got ${jam10[aa]})`, jam10[aa] >= 0.9);
 assertTrue(`72o jam at 10bb ~0 (got ${jam10[o72]})`, jam10[o72] <= 0.1);
 
-const jam3 = poker.nashHeadsUpJamRange(3, 0.5, 1, 0);
-const jam12 = poker.nashHeadsUpJamRange(12, 0.5, 1, 0);
+const jam3 = poker.nashHeadsUpJamRange(hu(3));
+const jam12 = poker.nashHeadsUpJamRange(hu(12));
 assertTrue(
   `shorter stack jams more (3bb=${jamCount(jam3)} 12bb=${jamCount(jam12)})`,
   jamCount(jam3) > jamCount(jam12),
 );
 
-const mass8 = jamCount(poker.nashHeadsUpJamRange(8, 0.5, 1, 0));
+const mass8 = jamCount(poker.nashHeadsUpJamRange(hu(8)));
 const mass10 = jamCount(jam10);
 const mass12 = jamCount(jam12);
 assertTrue(`8bb jam mass in band (${mass8})`, mass8 > 0 && mass8 < 169);
 assertTrue(`10bb jam mass in band (${mass10})`, mass10 > 0 && mass10 < 169);
 assertTrue(`12bb jam mass in band (${mass12})`, mass12 > 0 && mass12 < 169);
 
-const call10 = poker.nashHeadsUpCallRange(10, 0.5, 1, 0);
+const call10 = poker.nashHeadsUpCallRange(hu(10));
 assertTrue('call10 length 169', call10.length === 169);
 assertTrue(`AA calls a jam at 10bb (got ${call10[aa]})`, call10[aa] >= 0.9);
 
-const solved = poker.nashHeadsUpJamCallSolve(10, 0.5, 1, 0);
+const solved = poker.nashHeadsUpJamCallSolve(hu(10));
+assertTrue('solve jam matches nashHeadsUpJamRange', solved.jam.every((v, i) => v === jam10[i]));
 assertTrue('solve jam/call length', solved.jam.length === 169 && solved.call.length === 169);
 assertTrue('solve iterations in 1..80', solved.iterations >= 1 && solved.iterations <= 80);
 assertTrue('solve heroEv finite', Number.isFinite(solved.heroEv));
 assertTrue('solve villainEv finite', Number.isFinite(solved.villainEv));
 
-const bvb = poker.nashBlindVsBlindSolve(10, 0.5, 1, 0);
+const bvb = poker.nashBlindVsBlindSolve(hu(10));
 assertTrue('bvb AA jams', bvb.jam[aa] >= 0.9);
 assertTrue('bvb 72o folds', bvb.jam[o72] <= 0.2);
 
-const jamChart = poker.nashJamFoldChart169({ bigBlind: 1, ante: 0, maxStackBb: 16 });
-const callChart = poker.nashCallChart169({ bigBlind: 1, ante: 0, maxStackBb: 16 });
+const jamChart = poker.nashJamFoldChart169({ bigBlind: 1, ante: 0, maxStackBb: 16, ...EQ });
+const callChart = poker.nashCallChart169({ bigBlind: 1, ante: 0, maxStackBb: 16, ...EQ });
 assertTrue('jam chart length 169', jamChart.length === 169);
 assertTrue('call chart length 169', callChart.length === 169);
 assertTrue(
@@ -89,12 +77,12 @@ assertTrue(
   jamChart[aa] > jamChart[o72],
 );
 
-const indAa = poker.nashIndifferenceStackBb('AA', { maxStackBb: 16, smallBlind: 0.5, bigBlind: 1 });
-const ind72 = poker.nashIndifferenceStackBb('72o', { maxStackBb: 16, smallBlind: 0.5, bigBlind: 1 });
+const indAa = poker.nashIndifferenceStackBb('AA', { maxStackBb: 16, smallBlind: 0.5, bigBlind: 1, ...EQ });
+const ind72 = poker.nashIndifferenceStackBb('72o', { maxStackBb: 16, smallBlind: 0.5, bigBlind: 1, ...EQ });
 assertTrue(`AA indifference > 72o (${indAa} vs ${ind72})`, indAa > ind72);
 assertTrue('72o indifference is short', ind72 < 8);
 
-const chipOpts = { heroStack: 10, villainStack: 20, smallBlind: 0.5, bigBlind: 1, ante: 0 };
+const chipOpts = { heroStack: 10, villainStack: 20, smallBlind: 0.5, bigBlind: 1, ante: 0, ...EQ };
 const chip = poker.nashHeadsUpJamCallSolve(chipOpts);
 const icm = poker.nashIcmHeadsUpJamCallSolve({
   ...chipOpts,

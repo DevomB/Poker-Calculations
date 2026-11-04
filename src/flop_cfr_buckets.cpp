@@ -2,6 +2,7 @@
 
 #include "poker/card_string.hpp"
 #include "poker/deck_bitset.hpp"
+#include "poker/range.hpp"
 #include "poker/suit_isomorphism.hpp"
 
 #include <algorithm>
@@ -15,36 +16,7 @@ namespace poker {
 
 namespace {
 
-constexpr int kComboCount = 1326;
-
-[[nodiscard]] int combo_index_1326(int a, int b) {
-    if (a > b) {
-        std::swap(a, b);
-    }
-    if (a < 0 || b > 51 || a == b) {
-        return -1;
-    }
-    return a * 51 - (a * (a - 1)) / 2 + (b - a - 1);
-}
-
-void decode_combo_1326(int idx, int& a, int& b) {
-    if (idx < 0 || idx >= kComboCount) {
-        a = 0;
-        b = 1;
-        return;
-    }
-    int rem = idx;
-    for (a = 0; a < 52; ++a) {
-        const int n = 51 - a;
-        if (rem < n) {
-            b = a + 1 + rem;
-            return;
-        }
-        rem -= n;
-    }
-    a = 50;
-    b = 51;
-}
+constexpr int kComboCount = kHoleComboCount;
 
 [[nodiscard]] double clamp01(double x) {
     if (!std::isfinite(x)) {
@@ -86,9 +58,7 @@ void require_finite_nonneg(double x, const char* name) {
     dead.mark_cards(board);
     std::vector<int> out(static_cast<std::size_t>(kComboCount), -1);
     for (int i = 0; i < kComboCount; ++i) {
-        int a = 0;
-        int b = 1;
-        decode_combo_1326(i, a, b);
+        const auto [a, b] = combo_cards_1326(i);
         if (dead.test(a) || dead.test(b)) {
             continue;
         }

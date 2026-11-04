@@ -17,32 +17,6 @@ namespace {
 
 constexpr int kCancelCheckInterval = 4096;
 
-double hero_showdown_equity_strengths(const std::vector<std::uint64_t>& strengths) {
-    if (strengths.empty()) {
-        return 0.0;
-    }
-    if (strengths.size() == 1) {
-        return 1.0;
-    }
-    std::uint64_t best = strengths[0];
-    int tied_at_best = 1;
-    bool hero_tied = true;
-    for (std::size_t i = 1; i < strengths.size(); ++i) {
-        const std::uint64_t s = strengths[i];
-        if (best < s) {
-            best = s;
-            tied_at_best = 1;
-            hero_tied = false;
-        } else if (s == best) {
-            ++tied_at_best;
-        }
-    }
-    if (!hero_tied || tied_at_best <= 0) {
-        return 0.0;
-    }
-    return 1.0 / static_cast<double>(tied_at_best);
-}
-
 void collect_known(const std::vector<Card>& hero, const std::vector<Card>& board,
                    std::vector<bool>& used) {
     for (const auto& c : hero) {
@@ -124,7 +98,7 @@ float accumulate_showdown_equity(Rng& rng, const std::vector<Card>& player_hand,
             suits[1] = vh[1].suit();
             strengths.push_back(evaluate_seven_strength_fast(ranks, suits));
         }
-        equity_sum += hero_showdown_equity_strengths(strengths);
+        equity_sum += hero_showdown_share(strengths);
     }
     return static_cast<float>(equity_sum / static_cast<double>(iterations));
 }

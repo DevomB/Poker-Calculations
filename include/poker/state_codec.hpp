@@ -10,7 +10,7 @@ namespace poker {
 
 inline constexpr char kStateCodecMagic[4] = {'P', 'K', 'S', 'T'};
 inline constexpr std::uint8_t kStateCodecVersion = 1;
-inline constexpr std::size_t kStateCodecMaxPlayers = 10;
+inline constexpr std::size_t kStateCodecMaxPlayers = kMaxStatePlayers;
 
 [[nodiscard]] std::vector<std::uint8_t> encode_poker_state(const PokerGameState& state, std::string* err = nullptr);
 

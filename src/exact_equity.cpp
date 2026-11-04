@@ -52,8 +52,8 @@ double exact_hu_equity_vs_random_hand(const std::vector<Card>& hero_hole_cards,
             "exactHuEquityVsRandomHand: board must be empty (preflop) or have 3..5 cards");
     }
     DeckBitset used;
-    used.mark_cards(hero_hole_cards);
-    used.mark_cards(board_cards);
+    used.mark_cards_distinct(hero_hole_cards, "hero or board");
+    used.mark_cards_distinct(board_cards, "hero or board");
     const std::vector<int> deck = used.unused_indices();
     const int need_board = 5 - static_cast<int>(board_cards.size());
     const int need_villain = 2;

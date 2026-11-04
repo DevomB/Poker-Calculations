@@ -61,6 +61,15 @@ target_include_directories(poker_lib PUBLIC
 set_target_properties(poker_lib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_definitions(poker_lib PUBLIC $<$<BOOL:${WIN32}>:NOMINMAX>)
 
+# C++-only checks (npm run test:native). Off by default; the Node addon never builds them.
+option(POKER_BUILD_TESTS "Build the C++ native test" OFF)
+if(POKER_BUILD_TESTS)
+    enable_testing()
+    add_executable(poker_native_test test/native/native_test.cpp)
+    target_link_libraries(poker_native_test PRIVATE poker_lib)
+    add_test(NAME poker_native_test COMMAND poker_native_test)
+endif()
+
 if(DEFINED CMAKE_JS_INC AND NOT CMAKE_JS_INC STREQUAL "")
     execute_process(
         COMMAND node -p "require('node-addon-api').include"

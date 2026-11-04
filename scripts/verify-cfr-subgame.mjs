@@ -2,49 +2,7 @@
  * Runtime checks for CFR / best-response subgame exports.
  * Run from NPM/: `node scripts/verify-cfr-subgame.mjs` (requires built native addon).
  */
-import { createRequire } from 'node:module';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(join(root, 'package.json'));
-
-let poker;
-try {
-  poker = require('./index.js');
-} catch (e) {
-  console.error('Native addon not loaded — run `npm run build:native` first.');
-  console.error(e.message);
-  process.exit(1);
-}
-
-const EPS = 1e-9;
-function assertNear(label, actual, expected, tol = EPS) {
-  if (Math.abs(actual - expected) > tol) {
-    throw new Error(`${label}: expected ${expected}, got ${actual}`);
-  }
-}
-function assertTrue(label, cond) {
-  if (!cond) throw new Error(label);
-}
-
-const ranks = '23456789TJQKA';
-const suits = 'cdhs';
-function deckId(card) {
-  const r = ranks.indexOf(card[0]);
-  const s = suits.indexOf(card[1]);
-  if (r < 0 || s < 0) throw new Error(`bad card ${card}`);
-  return r * 4 + s;
-}
-function sparseHoles(pairs) {
-  const indices = [];
-  const weights = [];
-  for (const [a, b, w] of pairs) {
-    indices.push(deckId(a), deckId(b));
-    weights.push(w ?? 1);
-  }
-  return { indices: Int32Array.from(indices), weights: Float64Array.from(weights) };
-}
+import { poker, assertNear, assertTrue, sparseHoles } from './verify-lib.mjs';
 
 // --- regret matching ---
 const rm = poker.regretMatchingStrategy([1, -1, 0]);
@@ -138,7 +96,8 @@ const names = [
   'regretMatchingStrategy',
   'cfrRiverBetCallFoldSolve',
   'bestResponseRiver',
-  'exploitabilityRiver',  'fictitiousPlayRiver',
+  'exploitabilityRiver',
+  'fictitiousPlayRiver',
   'evOfStrategyProfile',
   'strategySupportSize',
   'cfrNodeReachUpdate',

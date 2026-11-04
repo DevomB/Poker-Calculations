@@ -1,11 +1,11 @@
 /**
  * Prints every **callable** name on the loaded N-API addon. This list must stay in sync with
- * `native/binding_register.cpp` (and `index.d.ts`). Expected count: 370.
+ * `native/binding_register.cpp` (and `index.d.ts`). Expected count: 371.
  *
  * Run from NPM/: `node scripts/list-native-exports.mjs`
  *
- * Not shown here: C++-only engine APIs (`GameEngine`, deck shuffle/deal, `BotConfig` file load/save, etc.).
- * Those are covered under **Engine and integration** in API.md.
+ * Not shown here: C++-only APIs (`GameEngine`, `Deck`, `BotConfig` file load/save); see README,
+ * Development.
  */
 import { createRequire } from 'module';
 

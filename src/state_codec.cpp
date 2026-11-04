@@ -89,8 +89,10 @@ std::vector<std::uint8_t> encode_poker_state(const PokerGameState& state, std::s
 
     for (const Player& pl : state.players) {
         if (pl.hole_cards.size() != 2) {
+            // PKST v1 has no "unknown hand" marker; the caller decides how to represent one.
             if (err) {
-                *err = "encodePokerState: each player needs exactly 2 hole cards";
+                *err = "encodePokerState: PKST stores exactly 2 hole cards per player; unknown hands "
+                       "(holeCards: []) cannot be encoded";
             }
             return {};
         }

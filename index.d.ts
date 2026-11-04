@@ -35,7 +35,15 @@ declare namespace api {
     villains?: number;
   }
 
-  /** Serialized game state (camelCase) passed to `decideAction`. */
+  /**
+   * No-limit Hold'em table snapshot (camelCase) for `decideAction` and the other state APIs.
+   * Chip fields are integers that fit in 32 bits, non-negative, with `pot + sum(stack) <= 2^31 - 1`;
+   * `pot` includes every `committedThisStreet`, and `currentBet` is at least the largest of them.
+   * 2–10 players with unique seats 0–255; `holeCards` is 2 known cards or `[]` for an unknown hand;
+   * no card appears twice; the board has 0/3/4/5 cards to match `phase` (any of those once the hand
+   * is complete); `actedThisStreet` has one boolean per player; `actingIndex` is -1 or a player who
+   * can act. `validatePokerState` lists every violation; the other state APIs throw on the first.
+   */
   export interface NativePokerState {
     players: Array<{
       name?: string;
@@ -62,6 +70,7 @@ declare namespace api {
   export interface NativeBotConfig {
     aggressionThreshold?: number;
     riskTolerance?: number;
+    /** Monte Carlo trials per decision (default 800). Must be at least 1: there is no non-simulated fallback. */
     monteCarloSimulations?: number;
     monteCarloVillains?: number;
     raisePotFraction?: number;
@@ -69,6 +78,12 @@ declare namespace api {
     rngSeed?: number;
   }
 
+  /**
+   * Opponent tendencies for `decideAction`. Only `aggressionFactor` is read: a normalized score in
+   * [0, 1] (0.5 neutral), not the (bets + raises) / calls ratio of `opponentAggressionFactor`. It
+   * shifts hero's equity by `(aggressionFactor - 0.5) * opponentAggressionWeight`, a heuristic nudge
+   * rather than a range inference.
+   */
   export interface NativeOpponentModel {
     aggressionFactor?: number;
     callFrequency?: number;
@@ -245,12 +260,30 @@ declare namespace api {
     seed?: number;
   }
 
+  /**
+   * Each trial pays hero's pot share in [0, 1] (`1/k` on a k-way chop). `se` is the standard error
+   * from the sampled payoff variance (0.5 when `n` is 1). `ciLow`/`ciHigh` is a 95% Wilson score
+   * interval at the unrounded mean: conservative for split pots, and it does not collapse when every
+   * sample is equal. Monte Carlo error only; it says nothing about modelling choices.
+   */
   export interface McEquityDetailedResult {
     estimate: number;
     se: number;
     ciLow: number;
     ciHigh: number;
     n: number;
+  }
+
+  /** `McEquityDetailedResult` plus the opponent-hand draws it took; `n / attempts` is the acceptance rate. */
+  export interface RangesEquityResult extends McEquityDetailedResult {
+    attempts: number;
+  }
+
+  export interface RangesEquityOptions {
+    /** Known dead cards (mucked or exposed); no range combo or runout uses them. */
+    deadCards?: CardInput;
+    /** Opponent-hand draws allowed before giving up (default `100 × numSimulations + 10000`). */
+    maxAttempts?: number;
   }
 
   export interface PreflopMatrixOptions {
@@ -596,6 +629,12 @@ declare namespace api {
     other: number;
   }
 
+  /**
+   * No-limit legal actions for one player. `toCall` may exceed the stack (a call is then all-in).
+   * `minRaiseTo` is the current bet plus the last full raise, or all-in when shorter. A player who
+   * already acted and faces less than a full raise (a short all-in) cannot re-raise. Everything is
+   * false once the hand is over or for a folded or all-in player.
+   */
   export interface LegalActionSummaryResult {
     canFold: boolean;
     canCheck: boolean;
@@ -621,6 +660,7 @@ declare namespace api {
     toCall: number;
   }
 
+  /** `legalActions` are hero's; `ev` is not populated. Batch rows that fail carry only `error`. */
   export interface DecisionDiagnosticResult {
     decision: DecisionResult;
     legalActions: LegalActionSummaryResult;
@@ -629,7 +669,13 @@ declare namespace api {
     error?: string;
   }
 
-  /** N-API addon (370 native function exports): NLHE hand engine, equity (MC + exact), strategy, chip/pot/rake math, ICM, side pots, heuristics, GTO-style frequencies, statistics, tournament/exact-runout/subgame helpers, board texture, suit isomorphism, range tools, opponent modeling, PKO/FGS/Nash/CFR/exact-multiway, Omaha Hi, PLO-8, Big O, MTT spots, short deck (6+), hand potential (HS/PPot/NPot/EHS), 2-7 single draw, 7-card stud / razz, bucketed flop CFR, and related utilities (all implemented in C++). */
+  /**
+   * Native addon exports (C++ via N-API). Unprefixed card functions are Texas Hold'em: two hole
+   * cards, a 52-card deck, 1326 combos, 169 hand classes. That includes Monte Carlo and exact equity,
+   * ranges, hand potential, and every state / `decideAction` API, which model no-limit Hold'em
+   * betting only. Other games use prefixed functions: `omaha*`, `omahaHiLo*` / `evaluateOmahaHiLo`,
+   * `bigO*`, `shortDeck*`, `stud*` / `razz*`, `deuceSeven*`.
+   */
   export interface PokerCalculations {
     evaluateBestHand(cards: CardInput, options?: EvaluateBestHandOptions): HandEvalResult;
     evaluateBestHand(
@@ -736,10 +782,20 @@ declare namespace api {
       boardCards: number,
       out?: Float64Array
     ): Float64Array;
-    /** PKST binary encoding of `NativePokerState`. */
+    /**
+     * PKST binary encoding of a valid `NativePokerState`. PKST stores exactly two hole cards per
+     * player, so a state with an unknown hand (`holeCards: []`) cannot be encoded.
+     */
     encodePokerState(state: NativePokerState): PokerStateBytes;
-    /** Decode PKST bytes to `NativePokerState` (camelCase). */
+    /** Decode PKST bytes to `NativePokerState` (camelCase); the decoded state must be valid. */
     decodePokerState(bytes: PokerStateBytes): NativePokerState;
+    /**
+     * Rule-based no-limit Hold'em action for hero (`heroSeat`, else the acting player) from Monte
+     * Carlo equity vs `monteCarloVillains` random hands, pot odds, and call EV. A call that puts hero
+     * all-in for less is priced on the chips hero can win (side-pot layers) and costs only the stack.
+     * `raiseBy` (chips above the call) stays within the legal raise range. Throws when
+     * `monteCarloSimulations` < 1, the seat is empty, or hero cannot act (hand over, folded, all-in).
+     */
     decideAction(
       state: NativePokerState | PokerStateBytes,
       config: NativeBotConfig,
@@ -932,14 +988,21 @@ declare namespace api {
     orbitCostChips(smallBlind: number, bigBlind: number, antesFromSeats: number[]): number;
     /** full Kelly for binary outcome, `netOdds` = net profit per unit staked when you win. */
     kellyCriterionBinary(winProbability: number, netOdds: number): number;
-    /** SE of binomial MC estimate. */
+    /**
+     * Bernoulli standard error `sqrt(pHat (1 - pHat) / nTrials)` for a 0/1 outcome. For payoffs
+     * with chops use the sample-variance `se` of `simulateHandOutcomeDetailed` instead.
+     */
     monteCarloStandardError(pHat: number, nTrials: number): number;
     /**
      * Smallest integer `n` so `monteCarloStandardError(pHat, n) <= targetSe` (ceil of `p(1-p)/targetSe²`).
      * Requires `pHat` strictly between `0` and `1`.
      */
     monteCarloTrialsForStandardErrorBound(pHat: number, targetSe: number): number;
-    /** Beta–Binomial update on fold frequency. */
+    /**
+     * Beta(priorAlpha, priorBeta) prior on a fold probability updated with integer `folds` and
+     * `calls` counts: posterior Beta(alpha, beta), mean alpha / (alpha + beta), variance
+     * alpha beta / ((alpha + beta)^2 (alpha + beta + 1)).
+     */
     betaBinomialFoldPosterior(
       priorAlpha: number,
       priorBeta: number,
@@ -1202,7 +1265,28 @@ declare namespace api {
       numSimulations: number,
       seed: number
     ): number;
-    /** Monte Carlo equity with standard error and Wilson CI. */
+    /**
+     * Monte Carlo showdown equity against one weighted range per opponent (1–9 ranges, each a
+     * dense `Float64Array(1326)` or sparse spec). Combos that use hero, board, or `deadCards` are
+     * dropped. Each trial draws a hand from every range and keeps the whole tuple only if no two
+     * opponents share a card, so tuples follow P(h₁…hₖ) ∝ Π wᵢ(hᵢ) over card-disjoint tuples; the
+     * board is then completed at random. Ties pay `1/k`; there are no side pots. Seeded and
+     * reproducible on one platform. Throws when a range has no live combo, or when fewer than
+     * `numSimulations` tuples are card-disjoint within `maxAttempts` draws (with the default, an
+     * acceptance rate below about 1%, e.g. ranges that all need the same cards).
+     */
+    simulateEquityVsRanges(
+      heroHoleCards: CardInput,
+      boardCards: CardInput,
+      ranges: Array<Float64Array | SparseRangeSpec>,
+      numSimulations: number,
+      seed: number,
+      options?: RangesEquityOptions
+    ): RangesEquityResult;
+    /**
+     * `simulateHandOutcome` with uncertainty (see `McEquityDetailedResult`). `numSimulations` must
+     * be at least 1.
+     */
     simulateHandOutcomeDetailed(
       holeCards: CardInput,
       board: CardInput,
@@ -1736,18 +1820,36 @@ declare namespace api {
     geometricStreetSizingPlan(pot: number, effectiveStack: number, streetsRemaining: number): Float64Array;
     thinValueMargin(heroEquityWhenCalled: number, pot: number, betSize: number): number;
     betSizingIndifferencePoint(pot: number, foldFrequency: number, equityWhenCalled: number): number;
+    /** `betaBinomialFoldPosterior` with c-bet counts: folds and continues (calls or raises) to c-bets. */
     opponentFoldToCbetPosterior(
       priorAlpha: number,
       priorBeta: number,
       folds: number,
       continues: number
     ): BetaBinomialFoldPosterior;
+    /**
+     * Conventional aggression factor `(bets + raises) / calls` from observed action counts. The
+     * denominator is floored at 1, so with no calls it returns `bets + raises`. A point estimate:
+     * small samples are noisy.
+     */
     opponentAggressionFactor(bets: number, raises: number, calls: number): number;
+    /**
+     * Slope of continue rate against bet size between the first and last observation
+     * (`(rate_last - rate_first) / (size_last - size_first)`, per unit of `sizes`). 0 with fewer than
+     * two points or equal end sizes. Arrays must be the same length.
+     */
     opponentRangeElasticityFromSizing(sizes: F64VectorInput, continueRates: F64VectorInput): number;
+    /** `rangeGiniCoefficient` clamped to [0, 1]: how concentrated the weights are. `board` is not used. */
     villainPolarizedRangeScore(range: SparseRangeSpec | Float64Array, board: CardInput): number;
+    /** Legal actions for the acting player (player 0 when `actingIndex` is -1). */
     legalActionSummary(state: NativePokerState | PokerStateBytes): LegalActionSummaryResult;
     actionMaskFromState(state: NativePokerState | PokerStateBytes): number;
+    /** Fills defaults and clamps: thresholds to [0, 1], at least 1 simulation and 1 villain. */
     normalizeBotConfig(config: Partial<NativeBotConfig>): NativeBotConfig;
+    /**
+     * Every problem with a state object or PKST bytes (same rules for both; see `NativePokerState`).
+     * A finished hand is valid; whether an action is possible is `legalActionSummary`'s question.
+     */
     validatePokerState(state: NativePokerState | PokerStateBytes): PokerStateValidationResult;
     stateToFeatureVector(state: NativePokerState | PokerStateBytes): Float64Array;
     decideActionWithDiagnostics(
@@ -1756,6 +1858,10 @@ declare namespace api {
       opponentModel?: NativeOpponentModel | null,
       heroSeat?: number
     ): DecisionDiagnosticResult;
+    /**
+     * `decideActionWithDiagnostics` for each state's acting player, with `opponentModels[i]` (or null)
+     * for state `i`. A state that is invalid or cannot be acted on yields `{ error }` in its row.
+     */
     runBotPolicyBatch(
       states: Array<NativePokerState | PokerStateBytes>,
       config: NativeBotConfig,

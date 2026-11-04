@@ -1,13 +1,19 @@
 # Numerical semantics
 
-## Deck indices
+## Deck, combo, and class indices
 
-Cards use `deckIndex = rank * 4 + suit` with rank `0..12` (2..A) and suit `0..3` (c,d,h,s).
+- Cards use `deckIndex = rank * 4 + suit` with rank `0..12` (2..A) and suit `0..3` (c,d,h,s).
+- Dense 1326 ranges are lexicographic over deck-id pairs `a < b`:
+  `index = a * 51 - a * (a - 1) / 2 + (b - a - 1)`, so `(0,1) -> 0`, `(1,2) -> 51`, `(50,51) -> 1325`.
+- The 169 hand classes take the low rank in the outer loop, each block a pair and then suited /
+  offsuit with every higher rank: `22, 32s, 32o, 42s, …, KK, AKs, AKo, AA`. With `l <= h`,
+  `index = l (26 - l)` for the pair and `l (26 - l) + 1 + 2 (h - l - 1) + (offsuit ? 1 : 0)` otherwise.
 
 ## Random number generation
 
 - Monte Carlo: `std::mt19937` with user-supplied seed.
 - `parallelHandSimulation`: worker `t` uses seed `baseSeed + t * 9743`.
+- `decideAction`: seed `rngSeed XOR (pot * 1315423911 mod 2^32)`; `rngSeed` itself is reduced modulo 2^32.
 - Cooperative cancellation checks every **4096** iterations (`CancelPredicate`).
 
 ## Showdown equity
@@ -62,10 +68,75 @@ Cards use `deckIndex = rank * 4 + suit` with rank `0..12` (2..A) and suit `0..3`
 and `v = ceil(villainStack / chipsPerAllIn)` steps: `P(hero) = (1 − r^h) / (1 − r^(h+v))`, `r = (1 − p) / p`,
 or `h / (h + v)` when `p = 0.5`; expected all-ins `h × v` at `p = 0.5`.
 
+## Monte Carlo uncertainty
+
+A trial pays hero `X` in [0, 1]: 1 for a win, `1/k` for a k-way chop, 0 for a loss. Chops make
+`X` non-Bernoulli, so `simulateHandOutcomeDetailed` reports:
+
+- `se = sqrt(s² / n)`, where `s² = Σ (x - x̄)² / (n - 1)` is the sample variance of the payoffs
+  (accumulated with Welford's update). With `n = 1` there is no sample variance and `se = 0.5`,
+  the largest standard deviation a [0, 1] payoff can have.
+- `[ciLow, ciHigh]`: the 95% Wilson score interval evaluated at the unrounded mean `x̄`. Any payoff
+  in [0, 1] with mean `μ` has `Var X <= μ (1 - μ)`, the Bernoulli variance the Wilson interval
+  assumes, so the interval is conservative for split pots. It deliberately ignores `s²`: when every
+  sample is equal (`s² = 0`, for example a board everyone plays) the true outcome distribution can
+  still have rare outcomes the sample missed, and the interval keeps its width.
+- Limits: both are large-sample normal approximations (coverage is approximate for small `n`),
+  they quantify Monte Carlo error only, and seeds make results repeatable rather than independent.
+
+`monteCarloStandardError(pHat, n)` stays the Bernoulli formula `sqrt(pHat (1 - pHat) / n)`.
+
+## Multiway range equity
+
+`simulateEquityVsRanges` targets the joint law of the opponents' hands,
+`P(h₁ … hₖ) ∝ w₁(h₁) ⋯ wₖ(hₖ)` over tuples that share no card with each other, hero, the board, or
+the dead cards. Each draw samples every range independently (combos touching known cards removed)
+and keeps the tuple only if the hands are disjoint; on any collision the whole tuple is redrawn.
+Accepted tuples have exactly the target law. Drawing hands one at a time and renormalising later
+ranges after removing earlier cards does not: it weights each earlier hand by its own range rather
+than by how many compatible completions it has. The board is then completed uniformly from the
+remaining deck, and payoffs and uncertainty are those of the Monte Carlo uncertainty section. The
+sampler stops with an error after `maxAttempts` draws (default `100 n + 10000`), so it fails rather
+than slows down when the acceptance rate `n / attempts` falls below about 1%. Results are showdown
+equity only; side-pot payouts need `exactMultiwaySidePotChipEv` or the side-pot helpers.
+
 ## Floating point
 
 - Most APIs return `double`; batch MC paths may use `float` internally then widen.
-- Wilson intervals on `simulateHandOutcomeDetailed` use `wilsonScoreInterval` with `successes = round(estimate × n)`.
+
+## Short-stack calls (`decideAction`)
+
+When hero's stack `S` is below `toCall`, a call costs `S` and can only win what each player has put
+in up to hero's matched level. With this street's commitments `c_j`, hero's level after the call
+`h = c_hero + S`, and `side_pot_ladder_from_commitments` layers, the call is priced with
+`pot' = (pot - Σ c_j) + Σ_j min(c_j, h) - S` (hero's own term counted as `h`) and `toCall' = S`;
+earlier streets are fully matched by anyone who still has chips. Heads-up, villain's unmatched excess is returned. Example: villain bets
+100 into 10 and hero has 10 left, so `pot' = 20`, `toCall' = 10`, and at 40% equity the call is
+worth `0.4 × 20 − 0.6 × 10 = +2` (the raw `pot = 110, toCall = 100` would give −16). Hero's single
+equity estimate is applied to every layer hero can win. With a full call `pot' = pot`.
+
+## No-limit betting rules
+
+`legalActionSummary`, `decideAction`, and the C++ `GameEngine` share one rule set:
+
+- A full raise is at least the last full bet or raise this street (never below the big blind).
+  The minimum raise-to is `currentBet + that increment`, or all-in when the stack is shorter.
+- An all-in raise short of a full raise keeps the previous increment and does not reopen betting:
+  a player who already acted may call or fold, and may raise again only once the bet has grown by
+  at least one full raise since their last action (short raises can add up to one).
+- `GameEngine` only: heads-up the button posts the small blind and acts first before the flop; a
+  short (all-in) blind still leaves the full big blind to call; once at most one player can bet the
+  board runs out to showdown; one player left ends the hand. `pot + Σ stacks` is conserved.
+
+## Opponent modeling
+
+- `opponentAggressionFactor(bets, raises, calls) = (bets + raises) / max(1, calls)` from action counts.
+- `betaBinomialFoldPosterior` / `opponentFoldToCbetPosterior`: Beta(α₀, β₀) prior, integer fold and
+  continue counts, posterior Beta(α₀ + folds, β₀ + continues) with mean α / (α + β) and variance
+  αβ / ((α + β)² (α + β + 1)).
+- `NativeOpponentModel.aggressionFactor` is a different quantity: a normalized score in [0, 1]
+  (0.5 neutral). `decideAction` adds `(aggressionFactor − 0.5) × opponentAggressionWeight` to hero's
+  equity, a heuristic adjustment, not a range model.
 
 ## Preflop matrix
 

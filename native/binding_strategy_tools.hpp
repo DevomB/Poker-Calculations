@@ -28,7 +28,6 @@ Napi::Value GeometricStreetSizingPlan(const Napi::CallbackInfo& info);
 Napi::Value ThinValueMargin(const Napi::CallbackInfo& info);
 Napi::Value BetSizingIndifferencePoint(const Napi::CallbackInfo& info);
 
-Napi::Value OpponentFoldToCbetPosterior(const Napi::CallbackInfo& info);
 Napi::Value OpponentAggressionFactor(const Napi::CallbackInfo& info);
 Napi::Value OpponentRangeElasticityFromSizing(const Napi::CallbackInfo& info);
 Napi::Value VillainPolarizedRangeScore(const Napi::CallbackInfo& info);

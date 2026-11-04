@@ -1,9 +1,8 @@
 'use strict';
 
-// Correctness tests for the September 2026 fixes. Every assertion here either checks a
-// hand-countable value, a published reference value, or a brute-force enumeration built on
-// the legacy (sorted-group) evaluator, so a regression in the fast paths fails loudly.
-// Run: npm test
+// Regression tests. Every assertion checks a hand-countable value, a published reference value,
+// or a brute-force enumeration built on the legacy (sorted-group) evaluator, so a regression in
+// the fast paths fails loudly. Run: npm test
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -458,4 +457,271 @@ test('fast and legacy evaluators agree on every two- and three-card hand', () =>
       for (let c = b + 1; c < 52; c++) check([DECK[a], DECK[b], DECK[c]]);
     }
   }
+});
+
+test('detailed Monte Carlo SE uses the sampled payoff variance, not a Bernoulli formula', () => {
+  // Everyone plays the royal-flush board: every trial pays exactly 1 / (villains + 1).
+  for (const villains of [1, 2, 3]) {
+    const r = poker.simulateHandOutcomeDetailed(['2c', '3d'], ['Ah', 'Kh', 'Qh', 'Jh', 'Th'], 100, 42, villains);
+    near(r.estimate, 1 / (villains + 1), 1e-12, `${villains + 1}-way chop share`);
+    assert.equal(r.se, 0, 'constant payoffs have zero sample variance');
+    // Zero observed variance is not zero uncertainty: the interval keeps a Wilson width.
+    assert.ok(r.ciLow < r.estimate && r.estimate < r.ciHigh, `interval ${r.ciLow}..${r.ciHigh}`);
+  }
+  const hu = poker.simulateHandOutcomeDetailed(['2c', '3d'], ['Ah', 'Kh', 'Qh', 'Jh', 'Th'], 100, 42, 1);
+  const w = poker.wilsonScoreInterval(50, 100, 1.96);
+  near(hu.ciLow, w.lower, 1e-12, 'integer mean matches wilsonScoreInterval');
+  near(hu.ciHigh, w.upper, 1e-12, 'integer mean matches wilsonScoreInterval');
+
+  // Variable payoffs (win 1, chop 0.5): population moments by enumerating every villain hand.
+  const hero = ['Th', '3c'];
+  const board = ['Ah', 'Kd', 'Qs', 'Jc', '2h'];
+  const pool = live([...hero, ...board]);
+  const hs = poker.evaluateBestHand([...hero, ...board]).strength;
+  let m1 = 0;
+  let m2 = 0;
+  let count = 0;
+  for (let i = 0; i < pool.length; i++) {
+    for (let j = i + 1; j < pool.length; j++) {
+      const vs = poker.evaluateBestHand([pool[i], pool[j], ...board]).strength;
+      const x = hs > vs ? 1 : hs === vs ? 0.5 : 0;
+      m1 += x;
+      m2 += x * x;
+      count++;
+    }
+  }
+  const mu = m1 / count;
+  const sd = Math.sqrt(m2 / count - mu * mu);
+  const n = 20000;
+  const r = poker.simulateHandOutcomeDetailed(hero, board, n, 7, 1);
+  near(r.estimate, mu, 5 * sd / Math.sqrt(n), 'estimate');
+  near(r.se * Math.sqrt(n), sd, 0.01, 'se is the sample SD over sqrt(n)');
+  assert.ok(poker.monteCarloStandardError(r.estimate, n) > r.se * 1.3, 'Bernoulli SE overstates chop variance');
+
+  const one = poker.simulateHandOutcomeDetailed(['Ah', 'Kd'], ['Qh', 'Jh', '2c'], 1, 42, 1);
+  assert.equal(one.se, 0.5, 'one draw reports the largest SD a [0, 1] payoff can have');
+  assert.throws(() => poker.simulateHandOutcomeDetailed(['Ah', 'Kd'], ['Qh', 'Jh', '2c'], 0, 42, 1), /at least 1/);
+  // The exported Bernoulli helper keeps its meaning.
+  near(poker.monteCarloStandardError(0.5, 100), 0.05, 1e-15, 'monteCarloStandardError');
+});
+
+// Heads-up flop: villain bet 100 (in the 110 pot) and is all-in; hero has 10 behind.
+function shortCallState(heroCards = ['Ac', '2d']) {
+  return {
+    players: [
+      { holeCards: heroCards, stack: 10, seat: 0, committedThisStreet: 0 },
+      { holeCards: ['7c', '7d'], stack: 0, seat: 1, committedThisStreet: 100 },
+    ],
+    communityCards: ['Qh', 'Jh', 'Th'],
+    phase: 'flop',
+    pot: 110,
+    currentBet: 100,
+    smallBlind: 1,
+    bigBlind: 2,
+    actingIndex: 0,
+    actedThisStreet: [false, true],
+  };
+}
+
+test('validatePokerState checks objects and PKST bytes with the same rules', () => {
+  const ok = shortCallState();
+  assert.deepEqual(poker.validatePokerState(ok), { valid: true, errors: [] });
+  const errors = (mutate) => {
+    const s = shortCallState();
+    mutate(s);
+    return poker.validatePokerState(s).errors.join(' | ');
+  };
+  assert.match(errors((s) => { s.players[0].stack = -5; }), /players\[0\]\.stack must be non-negative/);
+  assert.match(errors((s) => { s.communityCards = ['Ac', 'Jh', 'Th']; }), /card Ac appears twice/);
+  assert.match(errors((s) => { s.players[1].seat = 0; }), /seat 0 is used twice/);
+  assert.match(errors((s) => { s.actingIndex = 2; }), /actingIndex must be -1 or an index/);
+  assert.match(errors((s) => { s.actedThisStreet = [false]; }), /one flag per player/);
+  assert.match(errors((s) => { s.actedThisStreet = [0, 1]; }), /actedThisStreet\[0\] must be a boolean/);
+  assert.match(errors((s) => { s.phase = 'turn'; }), /phase Turn needs 4 community cards/);
+  assert.match(errors((s) => { s.pot = 50; }), /pot must include/);
+  assert.match(errors((s) => { s.currentBet = 50; }), /currentBet must be at least/);
+  assert.match(errors((s) => { s.players[0].holeCards = ['Ac']; }), /2 cards, or none/);
+  // Chip fields are checked before conversion: no rounding, no 32-bit wraparound.
+  assert.match(errors((s) => { s.pot = 110.5; }), /pot must be a finite integer/);
+  assert.match(errors((s) => { s.pot = 1e12; }), /pot must fit in a 32-bit integer/);
+  assert.match(errors((s) => { s.players[0].stack = NaN; }), /stack must be a finite integer/);
+  assert.match(errors((s) => { s.players[0].stack = 2 ** 31 - 100; }), /must not exceed 2147483647 chips/);
+
+  // PKST bytes go through the same semantic checks: write a negative stack into valid bytes.
+  const bytes = poker.encodePokerState(ok);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const heroStackOffset = 8 + 8 * 4 + 1 + 3 + 2; // header, table fields, board, hero hole cards
+  assert.equal(view.getInt32(heroStackOffset, true), 10);
+  view.setInt32(heroStackOffset, -5, true);
+  assert.match(poker.validatePokerState(bytes).errors.join(' | '), /players\[0\]\.stack must be non-negative/);
+  assert.throws(() => poker.decideAction(bytes, { monteCarloSimulations: 10 }, null, 0), /non-negative/);
+
+  // Unknown opponent hands are legitimate; PKST cannot store them and says so.
+  const unknown = shortCallState();
+  unknown.players[1].holeCards = [];
+  assert.equal(poker.validatePokerState(unknown).valid, true);
+  assert.throws(() => poker.encodePokerState(unknown), /unknown hands/);
+
+  // A finished hand is a valid snapshot even though nobody can act on it.
+  const done = { ...shortCallState(), phase: 'handcomplete', actingIndex: -1 };
+  assert.equal(poker.validatePokerState(done).valid, true);
+  assert.equal(poker.legalActionSummary(done).canCall, false);
+  assert.throws(() => poker.decideAction(done, { monteCarloSimulations: 10 }, null, 0), /hand is over/);
+});
+
+test('decideAction prices a short all-in call on the chips hero can win', async () => {
+  const state = shortCallState();
+  const cfg = { monteCarloSimulations: 4000, rngSeed: 1 };
+  // decideAction seeds its simulation with rngSeed ^ (pot * 1315423911), so the equity it saw
+  // can be reproduced here.
+  const equity = poker.simulateHandOutcome(['Ac', '2d'], state.communityCards, 4000, (1 ^ Math.imul(110, 1315423911)) >>> 0, 1);
+  // 90 of villain's 100 is uncalled: hero risks 10 to win 10 dead + 10 matched.
+  assert.ok(poker.expectedValueCall(equity, 20, 10) > 0, `equity ${equity} should call`);
+  assert.ok(poker.expectedValueCall(equity, 110, 100) < 0, `raw pot and bet would fold ${equity}`);
+  near(poker.expectedValueCall(0.4, 20, 10), 2, 1e-12, 'the documented +2 example');
+  near(poker.expectedValueCall(0.4, 110, 100), -16, 1e-12, 'what the raw inputs give');
+
+  assert.deepEqual(poker.decideAction(state, cfg, null, 0), { action: 'call', raiseBy: 0 });
+  assert.deepEqual(await poker.decideActionAsync(state, cfg, null, 0), { action: 'call', raiseBy: 0 });
+  const diag = poker.decideActionWithDiagnostics(state, cfg, null, 0);
+  assert.equal(diag.decision.action, 'call');
+  assert.equal(diag.legalActions.canRaise, false);
+  const [row] = poker.runBotPolicyBatch([state], cfg);
+  assert.equal(row.decision.action, 'call');
+  assert.deepEqual(poker.decideAction(poker.encodePokerState(state), cfg, null, 0), { action: 'call', raiseBy: 0 });
+});
+
+test('decideAction has a safe contract on every entry point', async () => {
+  // The old zero-simulation fallback read an encoded hand rank as equity and folded a royal flush.
+  const royal = shortCallState(['Ah', 'Kh']);
+  royal.players[0].stack = 1000;
+  for (const sims of [0, -5]) {
+    assert.throws(() => poker.decideAction(royal, { monteCarloSimulations: sims }, null, 0), /at least 1/);
+    await assert.rejects(poker.decideActionAsync(royal, { monteCarloSimulations: sims }, null, 0), /at least 1/);
+    assert.throws(() => poker.decideActionWithDiagnostics(royal, { monteCarloSimulations: sims }, null, 0), /at least 1/);
+    assert.match(poker.runBotPolicyBatch([royal], { monteCarloSimulations: sims })[0].error, /at least 1/);
+  }
+  assert.equal(poker.normalizeBotConfig({ monteCarloSimulations: 0 }).monteCarloSimulations, 1);
+  assert.notEqual(poker.decideAction(royal, { monteCarloSimulations: 50 }, null, 0).action, 'fold');
+
+  // Raises stay inside the legal range however large the configured pot fraction.
+  const open = shortCallState(['Ah', 'Kh']);
+  Object.assign(open, { pot: 100, currentBet: 0, actedThisStreet: [false, false] });
+  open.players[0].stack = 1000;
+  open.players[1] = { holeCards: ['7c', '7d'], stack: 1000, seat: 1, committedThisStreet: 0 };
+  const big = poker.decideAction(open, { monteCarloSimulations: 200, raisePotFraction: 50, aggressionThreshold: 0 }, null, 0);
+  assert.deepEqual(big, { action: 'raise', raiseBy: 1000 });
+  const legal = poker.legalActionSummary(open);
+  assert.ok(legal.minRaiseTo <= big.raiseBy && big.raiseBy <= legal.maxRaiseTo);
+
+  // Hero must be seated and able to act.
+  assert.throws(() => poker.decideAction(open, { monteCarloSimulations: 10 }, null, 7), /heroSeat 7 is not at the table/);
+  assert.throws(() => poker.decideAction(open, { monteCarloSimulations: 10 }, null, 0.5), /heroSeat must be an integer/);
+  const allIn = shortCallState();
+  assert.throws(() => poker.decideAction(allIn, { monteCarloSimulations: 10 }, null, 1), /all-in/);
+
+  // Seeds reduce modulo 2^32 instead of overflowing.
+  const cfg = { monteCarloSimulations: 300, aggressionThreshold: 0.6 };
+  assert.deepEqual(
+    poker.decideAction(open, { ...cfg, rngSeed: 2 ** 32 + 5 }, null, 0),
+    poker.decideAction(open, { ...cfg, rngSeed: 5 }, null, 0),
+  );
+
+  // runBotPolicyBatch applies one opponent model per state and reports bad rows per row.
+  const check = shortCallState(['Ac', '2d']);
+  Object.assign(check, { pot: 20, currentBet: 0, actedThisStreet: [false, false] });
+  check.players[1] = { holeCards: ['7c', '7d'], stack: 100, seat: 1, committedThisStreet: 0 };
+  const tuning = { monteCarloSimulations: 2000, rngSeed: 3, opponentAggressionWeight: 1 };
+  const aggressive = { aggressionFactor: 1 };
+  const rows = poker.runBotPolicyBatch([check, check, { ...check, phase: 'showdown' }], tuning, [null, aggressive, null]);
+  assert.equal(rows[0].decision.action, poker.decideAction(check, tuning, null, 0).action);
+  assert.equal(rows[1].decision.action, poker.decideAction(check, tuning, aggressive, 0).action);
+  assert.notEqual(rows[0].decision.action, rows[1].decision.action);
+  assert.match(rows[2].error, /community cards/);
+  assert.throws(() => poker.runBotPolicyBatch([check], tuning, aggressive), /opponentModels must be an array/);
+});
+
+test("Hold'em evaluation and exact equity reject duplicate cards like the variant APIs", () => {
+  const board = ['Ah', '9h', '8d']; // hero's Ah is also on the board
+  assert.throws(() => poker.evaluateBestHand(['Ah', 'Ah', '9h', '8d', '2c']), /duplicate/);
+  assert.throws(() => poker.evaluateHandStrength(['Ah', 'Kd'], board), /duplicate/);
+  assert.throws(() => poker.evaluateHandStrengthFast(['Ah', 'Kd'], board), /duplicate/);
+  assert.throws(() => poker.evaluateHandCategory(['Ah', 'Kd'], board), /duplicate/);
+  assert.throws(() => poker.exactHuEquityVsKnownHand(['Ah', 'Kd'], ['7c', '7d'], board), /duplicate/);
+  assert.throws(() => poker.exactHuEquityVsRandomHand(['Ah', 'Kd'], board), /duplicate/);
+  assert.throws(() => poker.exactHuEquityVsRange(['Ah', 'Kd'], board, new Float64Array(1326).fill(1)), /duplicate/);
+  assert.throws(() => poker.exactHeroCategoryJointFlopToRiver(['Ah', 'Kd'], board), /duplicate/);
+  assert.throws(() => poker.evaluateHandStrengthFastBatch(Uint8Array.of(50, 45), Uint8Array.of(50, 31, 26), 3), /duplicate/);
+  assert.throws(() => poker.exactHuEquityVsRandomHandBatch(Uint8Array.of(50, 45), Uint8Array.of(50, 31, 26), 3), /duplicate/);
+  // The variants already did this.
+  assert.throws(() => poker.exactHuOmahaEquityVsKnown(['Ah', 'Kd', 'Qs', 'Jc'], ['7c', '7d', '6s', '5s'], board), /duplicate/);
+});
+
+test('opponent-modeling helpers validate their counts', () => {
+  assert.deepEqual(poker.opponentFoldToCbetPosterior(2, 3, 4, 5), poker.betaBinomialFoldPosterior(2, 3, 4, 5));
+  near(poker.opponentFoldToCbetPosterior(2, 3, 4, 5).posteriorMean, 6 / 14, 1e-15, 'Beta(6, 8) mean');
+  assert.throws(() => poker.opponentFoldToCbetPosterior(2, 3, 4.5, 5), /integer counts/);
+  near(poker.opponentAggressionFactor(3, 1, 2), 2, 0, '(bets + raises) / calls');
+  near(poker.opponentAggressionFactor(3, 1, 0), 4, 0, 'calls floored at 1');
+  assert.throws(() => poker.opponentAggressionFactor(-1, 1, 2), /non-negative/);
+  assert.throws(() => poker.opponentRangeElasticityFromSizing([0.5, 1], [0.6]), /same length/);
+});
+
+test('simulateEquityVsRanges samples the joint range distribution', () => {
+  const id = (c) => RANKS.indexOf(c[0]) * 4 + SUITS.indexOf(c[1]);
+  const range = (...hands) => ({
+    indices: Int32Array.from(hands.flatMap(([a, b]) => [id(a), id(b)])),
+    weights: Float64Array.from(hands.map(() => 1)),
+  });
+  const within = (r, exact, label) => near(r.estimate, exact, 4.5 * r.se + 1e-12, label);
+
+  // Villain 1 holds KsKh or 3c4d; villain 2 holds 4d5d or 9c9s, and 4d5d collides with 3c4d.
+  // Card-disjoint tuples are (KK,45), (KK,99), (34,99), so P(villain 1 = KK) is 2/3. Drawing
+  // villain 1 first and renormalising villain 2 would give 1/2 and a very different equity.
+  const hero = ['Ac', 'Kc'];
+  const flop = ['Kd', '7s', '2h'];
+  const eq = (v1, v2) => poker.exactMultiwayEquityKnownHands([hero, v1, v2], flop)[0];
+  const kk = ['Ks', 'Kh'];
+  const low = ['3c', '4d'];
+  const joint = (eq(kk, ['4d', '5d']) + eq(kk, ['9c', '9s']) + eq(low, ['9c', '9s'])) / 3;
+  const sequential = 0.25 * eq(kk, ['4d', '5d']) + 0.25 * eq(kk, ['9c', '9s']) + 0.5 * eq(low, ['9c', '9s']);
+  const r = poker.simulateEquityVsRanges(hero, flop, [range(kk, low), range(['4d', '5d'], ['9c', '9s'])], 60000, 11);
+  within(r, joint, 'joint law');
+  assert.ok(Math.abs(r.estimate - sequential) > 20 * r.se, 'not the sequential approximation');
+  near(r.n / r.attempts, 0.75, 0.01, 'one tuple in four collides');
+
+  // Singleton ranges reproduce exact known-hand equity, heads-up and multiway, with dead cards.
+  within(poker.simulateEquityVsRanges(['Ah', 'Qd'], flop, [range(['7c', '7d'])], 20000, 2),
+    poker.exactHuEquityVsKnownHand(['Ah', 'Qd'], ['7c', '7d'], flop), 'heads-up');
+  const holes = [['Ah', 'Qd'], ['Jc', 'Tc'], ['8h', '8d'], ['6s', '5s']];
+  const turn = ['Ks', '7c', '2d', '9h'];
+  within(poker.simulateEquityVsRanges(holes[0], turn, holes.slice(1).map((h) => range(h)), 20000, 3),
+    poker.exactMultiwayEquityKnownHands(holes, turn)[0], '4-way turn');
+  within(poker.simulateEquityVsRanges(holes[0], ['Ks', '7c', '2d'], [range(holes[1]), range(holes[2])], 20000, 4, { deadCards: ['Td', '9c'] }),
+    poker.exactMultiwayEquityWithDeadCards(holes.slice(0, 3), ['Ks', '7c', '2d'], ['Td', '9c'])[0], 'dead cards');
+
+  // Fractional ties: everyone plays the royal board.
+  for (const k of [1, 2]) {
+    const chop = poker.simulateEquityVsRanges(['2c', '3d'], ['Ah', 'Kh', 'Qh', 'Jh', 'Th'],
+      Array.from({ length: k }, () => new Float64Array(1326).fill(1)), 500, 5);
+    near(chop.estimate, 1 / (k + 1), 1e-12, `${k + 1}-way chop`);
+    assert.equal(chop.se, 0);
+  }
+
+  // Seeded, bounded, and explicit about impossible inputs.
+  const args = [hero, flop, [range(kk, low), range(['4d', '5d'], ['9c', '9s'])], 2000];
+  assert.deepEqual(poker.simulateEquityVsRanges(...args, 9), poker.simulateEquityVsRanges(...args, 9));
+  assert.notDeepEqual(poker.simulateEquityVsRanges(...args, 9), poker.simulateEquityVsRanges(...args, 10));
+  assert.throws(() => poker.simulateEquityVsRanges(hero, flop, [range(kk), range(kk)], 100, 1, { maxAttempts: 5000 }),
+    /card-disjoint in 5000 attempts/);
+  assert.throws(() => poker.simulateEquityVsRanges(hero, flop, [range(['Ac', 'Qd'])], 100, 1), /ranges\[0\]/);
+  assert.throws(() => poker.simulateEquityVsRanges(hero, flop, [], 100, 1), /1 to 9/);
+  assert.throws(() => poker.simulateEquityVsRanges(hero, flop, [range(kk)], 0, 1), /at least 1/);
+});
+
+test('range rankings order equal weights the same way on every platform', () => {
+  const uniform = new Float64Array(1326).fill(1);
+  assert.deepEqual(poker.rangeTopCombos(uniform, 3).map((c) => c.comboIndex), [0, 1, 2]);
+  // Offsuit classes (12 combos) outweigh pairs and suited hands; ties keep first-seen order: 32o, 42o, ...
+  assert.deepEqual(poker.rangeBucketWeightsByNotation(uniform).slice(0, 3).map((b) => b.notation), ['32o', '42o', '52o']);
 });

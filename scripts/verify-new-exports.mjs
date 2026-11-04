@@ -2,32 +2,9 @@
  * Runtime checks for the native public export surface.
  * Run from NPM/: `node scripts/verify-new-exports.mjs` (requires built native addon).
  */
-import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(join(root, 'package.json'));
-
-let poker;
-try {
-  poker = require('./index.js');
-} catch (e) {
-  console.error('Native addon not loaded — run `npm run build:native` first.');
-  console.error(e.message);
-  process.exit(1);
-}
-
-const EPS = 1e-9;
-function assertNear(label, actual, expected, tol = EPS) {
-  if (Math.abs(actual - expected) > tol) {
-    throw new Error(`${label}: expected ${expected}, got ${actual}`);
-  }
-}
-function assertTrue(label, cond) {
-  if (!cond) throw new Error(label);
-}
+import { join } from 'node:path';
+import { poker, assertNear, assertTrue, EPS, root } from './verify-lib.mjs';
 
 // --- single-street draws ---
 assertNear('flopToTurnAtLeastOneHitProbability', poker.flopToTurnAtLeastOneHitProbability(9, 47), 9 / 47);
@@ -281,8 +258,8 @@ assertTrue('legalActionSummary', typeof poker.legalActionSummary(state).toCall =
 // --- export count ---
 const reg = readFileSync(join(root, 'native', 'binding_register.cpp'), 'utf8');
 const regCount = (reg.match(/PropertyDescriptor::Function/g) || []).length;
-assertTrue('binding_register count 370', regCount === 370);
+assertTrue('binding_register count 371', regCount === 371);
 const exportCount = Object.keys(poker).filter((k) => typeof poker[k] === 'function').length;
-assertTrue('runtime export count 370', exportCount === 370);
+assertTrue('runtime export count 371', exportCount === 371);
 
 console.log('OK: verify-new-exports.mjs - all checks passed.');

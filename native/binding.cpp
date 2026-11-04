@@ -64,6 +64,9 @@ Napi::Value EvaluateBestHand(const Napi::CallbackInfo& info) {
     if (cards.empty() || cards.size() > 7) {
         POKER_FAIL_TYPE(env, "need 1..7 cards");
     }
+    if (poker::cards_have_duplicate(cards)) {
+        POKER_FAIL_TYPE(env, "evaluateBestHand: duplicate card");
+    }
     poker_bind::EvalObjectFormat fmt = poker_bind::EvalObjectFormat::Full;
     if (info.Length() >= 2 && info[1].IsObject()) {
         const Napi::Object opts = info[1].As<Napi::Object>();
@@ -545,6 +548,8 @@ Napi::Value MonteCarloStandardError(const Napi::CallbackInfo& info) {
 
 Napi::Value BetaBinomialFoldPosterior(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
+        // Also registered as opponentFoldToCbetPosterior: a Beta(priorAlpha, priorBeta) prior on
+        // the fold probability updated with observed fold / continue counts.
         if (info.Length() < 4 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() ||
             !info[3].IsNumber()) {
             POKER_FAIL_TYPE(env, 
@@ -552,8 +557,14 @@ Napi::Value BetaBinomialFoldPosterior(const Napi::CallbackInfo& info) {
         }
         const double a = info[0].As<Napi::Number>().DoubleValue();
         const double b = info[1].As<Napi::Number>().DoubleValue();
-        const int f = info[2].As<Napi::Number>().Int32Value();
-        const int c = info[3].As<Napi::Number>().Int32Value();
+        const double fd = info[2].As<Napi::Number>().DoubleValue();
+        const double cd = info[3].As<Napi::Number>().DoubleValue();
+        const auto is_count = [](double x) { return std::isfinite(x) && x >= 0.0 && x <= 2147483647.0 && std::trunc(x) == x; };
+        if (!is_count(fd) || !is_count(cd)) {
+            POKER_FAIL_RANGE(env, "folds and calls must be non-negative integer counts");
+        }
+        const int f = static_cast<int>(fd);
+        const int c = static_cast<int>(cd);
         const auto r = poker::beta_binomial_fold_update(a, b, f, c);
         Napi::Object o = Napi::Object::New(env);
         o.Set("alpha", Napi::Number::New(env, r.alpha));

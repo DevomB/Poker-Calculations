@@ -18,6 +18,8 @@
 #include <cstdint>
 #include <cstring>
 #include <numeric>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -27,7 +29,7 @@ using poker_bind::read_f64_vector;
 
 namespace {
 
-constexpr std::size_t kCombos = 1326;
+constexpr std::size_t kCombos = poker::kHoleComboCount;
 
 double clamp01(double x) {
     if (!std::isfinite(x)) {
@@ -40,30 +42,9 @@ int deck_index(const poker::Card& c) {
     return static_cast<int>(c.rank()) * 4 + static_cast<int>(c.suit());
 }
 
-int combo_index(int a, int b) {
-    if (a == b) {
-        return -1;
-    }
-    if (a > b) {
-        std::swap(a, b);
-    }
-    if (a < 0 || b > 51) {
-        return -1;
-    }
-    return a * 51 - (a * (a - 1)) / 2 + (b - a - 1);
-}
+int combo_index(int a, int b) { return poker::combo_index_1326(a, b); }
 
-std::pair<int, int> combo_cards(int idx) {
-    int cur = 0;
-    for (int a = 0; a < 52; ++a) {
-        const int width = 51 - a;
-        if (idx < cur + width) {
-            return {a, a + 1 + (idx - cur)};
-        }
-        cur += width;
-    }
-    return {-1, -1};
-}
+std::pair<int, int> combo_cards(int idx) { return poker::combo_cards_1326(idx); }
 
 bool read_range_dense(const Napi::Value& v, std::vector<double>& out, std::string* err) {
     out.assign(kCombos, 0.0);
@@ -265,26 +246,28 @@ double equity_vs_range_safe(const std::vector<poker::Card>& hero, const std::vec
     }
 }
 
-Napi::Object legal_summary_from_state(Napi::Env env, const poker::PokerGameState& state) {
+/// Legal actions for `player_index` (poker::legal_actions_for), reported as `actingIndex`.
+Napi::Object legal_summary_for(Napi::Env env, const poker::PokerGameState& state, int player_index) {
+    const poker::LegalActions legal = poker::legal_actions_for(state, player_index);
     Napi::Object o = Napi::Object::New(env);
+    o.Set("canFold", legal.can_fold);
+    o.Set("canCheck", legal.can_check);
+    o.Set("canCall", legal.can_call);
+    o.Set("canRaise", legal.can_raise);
+    o.Set("toCall", legal.to_call);
+    o.Set("minRaiseTo", legal.min_raise_to);
+    o.Set("maxRaiseTo", legal.max_raise_to);
+    o.Set("actingIndex", player_index);
+    return o;
+}
+
+/// The acting player, or player 0 when the state names none.
+Napi::Object legal_summary_from_state(Napi::Env env, const poker::PokerGameState& state) {
     int idx = state.acting_index;
     if (idx < 0 && !state.players.empty()) {
         idx = 0;
     }
-    const bool valid = idx >= 0 && idx < static_cast<int>(state.players.size());
-    const int committed = valid ? state.players[static_cast<std::size_t>(idx)].committed_this_street : 0;
-    const int stack = valid ? state.players[static_cast<std::size_t>(idx)].stack : 0;
-    const int to_call = std::max(0, state.current_bet - committed);
-    const int min_raise = state.current_bet + std::max(state.last_raise_increment, state.big_blind);
-    o.Set("canFold", to_call > 0);
-    o.Set("canCheck", to_call == 0);
-    o.Set("canCall", to_call > 0 && stack > 0);
-    o.Set("canRaise", stack > to_call);
-    o.Set("toCall", to_call);
-    o.Set("minRaiseTo", min_raise);
-    o.Set("maxRaiseTo", committed + stack);
-    o.Set("actingIndex", idx);
-    return o;
+    return legal_summary_for(env, state, idx);
 }
 
 Napi::Object config_to_js(Napi::Env env, const poker::BotConfig& cfg) {
@@ -562,7 +545,8 @@ Napi::Value RangeTopCombos(const Napi::CallbackInfo& info) {
             pairs.push_back({i, r[static_cast<std::size_t>(i)]});
         }
     }
-    std::sort(pairs.begin(), pairs.end(), [](const auto& x, const auto& y) { return x.second > y.second; });
+    // Stable, so equal weights stay in combo order on every standard library.
+    std::stable_sort(pairs.begin(), pairs.end(), [](const auto& x, const auto& y) { return x.second > y.second; });
     const int k = std::min<int>(std::max(0, info[1].As<Napi::Number>().Int32Value()), pairs.size());
     Napi::Array arr = Napi::Array::New(env, k);
     for (int i = 0; i < k; ++i) {
@@ -639,7 +623,8 @@ Napi::Value RangeBucketWeightsByNotation(const Napi::CallbackInfo& info) {
             it->second += w;
         }
     }
-    std::sort(buckets.begin(), buckets.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+    // Stable, so equal weights stay in first-seen (combo) order on every standard library.
+    std::stable_sort(buckets.begin(), buckets.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
     Napi::Array arr = Napi::Array::New(env, static_cast<uint32_t>(buckets.size()));
     for (std::size_t i = 0; i < buckets.size(); ++i) {
         Napi::Object o = Napi::Object::New(env);
@@ -771,21 +756,18 @@ Napi::Value BetSizingIndifferencePoint(const Napi::CallbackInfo& info) {
     return Napi::Number::New(env, std::max(0.0, ((fe + eq * (1.0 - fe)) * pot) / denom));
 }
 
-Napi::Value OpponentFoldToCbetPosterior(const Napi::CallbackInfo& info) {
-    const Napi::Env env = info.Env();
-    if (info.Length() < 4) POKER_FAIL_TYPE(env, "opponentFoldToCbetPosterior(priorAlpha, priorBeta, folds, continues)");
-    const auto r = poker::beta_binomial_fold_update(get_number(info, 0), get_number(info, 1), info[2].As<Napi::Number>().Int32Value(), info[3].As<Napi::Number>().Int32Value());
-    Napi::Object o = Napi::Object::New(env);
-    o.Set("alpha", r.alpha);
-    o.Set("beta", r.beta);
-    o.Set("posteriorMean", r.posterior_mean);
-    return o;
-}
-
 Napi::Value OpponentAggressionFactor(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     if (info.Length() < 3) POKER_FAIL_TYPE(env, "opponentAggressionFactor(bets, raises, calls)");
-    return Napi::Number::New(env, (get_number(info, 0) + get_number(info, 1)) / std::max(1.0, get_number(info, 2)));
+    // Conventional postflop aggression factor (bets + raises) / calls from observed counts. The
+    // denominator is floored at 1, so with no calls the result is bets + raises, not Infinity.
+    const double bets = get_number(info, 0, -1.0);
+    const double raises = get_number(info, 1, -1.0);
+    const double calls = get_number(info, 2, -1.0);
+    for (const double x : {bets, raises, calls}) {
+        if (!std::isfinite(x) || x < 0.0) POKER_FAIL_RANGE(env, "bets, raises, and calls must be finite non-negative counts");
+    }
+    return Napi::Number::New(env, (bets + raises) / std::max(1.0, calls));
 }
 
 Napi::Value OpponentRangeElasticityFromSizing(const Napi::CallbackInfo& info) {
@@ -794,7 +776,9 @@ Napi::Value OpponentRangeElasticityFromSizing(const Napi::CallbackInfo& info) {
     std::string err;
     std::vector<double> sizes, rates;
     if (!read_f64_vector(info[0], "sizes", sizes, &err) || !read_f64_vector(info[1], "continueRates", rates, &err)) POKER_FAIL_TYPE(env, err);
-    if (sizes.size() < 2 || rates.size() < 2) return Napi::Number::New(env, 0);
+    if (sizes.size() != rates.size()) POKER_FAIL_RANGE(env, "sizes and continueRates must have the same length");
+    // Endpoint slope of continue rate against bet size (first and last observation only).
+    if (sizes.size() < 2) return Napi::Number::New(env, 0);
     const double ds = sizes.back() - sizes.front();
     return Napi::Number::New(env, ds != 0.0 ? (rates.back() - rates.front()) / ds : 0.0);
 }
@@ -834,7 +818,7 @@ Napi::Value NormalizeBotConfig(const Napi::CallbackInfo& info) {
     }
     cfg.aggression_threshold = static_cast<float>(clamp01(cfg.aggression_threshold));
     cfg.risk_tolerance = static_cast<float>(std::max(0.0f, cfg.risk_tolerance));
-    cfg.monte_carlo_simulations = std::max(0, cfg.monte_carlo_simulations);
+    cfg.monte_carlo_simulations = std::max(1, cfg.monte_carlo_simulations);
     cfg.monte_carlo_villains = std::max(1, cfg.monte_carlo_villains);
     cfg.raise_pot_fraction = static_cast<float>(std::max(0.0f, cfg.raise_pot_fraction));
     return config_to_js(env, cfg);
@@ -843,13 +827,19 @@ Napi::Value NormalizeBotConfig(const Napi::CallbackInfo& info) {
 Napi::Value ValidatePokerState(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     poker::PokerGameState state;
-    std::string err;
-    const bool ok = info.Length() >= 1 && poker_bind::parse_state_input(info[0], state, &err);
+    std::vector<std::string> errors;
+    if (info.Length() < 1) {
+        errors.emplace_back("validatePokerState(state)");
+    } else {
+        (void)poker_bind::parse_state_input(info[0], state, errors);
+    }
     Napi::Object o = Napi::Object::New(env);
-    o.Set("valid", ok);
-    Napi::Array errors = Napi::Array::New(env, ok ? 0 : 1);
-    if (!ok) errors[0u] = err.empty() ? "invalid state" : err;
-    o.Set("errors", errors);
+    o.Set("valid", errors.empty());
+    Napi::Array arr = Napi::Array::New(env, errors.size());
+    for (std::size_t i = 0; i < errors.size(); ++i) {
+        arr[static_cast<uint32_t>(i)] = errors[i];
+    }
+    o.Set("errors", arr);
     return o;
 }
 
@@ -867,6 +857,8 @@ Napi::Value StateToFeatureVector(const Napi::CallbackInfo& info) {
     return poker_bind::write_f64_vector(env, v, poker_bind::F64ReturnFormat::Float64);
 }
 
+constexpr const char* kDecisionReason = "rule-based equity and pot-odds decision";
+
 Napi::Value DecideActionWithDiagnostics(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     poker_bind::DecideActionParsed parsed;
@@ -876,8 +868,10 @@ Napi::Value DecideActionWithDiagnostics(const Napi::CallbackInfo& info) {
     const auto d = poker::decide_action(parsed.state, parsed.hero_hole, parsed.cfg, opp, parsed.hero_seat);
     Napi::Object o = Napi::Object::New(env);
     o.Set("decision", decision_to_js(env, d));
-    o.Set("legalActions", legal_summary_from_state(env, parsed.state));
-    o.Set("reason", "rule-based equity and pot-odds decision");
+    // Hero's legal actions, so the decision can be checked against them.
+    o.Set("legalActions",
+          legal_summary_for(env, parsed.state, poker::hero_player_index(parsed.state, parsed.hero_seat)));
+    o.Set("reason", kDecisionReason);
     return o;
 }
 
@@ -885,28 +879,46 @@ Napi::Value RunBotPolicyBatch(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     if (info.Length() < 2 || !info[0].IsArray()) POKER_FAIL_TYPE(env, "runBotPolicyBatch(states, config, opponentModels?)");
     const Napi::Array states = info[0].As<Napi::Array>();
-    Napi::Array out = Napi::Array::New(env, states.Length());
     if (!info[1].IsObject()) {
         POKER_FAIL_TYPE(env, "config must be an object");
     }
+    const bool has_models = info.Length() >= 3 && !info[2].IsUndefined() && !info[2].IsNull();
+    if (has_models && !info[2].IsArray()) {
+        POKER_FAIL_TYPE(env, "opponentModels must be an array (one entry or null per state)");
+    }
+    const Napi::Array models = has_models ? info[2].As<Napi::Array>() : Napi::Array::New(env, 0);
     const poker::BotConfig cfg = poker_bind::parse_bot_config(info[1].As<Napi::Object>());
+    Napi::Array out = Napi::Array::New(env, states.Length());
     for (uint32_t i = 0; i < states.Length(); ++i) {
+        Napi::Object row = Napi::Object::New(env);
+        out[i] = row;
         poker::PokerGameState state;
         std::string err;
         if (!poker_bind::parse_state_input(states.Get(i), state, &err)) {
-            Napi::Object row = Napi::Object::New(env);
             row.Set("error", err.empty() ? "invalid state" : err);
-            out[i] = row;
             continue;
+        }
+        std::optional<poker::OpponentModel> model;
+        if (i < models.Length()) {
+            const Napi::Value m = models.Get(i);
+            if (m.IsObject()) {
+                model = poker_bind::parse_opponent_model(m.As<Napi::Object>());
+            } else if (!m.IsUndefined() && !m.IsNull()) {
+                row.Set("error", "opponentModels[" + std::to_string(i) + "] must be an object or null");
+                continue;
+            }
         }
         std::vector<poker::Card> hero;
         poker_bind::resolve_hero_hole(state, -1, hero);
-        const auto decision = poker::decide_action(state, hero, cfg, nullptr, -1);
-        Napi::Object row = Napi::Object::New(env);
-        row.Set("decision", decision_to_js(env, decision));
-        row.Set("legalActions", legal_summary_from_state(env, state));
-        row.Set("reason", "rule-based equity and pot-odds decision");
-        out[i] = row;
+        try {
+            const auto decision = poker::decide_action(state, hero, cfg, model ? &*model : nullptr, -1);
+            row.Set("decision", decision_to_js(env, decision));
+            row.Set("legalActions", legal_summary_for(env, state, poker::hero_player_index(state, -1)));
+            row.Set("reason", kDecisionReason);
+        } catch (const std::exception& e) {
+            // One unplayable state (hand over, hero all-in, ...) does not abort the batch.
+            row.Set("error", e.what());
+        }
     }
     return out;
 }

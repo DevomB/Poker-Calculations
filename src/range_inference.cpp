@@ -10,20 +10,12 @@ namespace poker {
 
 namespace {
 
-int combo_dense_index(int c0, int c1) {
-    if (c0 > c1) {
-        std::swap(c0, c1);
-    }
-    // Lexicographic (a < b) slot in the 1326-entry dense range, matching range.cpp.
-    return c0 * 51 - c0 * (c0 - 1) / 2 + (c1 - c0 - 1);
-}
-
 MaterializedRangeResult from_sparse(const SparseRange& range) {
     MaterializedRangeResult out;
     out.weight_sum = range.weight_sum;
     out.live_combo_count = static_cast<int>(range.combos.size());
     for (const WeightedHoleCombo& c : range.combos) {
-        const int idx = combo_dense_index(c.card_a, c.card_b);
+        const int idx = combo_index_1326_unchecked(c.card_a, c.card_b);
         out.weights[static_cast<std::size_t>(idx)] = c.weight;
     }
     if (out.weight_sum > 0.0) {

@@ -6,6 +6,8 @@
 /build_native_tests
 /build_test_addon
 node_modules/
+# Native binaries are built in CI or staged locally, never committed.
+/prebuilds/
 
 prompt.txt
 notes.txt

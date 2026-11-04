@@ -1,5 +1,6 @@
 #include "poker/nash_push_fold.hpp"
 
+#include "poker/equity_matrix.hpp"
 #include "poker/fast_evaluator.hpp"
 #include "poker/icm.hpp"
 
@@ -18,39 +19,10 @@ namespace {
 constexpr int kHands = kNashHandCount;
 
 void decode_hand169(int hand169, int& high_rank, int& low_rank, bool& suited) {
-    if (hand169 < 0 || hand169 > 168) {
-        throw std::invalid_argument("nash hand169 out of range");
-    }
-    int idx = 0;
-    for (int i = 0; i < 13; ++i) {
-        for (int j = i; j < 13; ++j) {
-            if (i == j) {
-                if (idx == hand169) {
-                    high_rank = i;
-                    low_rank = j;
-                    suited = false;
-                    return;
-                }
-                ++idx;
-            } else {
-                if (idx == hand169) {
-                    high_rank = j;
-                    low_rank = i;
-                    suited = true;
-                    return;
-                }
-                ++idx;
-                if (idx == hand169) {
-                    high_rank = j;
-                    low_rank = i;
-                    suited = false;
-                    return;
-                }
-                ++idx;
-            }
-        }
-    }
-    throw std::invalid_argument("nash hand169 decode failed");
+    const HandClass169 c = hand169_class(hand169);
+    high_rank = c.high_rank;
+    low_rank = c.low_rank;
+    suited = c.suited;
 }
 
 int parse_rank_char(const std::string& s, std::size_t& i) {
@@ -367,38 +339,7 @@ double icm_call_ev(double eq, const IcmTerminals& t) {
 }  // namespace
 
 int nash_hand169_index(int high_rank, int low_rank, bool suited) {
-    if (high_rank < 0 || high_rank > 12 || low_rank < 0 || low_rank > 12) {
-        throw std::invalid_argument("rank out of range");
-    }
-    int high = high_rank;
-    int low = low_rank;
-    if (high < low) {
-        std::swap(high, low);
-    }
-    if (high == low && suited) {
-        throw std::invalid_argument("pairs have no suited/offsuit suffix");
-    }
-    int idx = 0;
-    for (int i = 0; i < 13; ++i) {
-        for (int j = i; j < 13; ++j) {
-            if (i == j) {
-                if (high == i && low == j) {
-                    return idx;
-                }
-                ++idx;
-            } else {
-                if (high == j && low == i && suited) {
-                    return idx;
-                }
-                ++idx;
-                if (high == j && low == i && !suited) {
-                    return idx;
-                }
-                ++idx;
-            }
-        }
-    }
-    throw std::invalid_argument("hand169 index not found");
+    return hand169_index(high_rank, low_rank, suited);
 }
 
 int nash_hand169_from_notation(const std::string& notation_raw) {

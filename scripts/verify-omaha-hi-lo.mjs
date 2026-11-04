@@ -6,40 +6,7 @@
  * Pair: As 2c Kh Kd on 2h 3d 4s 9c Tc → using the deuce pairs the board; no low.
  * No-low paired broadway: hi takes the full pot (potShare === hiEquity).
  */
-import { createRequire } from 'node:module';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(join(root, 'package.json'));
-
-let poker;
-try {
-  poker = require('./index.js');
-} catch (e) {
-  console.error('Native addon not loaded — run `npm run build:native` first.');
-  console.error(e.message);
-  process.exit(1);
-}
-
-const EPS = 1e-9;
-function assertNear(label, actual, expected, tol = EPS) {
-  if (Math.abs(actual - expected) > tol) {
-    throw new Error(`${label}: expected ${expected}, got ${actual}`);
-  }
-}
-function assertTrue(label, cond) {
-  if (!cond) throw new Error(label);
-}
-function assertThrows(label, fn) {
-  let threw = false;
-  try {
-    fn();
-  } catch {
-    threw = true;
-  }
-  if (!threw) throw new Error(`${label}: expected throw`);
-}
+import { poker, assertNear, assertTrue, assertThrows } from './verify-lib.mjs';
 
 const names = [
   'evaluateOmahaLoHand',

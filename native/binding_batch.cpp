@@ -428,6 +428,11 @@ Napi::Value EvaluateHandStrengthFastBatch(const Napi::CallbackInfo& info) {
                                            static_cast<std::size_t>(board_cards), board, &cerr)) {
                 POKER_FAIL_TYPE(env, "spot " + std::to_string(i) + " board: " + cerr);
             }
+            std::vector<poker::Card> all = hole;
+            all.insert(all.end(), board.begin(), board.end());
+            if (poker::cards_have_duplicate(all)) {
+                POKER_FAIL_TYPE(env, "spot " + std::to_string(i) + ": duplicate card");
+            }
             out_d[i] = static_cast<double>(poker::evaluate_hand_strength_fast(hole, board));
         }
         std::string werr;

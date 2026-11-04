@@ -183,6 +183,11 @@ bool try_parse_hole_and_board(Napi::Env env, const Napi::CallbackInfo& info, std
     if (!try_parse_cards_from_js(env, info[1], board)) {
         return false;
     }
+    std::vector<poker::Card> all = hole;
+    all.insert(all.end(), board.begin(), board.end());
+    if (poker::cards_have_duplicate(all)) {
+        return fail_type(env, "duplicate card in holeCards or board");
+    }
     return true;
 }
 

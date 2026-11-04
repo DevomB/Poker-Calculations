@@ -4,6 +4,7 @@
 #include "poker/deck_bitset.hpp"
 #include "poker/fast_evaluator.hpp"
 #include "poker/hand_evaluator.hpp"
+#include "poker/range.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -15,19 +16,9 @@ namespace poker {
 
 namespace {
 
-constexpr int kComboCount = 1326;
+constexpr int kComboCount = kHoleComboCount;
 constexpr int kDefaultIters = 400;
 constexpr int kMaxIters = 20000;
-
-[[nodiscard]] int combo_index_1326(int a, int b) {
-    if (a > b) {
-        std::swap(a, b);
-    }
-    if (a < 0 || b > 51 || a == b) {
-        return -1;
-    }
-    return a * 51 - (a * (a - 1)) / 2 + (b - a - 1);
-}
 
 [[nodiscard]] double clamp01(double x) {
     if (!std::isfinite(x)) {

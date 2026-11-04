@@ -6,40 +6,7 @@
  * Hero trips aces (As Ac + Ah + K + 9). Villain 8-high straight: 4c 5d + 6s 7c 8d.
  * 5-hole vs drop: 9s 8s 2c 3d Ah on 7s 6s 5s 4c 2h — 9s is required for the flush.
  */
-import { createRequire } from 'node:module';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(join(root, 'package.json'));
-
-let poker;
-try {
-  poker = require('./index.js');
-} catch (e) {
-  console.error('Native addon not loaded — run `npm run build:native` first.');
-  console.error(e.message);
-  process.exit(1);
-}
-
-const EPS = 1e-9;
-function assertNear(label, actual, expected, tol = EPS) {
-  if (Math.abs(actual - expected) > tol) {
-    throw new Error(`${label}: expected ${expected}, got ${actual}`);
-  }
-}
-function assertTrue(label, cond) {
-  if (!cond) throw new Error(label);
-}
-function assertThrows(label, fn) {
-  let threw = false;
-  try {
-    fn();
-  } catch {
-    threw = true;
-  }
-  if (!threw) throw new Error(`${label}: expected throw`);
-}
+import { poker, assertNear, assertTrue, assertThrows, deckId } from './verify-lib.mjs';
 
 const names = [
   'evaluateBigOBestHand',
@@ -48,7 +15,8 @@ const names = [
   'simulateBigOEquityVsRandom',
   'simulateBigOEquityVsRange',
   'bigOComboCount',
-  'bigONutsOnBoard',  'bigOMultiwayEquityMc',
+  'bigONutsOnBoard',
+  'bigOMultiwayEquityMc',
 ];
 for (const n of names) {
   assertTrue(`${n} exported`, typeof poker[n] === 'function');
@@ -111,14 +79,6 @@ const wrapHero = ['9h', 'Th', 'Jc', 'Qd', '2s'];
 const flopEq = poker.evaluateBigOBestHand(wrapHero, flop);
 assertTrue('flop eval has rank', typeof flopEq.rank === 'string');
 
-const ranks = '23456789TJQKA';
-const suits = 'cdhs';
-function deckId(card) {
-  const r = ranks.indexOf(card[0]);
-  const s = suits.indexOf(card[1]);
-  if (r < 0 || s < 0) throw new Error(`bad card ${card}`);
-  return r * 4 + s;
-}
 const packed = Uint8Array.from(villain.map(deckId));
 const vsRange = poker.simulateBigOEquityVsRange(hero, board, { packed }, 20, 7);
 assertNear('range MC vs the river winner is 0', vsRange, 0);

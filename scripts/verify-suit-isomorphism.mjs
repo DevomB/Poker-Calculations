@@ -9,27 +9,7 @@
  * - pair + kicker (3 suits or 2): 12; trips: 4
  * Rank ties shrink the orbit; sizes always divide 24.
  */
-import { createRequire } from 'node:module';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(join(root, 'package.json'));
-
-let poker;
-try {
-  poker = require('./index.js');
-} catch (e) {
-  console.error('Native addon not loaded — run `npm run build:native` first.');
-  console.error(e.message);
-  process.exit(1);
-}
-
-function assertTrue(label, cond) {
-  if (!cond) {
-    throw new Error(label);
-  }
-}
+import { poker, assertTrue } from './verify-lib.mjs';
 
 function sameCards(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);

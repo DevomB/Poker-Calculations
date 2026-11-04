@@ -1,6 +1,7 @@
 #include "poker/suit_isomorphism.hpp"
 
 #include "poker/card_string.hpp"
+#include "poker/range.hpp"
 
 #include <algorithm>
 #include <array>
@@ -17,13 +18,6 @@ constexpr int kDeck = 52;
 
 [[nodiscard]] int apply_idx(int idx, const SuitPerm& perm) {
     return (idx / 4) * 4 + perm[static_cast<std::size_t>(idx % 4)];
-}
-
-[[nodiscard]] int combo_index_1326(int a, int b) {
-    if (a > b) {
-        std::swap(a, b);
-    }
-    return a * 51 - (a * (a - 1)) / 2 + (b - a - 1);
 }
 
 struct IsoScore {
@@ -246,7 +240,7 @@ std::vector<double> apply_suit_perm_to_range1326(const double* weights, std::siz
     int n = 0;
     for (int a = 0; a < kDeck; ++a) {
         for (int b = a + 1; b < kDeck; ++b) {
-            const int dest = combo_index_1326(apply_idx(a, perm), apply_idx(b, perm));
+            const int dest = combo_index_1326_unchecked(apply_idx(a, perm), apply_idx(b, perm));
             out[static_cast<std::size_t>(dest)] = weights[static_cast<std::size_t>(n)];
             ++n;
         }
