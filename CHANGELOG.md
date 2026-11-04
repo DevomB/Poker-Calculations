@@ -9,13 +9,20 @@ Bug fixes. Some intervals change, and inputs that used to give meaningless resul
 - **Wilson intervals.** The interval divided its `z²/4n²` term by an extra `n`, so it was too narrow and could exclude its own estimate: 100 successes in 100 gave [0.97965, 0.98335] instead of [0.96301, 1]. This affects `wilsonScoreInterval`, `binomialProportionCiWidth`, and the `ciLow`/`ciHigh` of `simulateHandOutcomeDetailed` and `simulateEquityVsRanges`; a guaranteed win now reports an upper bound of 1.
 - **No raises against opponents who are all in.** `legalActionSummary`, `actionMaskFromState`, the `decideAction` family, and the C++ `GameEngine` allowed hero to raise when every other player still in the hand had no chips left; hero now calls (or checks) or folds.
 - **Card strings are parsed by one strict rule.** The native parser rejected lowercase ranks (`'ah'`, `'td'`) while `poker-calculations/encode` accepted them, and `encode` read `'Ahjunk'` as `Ah`. Both now accept rank and suit in either case, `'10'` for ten, and surrounding whitespace, and reject anything else.
+- **Range weights are scale-free.** A range's total weight overflowed or underflowed in every exact and Monte Carlo consumer: `[1e308, 1e308]` gave 0 or NaN where `[1, 1]` gave 0.5, Monte Carlo sampling picked combos from a broken distribution, and cosine similarity and the CFR subgames returned NaN or 0 at extreme scales. One shared helper now rescales extreme weights by an exact power of two before any total is formed, for Hold'em, Omaha, Big O, and short-deck ranges and the dense range tools. Ordinary ranges give bit-identical results, except `rangeCosineSimilarity`, which now normalizes first and can differ in the last digit. See [NUMERICAL.md](NUMERICAL.md#range-weights).
 
 ### Now rejected
 
+- Range weights that are NaN, infinite, or negative (they were silently dropped, which changed the distribution), sparse range indices that are not a valid card pair, and weighted totals reported in the caller's units (`handPotentialBreakdown` counts, `materializeVillainRangeAfterBlockers`, class and per-card range totals) that exceed the largest double.
 - `benchmarkEvaluatorThroughput` / `benchmarkEvaluatorThroughputAsync` with an iteration count that is not an integer from 1 to 100,000,000; NaN or Infinity used to run for hours.
 - Dead cards that are already in hero's hand or on the flop in `straightMadeFlopToRiverExactProbability`, `flushMadeFlopToRiverExactProbability`, `fullHouseMadeFlopToRiverExactProbability`, `tripsMadeFlopToRiverExactProbability`, and `twoPairMadeFlopToRiverExactProbability` (and their async forms); hero cards that are also on the board in `materializeVillainRangeAfterBlockers` and `exactRangeDominatedComboFraction`.
 - Packed card input that is not a `Uint8Array` (or `Buffer`). A `Float64Array`, `Int32Array`, `Uint16Array`, or `DataView` had its raw bytes read as deck ids.
 - An invalid `knownDead` in `exactVillainLeapfrogOutCounts` and `exactHeroCategoryJointFlopToRiver`, which was silently treated as no dead cards.
+
+### Tooling
+
+- `test/range-consistency.test.js` checks every export that takes a weighted range: scaling all weights (field by field), sparse and dense input, opponent order, suit relabeling, an independent exact enumeration, and bounded rejection of impossible ranges. Its export list comes from `index.d.ts`, so a new range consumer must be covered.
+- The installed-tarball smoke check (`scripts/smoke-load.js`, run on every platform build and on the packed package before publishing) exercises these fixes through the published entry points, including `poker-calculations/encode` resolved via the package's `exports` map.
 
 ## 4.1.0
 

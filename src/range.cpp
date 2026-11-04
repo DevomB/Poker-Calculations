@@ -25,21 +25,15 @@ SparseRange sparse_range_from_arrays(const std::vector<int>& pair_indices,
         if (a < 0 || a > 51 || b < 0 || b > 51 || a == b) {
             throw std::invalid_argument("invalid deck index in sparse range");
         }
-        const std::uint64_t m = dead_mask | (std::uint64_t{1} << a) | (std::uint64_t{1} << b);
-        if ((dead_mask & (std::uint64_t{1} << a)) != 0 || (dead_mask & (std::uint64_t{1} << b)) != 0) {
-            continue;
-        }
         const double w = weights[i];
-        if (!std::isfinite(w) || w <= 0.0) {
+        require_range_weight(w);
+        if ((dead_mask & (std::uint64_t{1} << a)) != 0 || (dead_mask & (std::uint64_t{1} << b)) != 0 ||
+            w == 0.0) {
             continue;
         }
-        WeightedHoleCombo c{};
-        c.card_a = a;
-        c.card_b = b;
-        c.weight = w;
-        out.combos.push_back(c);
-        out.weight_sum += w;
+        out.combos.push_back(WeightedHoleCombo{a, b, w});
     }
+    out.weight_sum = rescale_range_weights(out.combos, &out.weight_shift);
     if (out.combos.empty()) {
         throw std::invalid_argument("sparse range has no valid combos after blockers");
     }
@@ -56,20 +50,15 @@ SparseRange sparse_range_from_dense1326(const double* weights, const std::size_t
     for (int a = 0; a < 52; ++a) {
         for (int b = a + 1; b < 52; ++b) {
             const double w = weights[static_cast<std::size_t>(idx++)];
-            if (!std::isfinite(w) || w <= 0.0) {
+            require_range_weight(w);
+            if (w == 0.0 || (dead_mask & (std::uint64_t{1} << a)) != 0 ||
+                (dead_mask & (std::uint64_t{1} << b)) != 0) {
                 continue;
             }
-            if ((dead_mask & (std::uint64_t{1} << a)) != 0 || (dead_mask & (std::uint64_t{1} << b)) != 0) {
-                continue;
-            }
-            WeightedHoleCombo c{};
-            c.card_a = a;
-            c.card_b = b;
-            c.weight = w;
-            out.combos.push_back(c);
-            out.weight_sum += w;
+            out.combos.push_back(WeightedHoleCombo{a, b, w});
         }
     }
+    out.weight_sum = rescale_range_weights(out.combos, &out.weight_shift);
     if (out.combos.empty()) {
         throw std::invalid_argument("dense range has no valid combos after blockers");
     }

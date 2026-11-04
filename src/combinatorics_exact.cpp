@@ -441,6 +441,7 @@ CardRemovalGradientResult exact_equity_card_removal_gradient(
         }
         SparseRange filtered;
         filtered.weight_sum = 0.0;
+        filtered.weight_shift = villain_range.weight_shift;
         const std::uint64_t dead = base_dead.mask | (std::uint64_t{1} << c);
         for (const WeightedHoleCombo& combo : villain_range.combos) {
             if ((dead & (std::uint64_t{1} << combo.card_a)) != 0 ||

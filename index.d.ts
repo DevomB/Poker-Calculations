@@ -140,7 +140,13 @@ declare namespace api {
     implementation: string;
   }
 
-  /** Sparse villain range: parallel `indices` (two deck ids per combo) and `weights`. */
+  /**
+   * Sparse villain range: parallel `indices` (two deck ids per combo) and `weights`. Weights in any
+   * range input (sparse, dense `Float64Array(1326)`, Omaha / Big O / short-deck specs) must be finite
+   * and non-negative; only their ratios matter, so `[1, 1]` and `[1e308, 1e308]` give the same
+   * result. Outputs reported in weight units (weighted totals, materialized weights) throw when the
+   * total cannot be represented as a double.
+   */
   export interface SparseRangeSpec {
     indices: number[] | Int32Array | Uint32Array;
     weights: F64VectorInput;

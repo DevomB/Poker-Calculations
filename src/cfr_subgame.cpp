@@ -598,7 +598,7 @@ HuRiverCheckBetTreeResult solve_hu_river_check_bet_tree(double pot, double bet_s
         row.card_a = c.card_a;
         row.card_b = c.card_b;
         row.bet_frequency = bet_p[order[static_cast<std::size_t>(t)]];
-        row.weight = c.weight;
+        row.weight = std::ldexp(c.weight, -bettor_range.weight_shift);  // in the caller's units
         out.top_bet_combos.push_back(row);
     }
     return out;

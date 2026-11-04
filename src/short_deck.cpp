@@ -796,7 +796,8 @@ SparseRange short_deck_range_from_class_weights(const std::array<double, kShortD
     SparseRange out;
     for (int h = 0; h < kShortDeckHandClasses; ++h) {
         const double w = weights[static_cast<std::size_t>(h)];
-        if (w <= 0.0) {
+        require_range_weight(w);
+        if (w == 0.0) {
             continue;
         }
         int hi = 0;
@@ -826,10 +827,10 @@ SparseRange short_deck_range_from_class_weights(const std::array<double, kShortD
                     continue;
                 }
                 out.combos.push_back(WeightedHoleCombo{i0, i1, w});
-                out.weight_sum += w;
             }
         }
     }
+    out.weight_sum = rescale_range_weights(out.combos, &out.weight_shift);
     return out;
 }
 

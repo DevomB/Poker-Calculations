@@ -26,6 +26,17 @@ MaterializedRangeResult from_sparse(const SparseRange& range) {
             }
         }
     }
+    // Report weights in the caller's units (range_weight rescaling is internal).
+    if (range.weight_shift != 0) {
+        for (double& w : out.weights) {
+            w = std::ldexp(w, -range.weight_shift);
+        }
+        out.weight_sum = std::ldexp(out.weight_sum, -range.weight_shift);
+        if (!std::isfinite(out.weight_sum)) {
+            throw std::invalid_argument(
+                "range weights are too large: their total exceeds the largest double (scale them down)");
+        }
+    }
     return out;
 }
 
@@ -54,6 +65,7 @@ MaterializedRangeResult materialize_villain_range_after_blockers_sparse(
     dead.mark_cards_distinct(known_dead_cards, "hero, board, or dead cards");
     SparseRange filtered;
     filtered.weight_sum = 0.0;
+    filtered.weight_shift = prior.weight_shift;
     for (const WeightedHoleCombo& c : prior.combos) {
         if (dead.test(c.card_a) || dead.test(c.card_b)) {
             continue;

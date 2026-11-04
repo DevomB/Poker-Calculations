@@ -3,6 +3,7 @@
 #include "poker/card_string.hpp"
 #include "poker/combo_enumerator.hpp"
 #include "poker/deck_bitset.hpp"
+#include "poker/range.hpp"
 #include "poker/fast_evaluator.hpp"
 
 #include <algorithm>
@@ -234,7 +235,8 @@ float simulate_big_o_equity_vs_range(const std::vector<Card>& hero, const std::v
     live.reserve(range.size());
     double wsum = 0.0;
     for (const BigORangeCombo& c : range) {
-        if (c.weight <= 0.0) {
+        require_range_weight(c.weight);
+        if (c.weight == 0.0) {
             continue;
         }
         DeckBitset combo;
@@ -251,8 +253,8 @@ float simulate_big_o_equity_vs_range(const std::vector<Card>& hero, const std::v
             continue;
         }
         live.push_back(c);
-        wsum += c.weight;
     }
+    wsum = rescale_range_weights(live);
     if (live.empty() || wsum <= 0.0) {
         throw std::invalid_argument("simulateBigOEquityVsRange: no live combos");
     }

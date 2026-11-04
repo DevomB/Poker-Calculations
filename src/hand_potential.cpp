@@ -289,7 +289,15 @@ HandPotentialBreakdown hand_potential_breakdown(const std::vector<Card>& hero_ho
         used.set(board[i]);
     }
     const int need = streets == PotentialStreets::Two ? 2 : 1;
-    return compute_for_ids(h0, h1, board, board_n, need, villain_range, used.mask, 0, 0, should_cancel);
+    HandPotentialBreakdown out =
+        compute_for_ids(h0, h1, board, board_n, need, villain_range, used.mask, 0, 0, should_cancel);
+    // The weighted counts are reported in the caller's units; the ratios do not depend on scale.
+    if (villain_range.weight_shift != 0) {
+        out.n_ahead = std::ldexp(out.n_ahead, -villain_range.weight_shift);
+        out.n_tied = std::ldexp(out.n_tied, -villain_range.weight_shift);
+        out.n_behind = std::ldexp(out.n_behind, -villain_range.weight_shift);
+    }
+    return out;
 }
 
 double hand_strength_vs_range(const std::vector<Card>& hero_hole_cards,

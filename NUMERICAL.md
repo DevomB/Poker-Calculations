@@ -87,6 +87,18 @@ A trial pays hero `X` in [0, 1]: 1 for a win, `1/k` for a k-way chop, 0 for a lo
 
 `monteCarloStandardError(pHat, n)` stays the Bernoulli formula `sqrt(pHat (1 - pHat) / n)`.
 
+## Range weights
+
+A weighted range is a distribution: only ratios of weights matter. Every range input is checked
+first (weights must be finite and non-negative). When the largest weight is outside
+`[2^-256, 2^256]`, all weights are multiplied by one power of two that brings the largest into
+`[0.5, 1)`. That is exact in binary floating point, so the distribution is unchanged, and totals,
+products with probabilities, and the pairwise products of two ranges in the CFR subgames stay
+finite and normal. Ordinary ranges are never touched. Results reported in weight units
+(`handPotentialBreakdown` counts, `materializeVillainRangeAfterBlockers` weights, CFR top-combo
+weights, class and per-card totals) are converted back to the caller's units, and throw rather than
+return Infinity when that total exceeds the largest double.
+
 ## Multiway range equity
 
 `simulateEquityVsRanges` targets the joint law of the opponents' hands,

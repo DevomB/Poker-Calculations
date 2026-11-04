@@ -202,6 +202,7 @@ double equity_delta_if_card_removed(const std::vector<Card>& hero_hole_cards,
     const std::uint64_t dead = extra_dead.mask;
     SparseRange filtered;
     filtered.weight_sum = 0.0;
+    filtered.weight_shift = villain_range.weight_shift;
     for (const WeightedHoleCombo& c : villain_range.combos) {
         if ((dead & (std::uint64_t{1} << c.card_a)) != 0 || (dead & (std::uint64_t{1} << c.card_b)) != 0) {
             continue;

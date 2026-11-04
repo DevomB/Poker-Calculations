@@ -8,6 +8,8 @@
 #include "poker/hand_potential.hpp"
 #include "poker/range.hpp"
 
+#include <cmath>
+#include <stdexcept>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -127,6 +129,11 @@ bool parse_hero_board_range(const Napi::CallbackInfo& info, const char* sig,
 }
 
 Napi::Object breakdown_to_js(Napi::Env env, const poker::HandPotentialBreakdown& r) {
+    if (!std::isfinite(r.n_ahead) || !std::isfinite(r.n_tied) || !std::isfinite(r.n_behind)) {
+        // The ratios are fine; the weighted counts cannot be represented in the caller's units.
+        throw std::invalid_argument(
+            "range weights are too large: weighted counts exceed the largest double (scale them down)");
+    }
     Napi::Object o = Napi::Object::New(env);
     o.Set("hs", Napi::Number::New(env, r.hs));
     o.Set("ppot", Napi::Number::New(env, r.ppot));
