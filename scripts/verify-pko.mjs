@@ -55,8 +55,12 @@ const hero = 0;
 const villain = 1;
 const pot = 150;
 const spot = poker.pkoCallEvVsShove(stacks, payouts, bounties, hero, villain, pot, 0.55);
-const bountyEv = poker.pkoExpectedBountyCollection(stacks, bounties);
-assertNear('call fold path ICM+bounty', spot.foldEv, icm[hero] + bountyEv[hero], 1e-8);
+// Folding hands the pot to the shover; hero's fold EV is ICM + bounty EV on those stacks.
+const afterFold = stacks.slice();
+afterFold[villain] += pot;
+const foldIcm = poker.icmExpectedPayouts(afterFold, payouts);
+const foldBounty = poker.pkoExpectedBountyCollection(afterFold, bounties);
+assertNear('call fold path ICM+bounty', spot.foldEv, foldIcm[hero] + foldBounty[hero], 1e-8);
 assertTrue('callEv finite', Number.isFinite(spot.callEv));
 
 const huStacks = [100, 100];

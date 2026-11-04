@@ -153,11 +153,16 @@ assertNear(
 );
 
 // --- reverse implied ---
+// Losing costs the call plus the later loss, so the call is priced as risking toCall + L.
 assertNear(
   'reverseImpliedOddsMinEquity round-trip',
   poker.reverseImpliedOddsMinEquity(100, 50, 200),
-  poker.breakevenCallEquity(100 + 200, 50),
-  1e-6,
+  poker.breakevenCallEquity(100, 50 + 200),
+  1e-12,
+);
+assertTrue(
+  'reverse implied losses never lower the required equity',
+  poker.reverseImpliedOddsMinEquity(100, 50, 50) >= poker.breakevenCallEquity(100, 50),
 );
 assertNear('geometricPotAfterSingleMatchedBet', poker.geometricPotAfterSingleMatchedBet(100, 50), 200);
 

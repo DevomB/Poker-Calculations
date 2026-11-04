@@ -76,7 +76,7 @@ bool parse_river_args(const Napi::CallbackInfo& info, double& pot, double& bet, 
     if (!parse_sparse_range(env, info[3], dead, villain, err)) {
         return false;
     }
-    iterations = info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 400;
+    iterations = info.Length() >= 6 && info[5].IsNumber() ? poker_bind::checked_int32(info[5], "iterations") : 400;
     return true;
 }
 
@@ -281,7 +281,7 @@ Napi::Value SolveHuRiverCheckBetTree(const Napi::CallbackInfo& info) {
     if (!parse_river_args(info, pot, bet, hero, villain, board, iterations, &err)) {
         POKER_FAIL_TYPE(env, err.empty() ? "solveHuRiverCheckBetTree args" : err);
     }
-    const int top_k = info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 8;
+    const int top_k = info.Length() >= 7 && info[6].IsNumber() ? poker_bind::checked_int32(info[6], "topK") : 8;
     POKER_TRY(env, {
         const auto r =
             poker::solve_hu_river_check_bet_tree(pot, bet, hero, villain, board, iterations, top_k);

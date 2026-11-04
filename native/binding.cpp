@@ -291,7 +291,7 @@ Napi::Value FormatPotOdds(const Napi::CallbackInfo& info) {
         const double to_call = info[1].As<Napi::Number>().DoubleValue();
         int decimals = 2;
         if (info.Length() >= 3 && info[2].IsNumber()) {
-            decimals = info[2].As<Napi::Number>().Int32Value();
+            decimals = poker_bind::checked_int32(info[2], "decimals");
         }
         return Napi::String::New(env, poker::format_pot_odds(pot, to_call, decimals));
 }
@@ -509,7 +509,7 @@ Napi::Value GeometricPotAfterMatchedPotFractions(const Napi::CallbackInfo& info)
         }
         const double pot0 = info[0].As<Napi::Number>().DoubleValue();
         const double frac = info[1].As<Napi::Number>().DoubleValue();
-        const int n = info[2].As<Napi::Number>().Int32Value();
+        const int n = poker_bind::checked_int32(info[2], "n");
         return Napi::Number::New(env, poker::geometric_pot_after_matched_pot_fractions(pot0, frac, n));
 }
 
@@ -542,7 +542,7 @@ Napi::Value MonteCarloStandardError(const Napi::CallbackInfo& info) {
             POKER_FAIL_TYPE(env, "monteCarloStandardError(pHat, nTrials)");
         }
         const double ph = info[0].As<Napi::Number>().DoubleValue();
-        const int n = info[1].As<Napi::Number>().Int32Value();
+        const int n = poker_bind::checked_int32(info[1], "n");
         return Napi::Number::New(env, poker::monte_carlo_standard_error(ph, n));
 }
 
@@ -601,8 +601,8 @@ Napi::Value WilsonScoreInterval(const Napi::CallbackInfo& info) {
         if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
             POKER_FAIL_TYPE(env, "wilsonScoreInterval(successes, nTrials, z)");
         }
-        const int s = info[0].As<Napi::Number>().Int32Value();
-        const int n = info[1].As<Napi::Number>().Int32Value();
+        const int s = poker_bind::checked_int32(info[0], "successes");
+        const int n = poker_bind::checked_int32(info[1], "nTrials");
         const double z = info[2].As<Napi::Number>().DoubleValue();
         const auto w = poker::wilson_score_interval(s, n, z);
         Napi::Object o = Napi::Object::New(env);
@@ -616,8 +616,8 @@ Napi::Value AgrestiCoullInterval(const Napi::CallbackInfo& info) {
         if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
             POKER_FAIL_TYPE(env, "agrestiCoullInterval(successes, nTrials, z)");
         }
-        const int s = info[0].As<Napi::Number>().Int32Value();
-        const int n = info[1].As<Napi::Number>().Int32Value();
+        const int s = poker_bind::checked_int32(info[0], "successes");
+        const int n = poker_bind::checked_int32(info[1], "nTrials");
         const double z = info[2].As<Napi::Number>().DoubleValue();
         const auto w = poker::agresti_coull_interval(s, n, z);
         Napi::Object o = Napi::Object::New(env);
@@ -631,8 +631,8 @@ Napi::Value NormalWaldBinomialInterval(const Napi::CallbackInfo& info) {
         if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
             POKER_FAIL_TYPE(env, "normalWaldBinomialInterval(successes, nTrials, z)");
         }
-        const int s = info[0].As<Napi::Number>().Int32Value();
-        const int n = info[1].As<Napi::Number>().Int32Value();
+        const int s = poker_bind::checked_int32(info[0], "successes");
+        const int n = poker_bind::checked_int32(info[1], "nTrials");
         const double z = info[2].As<Napi::Number>().DoubleValue();
         const auto w = poker::normal_wald_binomial_interval(s, n, z);
         Napi::Object o = Napi::Object::New(env);
@@ -703,7 +703,7 @@ Napi::Value MultiwaySymmetricBreakevenCallEquity(const Napi::CallbackInfo& info)
         }
         const double p = info[0].As<Napi::Number>().DoubleValue();
         const double tc = info[1].As<Napi::Number>().DoubleValue();
-        const int k = info[2].As<Napi::Number>().Int32Value();
+        const int k = poker_bind::checked_int32(info[2], "k");
         return Napi::Number::New(env, poker::multiway_symmetric_breakeven_call_equity(p, tc, k));
 }
 
@@ -748,7 +748,7 @@ Napi::Value ChubukovMaxSymmetricJamStackChipsBinarySearch(const Napi::CallbackIn
         }
         const double eq = info[0].As<Napi::Number>().DoubleValue();
         const double dead = info[1].As<Napi::Number>().DoubleValue();
-        const int max_s = info[2].As<Napi::Number>().Int32Value();
+        const int max_s = poker_bind::checked_int32(info[2], "maxStackChips");
         const int out = poker::chubukov_max_symmetric_jam_stack_chips_binary_search(eq, dead, max_s);
         return Napi::Number::New(env, out);
 }
@@ -801,8 +801,8 @@ Napi::Value IcmPairwiseBubbleFactor(const Napi::CallbackInfo& info) {
     if (!read_f64_vector(info[1], "payouts", pay, &err)) {
         POKER_FAIL_TYPE(env, err);
     }
-    const std::size_t hero = static_cast<std::size_t>(info[2].As<Napi::Number>().Uint32Value());
-    const std::size_t vil = static_cast<std::size_t>(info[3].As<Napi::Number>().Uint32Value());
+    const std::size_t hero = poker_bind::checked_index(info[2], "heroIndex");
+    const std::size_t vil = poker_bind::checked_index(info[3], "villainIndex");
     const double pot = info[4].As<Napi::Number>().DoubleValue();
     return Napi::Number::New(env, poker::icm_pairwise_bubble_factor(stacks, pay, hero, vil, pot));
 }
@@ -852,7 +852,7 @@ Napi::Value LayeredPotChipEvFromEquities(const Napi::CallbackInfo& info) {
                 POKER_FAIL_TYPE(env, 
                     "layeredPotChipEvFromEquities: flat equity matrix requires cols argument");
             }
-            const int cols = info[2].As<Napi::Number>().Int32Value();
+            const int cols = poker_bind::checked_int32(info[2], "cols");
             if (!read_f64_matrix_flat(info[1], cols, "equityMatrix", mat, &err)) {
                 POKER_FAIL_TYPE(env, err);
             }
@@ -1001,7 +1001,7 @@ Napi::Value ChubukovMaxSymmetricJamStackFromHandBinarySearch(const Napi::Callbac
             POKER_FAIL_TYPE(env, err);
         }
         const double dead = info[2].As<Napi::Number>().DoubleValue();
-        const int max_s = info[3].As<Napi::Number>().Int32Value();
+        const int max_s = poker_bind::checked_int32(info[3], "maxStackChips");
         const int s = poker::chubukov_max_symmetric_jam_stack_from_hand_binary_search(hero, board, dead, max_s);
         return Napi::Number::New(env, s);
 }
@@ -1097,8 +1097,8 @@ Napi::Value RunnerRunnerStraightDrawHitProbability(const Napi::CallbackInfo& inf
                 "runnerRunnerStraightDrawHitProbability(straightKind, deadAmongOuts, unseenAfterFlop) "
                 "— straightKind: 0=gutshot4, 1=openEnded8, 2=doubleBelly8");
         }
-        const int k = info[0].As<Napi::Number>().Int32Value();
-        const int dead = info[1].As<Napi::Number>().Int32Value();
+        const int k = poker_bind::checked_int32(info[0], "k");
+        const int dead = poker_bind::checked_int32(info[1], "dead");
         const double u = info[2].As<Napi::Number>().DoubleValue();
         poker::Runner_runner_straight_draw_kind kind{};
         if (k == 0) {
@@ -1125,7 +1125,7 @@ Napi::Value HarringtonMEffective(const Napi::CallbackInfo& info) {
         const double sb = info[1].As<Napi::Number>().DoubleValue();
         const double bb = info[2].As<Napi::Number>().DoubleValue();
         const double ap = info[3].As<Napi::Number>().DoubleValue();
-        const int n = info[4].As<Napi::Number>().Int32Value();
+        const int n = poker_bind::checked_int32(info[4], "n");
         return Napi::Number::New(env, poker::harrington_m_effective(st, sb, bb, ap, n));
 }
 
@@ -1157,8 +1157,8 @@ Napi::Value MultiwaySymmetricBreakevenCallEquityWithShare(const Napi::CallbackIn
         }
         const double p = info[0].As<Napi::Number>().DoubleValue();
         const double tc = info[1].As<Napi::Number>().DoubleValue();
-        const int k = info[2].As<Napi::Number>().Int32Value();
-        const int m = info[3].As<Napi::Number>().Int32Value();
+        const int k = poker_bind::checked_int32(info[2], "k");
+        const int m = poker_bind::checked_int32(info[3], "m");
         const double frac = info[4].As<Napi::Number>().DoubleValue();
         const auto model = m == 0 ? poker::Multiway_symmetric_pot_share_model::WinnerTakesAll
                                   : poker::Multiway_symmetric_pot_share_model::FixedHeroShareWhenWins;
@@ -1478,7 +1478,7 @@ Napi::Value IcmTopKFinishProbabilities(const Napi::CallbackInfo& info) {
         if (!read_f64_vector(info[0], "stacks", stacks, &err)) {
             POKER_FAIL_TYPE(env, err);
         }
-        const int k = info[1].As<Napi::Number>().Int32Value();
+        const int k = poker_bind::checked_int32(info[1], "k");
         const auto probs = poker::icm_top_k_finish_probabilities(stacks, k);
         return write_f64_vector(env, probs, parse_return_format(info, 2));
 
@@ -1888,7 +1888,7 @@ Napi::Value MultiwaySymmetricBreakevenCallEquityWithRake(const Napi::CallbackInf
     POKER_REQUIRE(env, info.Length() >= 5 && info[0].IsNumber() && info[1].IsNumber() && info[2].IsNumber() && info[3].IsNumber() && info[4].IsNumber(), "multiwaySymmetricBreakevenCallEquityWithRake(...)");
         const double a0 = info[0].As<Napi::Number>().DoubleValue();
         const double a1 = info[1].As<Napi::Number>().DoubleValue();
-        const int a2 = info[2].As<Napi::Number>().Int32Value();
+        const int a2 = poker_bind::checked_int32(info[2], "symmetricExtraCallers");
         const double a3 = info[3].As<Napi::Number>().DoubleValue();
         const double a4 = info[4].As<Napi::Number>().DoubleValue();
     return Napi::Number::New(env, poker::multiway_symmetric_breakeven_call_equity_with_rake(a0, a1, a2, a3, a4));
@@ -1898,8 +1898,8 @@ Napi::Value MultiwaySymmetricBreakevenCallEquityWithShareAndRake(const Napi::Cal
     POKER_REQUIRE(env, info.Length() >= 7, "multiwaySymmetricBreakevenCallEquityWithShareAndRake(...)");
     const double pot = info[0].As<Napi::Number>().DoubleValue();
     const double to_call = info[1].As<Napi::Number>().DoubleValue();
-    const int k = info[2].As<Napi::Number>().Int32Value();
-    const int model = info[3].As<Napi::Number>().Int32Value();
+    const int k = poker_bind::checked_int32(info[2], "k");
+    const int model = poker_bind::checked_int32(info[3], "model");
     const double frac = info[4].As<Napi::Number>().DoubleValue();
     const double rake_f = info[5].As<Napi::Number>().DoubleValue();
     const double rake_c = info[6].As<Napi::Number>().DoubleValue();
@@ -1912,7 +1912,7 @@ Napi::Value MultiwayExpectedValueCall(const Napi::CallbackInfo& info) {
         const double a0 = info[0].As<Napi::Number>().DoubleValue();
         const double a1 = info[1].As<Napi::Number>().DoubleValue();
         const double a2 = info[2].As<Napi::Number>().DoubleValue();
-        const int a3 = info[3].As<Napi::Number>().Int32Value();
+        const int a3 = poker_bind::checked_int32(info[3], "symmetricExtraCallers");
     return Napi::Number::New(env, poker::multiway_expected_value_call(a0, a1, a2, a3));
 }
 Napi::Value ReverseImpliedOddsMinEquity(const Napi::CallbackInfo& info) {
@@ -1933,7 +1933,7 @@ Napi::Value GeometricPotAfterSingleMatchedBet(const Napi::CallbackInfo& info) {
 Napi::Value BinomialProportionCiWidth(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     POKER_REQUIRE(env, info.Length() >= 3, "binomialProportionCiWidth(successes, nTrials, z)");
-    return Napi::Number::New(env, poker::binomial_proportion_ci_width(info[0].As<Napi::Number>().Int32Value(), info[1].As<Napi::Number>().Int32Value(), info[2].As<Napi::Number>().DoubleValue()));
+    return Napi::Number::New(env, poker::binomial_proportion_ci_width(poker_bind::checked_int32(info[0], "successes"), poker_bind::checked_int32(info[1], "nTrials"), info[2].As<Napi::Number>().DoubleValue()));
 }
 Napi::Value MonteCarloTrialsForWilsonHalfWidth(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
@@ -1989,7 +1989,7 @@ Napi::Value IcmSatelliteAdvanceProbability(const Napi::CallbackInfo& info) {
     std::vector<double> stacks;
     std::string err;
     if (!read_f64_vector(info[0], "stacks", stacks, &err)) { POKER_FAIL_TYPE(env, err); }
-    const int k = info[1].As<Napi::Number>().Int32Value();
+    const int k = poker_bind::checked_int32(info[1], "k");
     return write_f64_vector(env, poker::icm_satellite_advance_probability(stacks, k), poker_bind::F64ReturnFormat::Array);
 }
 Napi::Value IcmPayoutStructureGini(const Napi::CallbackInfo& info) {
@@ -2132,7 +2132,7 @@ Napi::Value ExactHeroCategoryAtLeastFlopToRiver(const Napi::CallbackInfo& info) 
     std::string err;
     if (!parse_straight_made_args(info, args, &err)) { POKER_FAIL_TYPE(env, err); }
     POKER_REQUIRE(env, info.Length() >= 4 && info[3].IsNumber(), "exactHeroCategoryAtLeastFlopToRiver(hero, flop, dead?, minCategoryOrder)");
-    const int min_cat = info[3].As<Napi::Number>().Int32Value();
+    const int min_cat = poker_bind::checked_int32(info[3], "minCat");
     return Napi::Number::New(env, poker::exact_hero_category_at_least_flop_to_river(args.hero, args.flop, args.dead, min_cat));
 }
 Napi::Value ExactHeroCategoryAtLeastFlopToRiverAsync(const Napi::CallbackInfo& info) {
@@ -2141,7 +2141,7 @@ Napi::Value ExactHeroCategoryAtLeastFlopToRiverAsync(const Napi::CallbackInfo& i
     std::string err;
     if (!parse_straight_made_args(info, args, &err)) { POKER_FAIL_TYPE(env, err); }
     POKER_REQUIRE(env, info.Length() >= 4 && info[3].IsNumber(), "exactHeroCategoryAtLeastFlopToRiverAsync(hero, flop, dead?, minCategoryOrder)");
-    const int min_cat = info[3].As<Napi::Number>().Int32Value();
+    const int min_cat = poker_bind::checked_int32(info[3], "minCat");
     const auto hero = std::move(args.hero);
     const auto flop = std::move(args.flop);
     const auto dead = std::move(args.dead);

@@ -1,5 +1,49 @@
 # Changelog
 
+## 4.2.0
+
+Correctness release from an independent audit of 4.1.2. Many results change, unsupported inputs that used to return numbers now throw, and three helpers are deprecated. 4.1.3 already fixed the audit's partial-board and runout findings; those checks are extended here.
+
+### Fixed — results change
+
+- **Derived formulas.** `estimatedOutsFromRuleOfTwo` / `RuleOfFour` invert the rules of thumb (`equity × 50`, `equity × 25`; 0.18 and 0.36 now give 9 outs, not 4.23), capped at `unseenCards`. `reverseImpliedOddsMinEquity` is `(toCall + L) / (pot + toCall + L)` (it was `toCall / (pot + toCall + L)`, which made extra losses lower the threshold). `betSizingIndifferencePoint` returns `Infinity` when no finite bet breaks even (it clamped a zero denominator and returned 5e10 for pot 100, fold 0, equity 0.5) and keeps finite roots such as 137.5.
+- **Trial planners.** `monteCarloTrialsForWilsonHalfWidth` solves the Wilson interval itself (it used a normal standard error: 39 trials for p = 0.001 and half-width 0.01 gave a real half-width of 0.0457; now 209), returning the smallest count that meets the bound. The standard-error, Wilson, and Hoeffding planners reject counts above 2^53 − 1 instead of overflowing (`(0.5, 1e-200)` returned 1).
+- **`tournamentDuelAbsorptionProbabilities`** is evaluated with `log1p` / `expm1` and cancellation-free near-fair algebra: 1000 vs 1000 one-chip all-ins at p = 0.1 returned NaN, and now gives win probability ≈ 0 and 1250 expected all-ins. Inputs are validated (NaN stacks passed before).
+- **Normalization at extreme scales.** `normalizedStackFractions`, the ICM family, `betaBinomialFoldPosterior`, `regretMatchingStrategy`, `mysteryBountyExpectedValue`, and the power utilities of `icmExpectedPayoutsWeitzman` scale before summing: `[1e308, 1e308]` returned zeros and now gives equal shares. ICM scales over the players still unplaced, so `([1e308, 1e-308, 1e-308], [100, 50, 0])` keeps `[100, 25, 25]`.
+- **ICM enumeration.** Harville placements are accumulated over subsets of placed players instead of every finishing order, and payouts only resolve the places that pay more than last place: twelve equal stacks with equal prizes (factorial before) are instant, first place is the chip share, and every place is supported for up to 20 players (larger fields with few paid places). Requests beyond 2^20 subset states throw instead of running for hours. `icmHarvilleSkillAdjustedPayouts` gets the same engine and validation (NaN stacks and negative prizes now throw); seats whose skill weights are all zero finish last in a uniformly random order.
+- **`icmHarvilleStackJacobian`** uses central differences with a step relative to each stack (it used a one-sided step of at least one chip): `([1, 1], [100, 0])` is now `[25, −25, −25, 25]`, not ±16.67.
+- **Side pots.** `sidePotLadderFromCommitments` compares commitments exactly; an absolute 1e-12 tolerance created chips (`[1e-13, 2e-13]` totalled 4e-13) and counted a player with nothing in.
+- **`legalActionSummary`** forms `minRaiseTo` in 64 bits and caps it at all-in as documented (a valid state with a 1.2e9 bet and raise reported −1,894,967,296).
+- **River CFR.** `cfrRiverBetCallFoldSolve` and `solveHuRiverCheckBetTree` kept the defender's call values conditional on a bet, dropping the bettor's bet frequency (opponent reach) from the regrets. On value vs bluff catcher (pot 100, bet 50) 20,000 iterations now give aggregate betting 0.6653 and exploitability 0.0927 (was 0.7338 and 1.777), matching an independent reach-weighted CFR. Best responses and fictitious play are unchanged.
+- **Nash push/fold** (Hold'em and short deck). A called jam commits the smaller total stack from each player and returns the excess; both players were charged the smaller remaining stack, so with 10/10 stacks and 0.5/1 blinds the pot was 19.5 and the loser kept 0.5. `heroEv` and `villainEv` are now root values over the same joint deal (chip mode: final minus starting stack, summing to the ante; ICM: summing to the pool less other seats), where the ICM solve returned 49.60 + 50.09 = 99.69 of a 100 pool. Busted seats use the bust-aware ICM.
+- **Nash equity caches** hand each solve an immutable snapshot taken under the lock; a concurrent solve with other settings could rebuild the matrix another solve was reading (all 30 fixed-seed outputs changed under two workers).
+- **PKO fold terminals.** `pkoCallEvVsShove` and `pkoJamEvVsFold` give the pot to the villain when hero folds (fold EV left stacks unchanged and dropped the pot: 50 instead of 100/3 in the audit case); `pkoCoveringHuntEv`'s check-down awards the pot to the showdown winner at the given equity.
+- **`mysteryBountyExpectedValue`** draws without replacement with probabilities proportional to the weights: `sampleK` for unequal weights uses the exact inclusion probabilities, never exceeds the pool, and rises with `k` (`([100, 1, 1], [1000, 1, 1], 2)` gave 199.6 from a 102 pool).
+- **`rangeBlockerPressureByCard`** / `blockerMatrixByCard` remove combos holding a dead card (the second argument was ignored).
+- **`normalizeBotConfig`** clamps `riskTolerance` to [0, 1] as documented.
+
+### Now rejected
+
+- A duplicate villain card in `exactHuEquityVsKnownHand`, a duplicate board card in `comboEhsTableVsRange`, inconsistent inclusion–exclusion inputs in every `*Union*Categories` helper (an intersection larger than its sets), a negative pot in `netPotAfterCallAndRake`, `estimatedOutsFromRule*` equities outside [0, 1], and a preflop board in the Chubukov jam-stack searches (documented as 3–5; it ran exact preflop enumeration).
+- Integer arguments (counts, indices, sizes) that are not integers in the int32 range, in every native export: `Int32Value` / `Uint32Value` turned 1.9 into 1, NaN into 0, and 4294967297 into 1 (`wilsonScoreInterval(4294967297, 10, 1.96)`, `applySuitPermToCards(['Ah'], [NaN, 1, 2, 3])`). Seeds keep their documented modulo-2^32 conversion.
+- Bot-config numbers outside the 32-bit float range (`opponentAggressionWeight: 1e300` became Infinity); NaN and Infinity still keep the default.
+- `poker-calculations/encode`'s `cardStringToDeckIndex` with anything but a string (objects were coerced through `toString`).
+
+### Faster
+
+- `omahaNutsOnBoard`, `bigONutsOnBoard`, the Omaha Hi-Lo nut-low check, and `omahaWrapDrawOuts` test pairs of live cards (exactly two hole cards play) instead of every full holding: `omahaWrapDrawOuts(['Kc','Qd','9c','8d'], ['Jh','Ts','2c'])` still returns 20 outs, 14 nut outs, in milliseconds instead of about 7 s. `exactHeroRunoutVulnerability` reuses the strongest villain hand instead of enumerating opponents twice.
+
+### Deprecated
+
+- `icmExpectedPayoutsWeitzman`: not a payout model; it splits the whole pool by `stack^alpha` regardless of finishing positions (`([1, 3], [100, 100])` gives `[20, 180]`). Use `icmExpectedPayouts`.
+- `stackToPotAfterCall`: returns pot / stack (`1 / sprAfterCall`) despite its name. Use `sprAfterCall`.
+- `buildPreflopEquityMatrix`'s `threads` option, which was never used: the matrix is computed on the calling thread.
+
+### Tooling
+
+- `test/audit-regressions.test.js` checks each finding against independent references (closed forms, brute-force Harville and draw orders, an absorbing-chain solve, a reference CFR, Wilson's formula, enumeration of Omaha holdings), conservation identities, scale invariance, fixed-seed agreement of concurrent Nash solves on both caches, and bounded versions of the exports the sweep allows to run long. 17 of its 18 tests fail on 4.1.2 (the vulnerability check passes on both: that change only removes duplicate work). `test/native` checks Nash terminal stacks directly.
+- The crash sweep classifies timeouts: only exports listed as legitimately expensive, on arguments with valid cards, may run past the limit; any other timeout now fails the sweep.
+
 ## 4.1.3
 
 Fixes for helpers that look at a flop or turn before the board is complete.

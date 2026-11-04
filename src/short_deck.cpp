@@ -5,10 +5,12 @@
 #include "poker/combo_enumerator.hpp"
 #include "poker/equity_matrix.hpp"
 #include "poker/hand_evaluator.hpp"
+#include "poker/nash_push_fold.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <utility>
@@ -384,20 +386,23 @@ void fill_equity_matrix(int iterations, std::uint32_t seed, std::vector<double>&
     }
 }
 
-const std::vector<double>& cached_equity_matrix(int iterations, std::uint32_t seed) {
+/// Immutable snapshot of the 81-class equity matrix for (iterations, seed), taken under the lock so a
+/// rebuild for other settings never overwrites a matrix another solve is reading.
+std::shared_ptr<const std::vector<double>> cached_equity_matrix(int iterations, std::uint32_t seed) {
     static std::mutex mu;
     static int cached_iters = -1;
     static std::uint32_t cached_seed = 0;
-    static std::vector<double> cached;
+    static std::shared_ptr<const std::vector<double>> cached;
     if (iterations < 1) {
         throw std::invalid_argument("equityIterations must be positive");
     }
     std::lock_guard<std::mutex> lock(mu);
-    if (cached_iters == iterations && cached_seed == seed &&
-        cached.size() == static_cast<std::size_t>(kShortDeckHandClasses * kShortDeckHandClasses)) {
+    if (cached && cached_iters == iterations && cached_seed == seed) {
         return cached;
     }
-    fill_equity_matrix(iterations, seed, cached);
+    auto fresh = std::make_shared<std::vector<double>>();
+    fill_equity_matrix(iterations, seed, *fresh);
+    cached = std::move(fresh);
     cached_iters = iterations;
     cached_seed = seed;
     return cached;
@@ -942,12 +947,12 @@ std::array<double, kShortDeckHandClasses> short_deck_nash_hu_jam_range(const Sho
         throw std::invalid_argument("stack must exceed posted blind");
     }
     const int iters = std::max(1, std::min(spec.max_iterations, kShortDeckNashMaxIterations));
-    const auto& matrix = cached_equity_matrix(spec.equity_iterations, spec.equity_seed);
-    const double pot = spec.hero_posted + spec.villain_posted + spec.ante;
-    const double eff = std::min(spec.hero_stack - spec.hero_posted, spec.villain_stack - spec.villain_posted);
-    if (!(pot > 0.0) || !(eff > 0.0)) {
-        throw std::invalid_argument("pot and effective remaining stack must be positive");
-    }
+    const std::shared_ptr<const std::vector<double>> snapshot =
+        cached_equity_matrix(spec.equity_iterations, spec.equity_seed);
+    const std::vector<double>& matrix = *snapshot;
+    // Physical terminals (matched commitments, refunded excess, dead ante), as in Hold'em Nash.
+    const NashTerminalStacks t = nash_terminal_stacks(spec.hero_stack, spec.villain_stack, spec.hero_posted,
+                                                      spec.villain_posted, spec.ante);
     constexpr int kHands = kShortDeckHandClasses;
     std::array<double, kHands> ones{};
     ones.fill(1.0);
@@ -958,9 +963,15 @@ std::array<double, kShortDeckHandClasses> short_deck_nash_hu_jam_range(const Sho
     call_avg.fill(0.5);
     std::array<double, kHands> jam_br{};
     std::array<double, kHands> call_br{};
-    auto chip_called = [&](double eq) { return eq * pot + (2.0 * eq - 1.0) * eff; };
+    // Chips relative to folding: hero's fold leaves t.fold[0]; villain's fold to a jam leaves t.jam_fold[1].
+    auto hero_called = [&](double eq) {
+        return eq * t.hero_wins[0] + (1.0 - eq) * t.villain_wins[0] - t.fold[0];
+    };
+    auto villain_called = [&](double eq) {
+        return eq * t.villain_wins[1] + (1.0 - eq) * t.hero_wins[1] - t.jam_fold[1];
+    };
     auto chip_jam = [&](double eq, double p_call) {
-        return (1.0 - p_call) * pot + p_call * chip_called(eq);
+        return (1.0 - p_call) * (t.jam_fold[0] - t.fold[0]) + p_call * hero_called(eq);
     };
     for (int iter = 0; iter < iters; ++iter) {
         const double p_call = weight_sum(call_avg) / w_all;
@@ -970,7 +981,7 @@ std::array<double, kShortDeckHandClasses> short_deck_nash_hu_jam_range(const Sho
         }
         for (int j = 0; j < kHands; ++j) {
             const double eq = equity_vs_freq(j, jam_avg, matrix);
-            call_br[static_cast<std::size_t>(j)] = br_from_ev(chip_called(eq), 0.0, spec.tolerance);
+            call_br[static_cast<std::size_t>(j)] = br_from_ev(villain_called(eq), 0.0, spec.tolerance);
         }
         mix_avg(jam_avg, jam_br, iter);
         mix_avg(call_avg, call_br, iter);

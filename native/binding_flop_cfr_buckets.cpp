@@ -50,7 +50,7 @@ bool parse_i32_vector(const Napi::Value& v, const char* ctx, std::vector<int>& o
         const Napi::Array a = v.As<Napi::Array>();
         out.resize(a.Length());
         for (uint32_t i = 0; i < a.Length(); ++i) {
-            out[i] = a.Get(i).As<Napi::Number>().Int32Value();
+            out[i] = poker_bind::checked_int32(a.Get(i), "bucket");
         }
         return true;
     }
@@ -97,20 +97,20 @@ Napi::Value Ehs2BucketsVsRange(const Napi::CallbackInfo& info) {
     poker::ComboEhsTableOptions opt{};
     std::size_t idx = 2;
     if (idx < info.Length() && info[idx].IsNumber()) {
-        k = info[idx].As<Napi::Number>().Int32Value();
+        k = poker_bind::checked_int32(info[idx], "k");
         ++idx;
     }
     if (idx < info.Length() && info[idx].IsObject() && !info[idx].IsTypedArray()) {
         const Napi::Object o = info[idx].As<Napi::Object>();
         if (o.Has("trials") && o.Get("trials").IsNumber()) {
-            const int t = o.Get("trials").As<Napi::Number>().Int32Value();
+            const int t = poker_bind::checked_int32(o.Get("trials"), "trials");
             opt.trials = t < 0 ? 0 : static_cast<std::size_t>(t);
         }
         if (o.Has("seed") && o.Get("seed").IsNumber()) {
             opt.seed = o.Get("seed").As<Napi::Number>().Uint32Value();
         }
         if (o.Has("bucketCount") && o.Get("bucketCount").IsNumber()) {
-            k = o.Get("bucketCount").As<Napi::Number>().Int32Value();
+            k = poker_bind::checked_int32(o.Get("bucketCount"), "bucketCount");
         }
     }
     POKER_TRY(env, {
@@ -134,7 +134,7 @@ Napi::Value BucketMassFromRange(const Napi::CallbackInfo& info) {
     }
     int k = poker::flop_bucket_count_default();
     if (info.Length() >= 3 && info[2].IsNumber()) {
-        k = info[2].As<Napi::Number>().Int32Value();
+        k = poker_bind::checked_int32(info[2], "k");
     } else {
         int mx = 0;
         for (int b : buckets) {

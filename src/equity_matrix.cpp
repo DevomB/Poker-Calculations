@@ -126,10 +126,6 @@ void build_preflop_equity_matrix(const PreflopMatrixOptions& opts, std::vector<d
     }
     out.assign(169 * 169, 0.0);
     const int iters = opts.iterations;
-    std::size_t threads = opts.num_threads;
-    if (threads == 0) {
-        threads = 1;
-    }
     const std::vector<Card> empty_board;
 
     for (int i = 0; i < 169; ++i) {

@@ -43,7 +43,7 @@ struct SimulateHandParsed {
     if (err && !err->empty()) {
         return false;
     }
-    out.num_sim = info[2].As<Napi::Number>().Int32Value();
+    out.num_sim = poker_bind::checked_int32(info[2], "numSim");
     out.seed = static_cast<std::uint32_t>(info[3].As<Napi::Number>().Uint32Value());
     out.villains = 1;
     const int opts_idx = poker_bind::trailing_async_options_index(info);
@@ -56,7 +56,7 @@ struct SimulateHandParsed {
         villains_idx = 4;
     }
     if (villains_idx >= 0) {
-        out.villains = info[villains_idx].As<Napi::Number>().Int32Value();
+        out.villains = poker_bind::checked_int32(info[villains_idx], "villains");
     }
     return true;
 }
@@ -89,9 +89,9 @@ struct ParallelSimParsed {
     if (err && !err->empty()) {
         return false;
     }
-    out.num_sim = info[2].As<Napi::Number>().Int32Value();
+    out.num_sim = poker_bind::checked_int32(info[2], "numSim");
     out.base_seed = static_cast<std::uint32_t>(info[3].As<Napi::Number>().Uint32Value());
-    out.villains = info[4].As<Napi::Number>().Int32Value();
+    out.villains = poker_bind::checked_int32(info[4], "villains");
     const int threads_idx = opts_idx >= 0 ? 5 : 5;
     if (opts_idx >= 0 && opts_idx != 6) {
         if (err) {
@@ -105,7 +105,7 @@ struct ParallelSimParsed {
         }
         return false;
     }
-    out.num_threads = static_cast<std::size_t>(info[threads_idx].As<Napi::Number>().Uint32Value());
+    out.num_threads = poker_bind::checked_index(info[threads_idx], "numThreads");
     return true;
 }
 
@@ -151,11 +151,11 @@ struct ParallelSimParsed {
             }
             return false;
         }
-        spot.num_simulations = o.Get("numSimulations").As<Napi::Number>().Int32Value();
+        spot.num_simulations = poker_bind::checked_int32(o.Get("numSimulations"), "numSimulations");
         spot.seed = static_cast<std::uint32_t>(o.Get("seed").As<Napi::Number>().Uint32Value());
         spot.villains = 1;
         if (o.Has("villains") && o.Get("villains").IsNumber()) {
-            spot.villains = o.Get("villains").As<Napi::Number>().Int32Value();
+            spot.villains = poker_bind::checked_int32(o.Get("villains"), "villains");
         }
         spots.push_back(std::move(spot));
     }
@@ -393,7 +393,7 @@ Napi::Value EvaluateHandStrengthFastBatch(const Napi::CallbackInfo& info) {
         int board_cards = 5;
         std::size_t out_idx = 2;
         if (info.Length() >= 3 && info[2].IsNumber()) {
-            board_cards = info[2].As<Napi::Number>().Int32Value();
+            board_cards = poker_bind::checked_int32(info[2], "boardCards");
             out_idx = 3;
         }
         if (board_cards < 0 || board_cards > 5) {
@@ -452,7 +452,7 @@ Napi::Value ExactHuEquityVsRandomHandBatch(const Napi::CallbackInfo& info) {
             POKER_FAIL_TYPE(env, 
                 "exactHuEquityVsRandomHandBatch(holes: Uint8Array, boards: Uint8Array, boardCards, out?)");
         }
-        const int board_cards = info[2].As<Napi::Number>().Int32Value();
+        const int board_cards = poker_bind::checked_int32(info[2], "boardCards");
         if (board_cards < 3 || board_cards > 5) {
             POKER_FAIL_TYPE(env, "boardCards must be 3..5");
         }

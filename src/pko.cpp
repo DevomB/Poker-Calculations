@@ -1,4 +1,5 @@
 #include "poker/pko.hpp"
+#include "poker/range.hpp"
 
 #include "poker/icm.hpp"
 
@@ -108,6 +109,16 @@ struct HandStacks {
     const auto icm = icm_expected_payouts_allowing_busts(stacks, payouts);
     const auto bounty = pko_expected_bounty_collection(stacks, bounty_values);
     return icm[seat] + bounty[seat] + immediate_bounty;
+}
+
+/// $EV for `seat` when `pot` (chips in the middle, not in any stack) goes to `recipient` with no
+/// further betting, e.g. when the other player folds.
+[[nodiscard]] double pot_awarded_ev(const std::vector<double>& stacks, const std::vector<double>& payouts,
+                                    const std::vector<double>& bounty_values, std::size_t seat,
+                                    std::size_t recipient, double pot) {
+    auto after = stacks;
+    after[recipient] += pot;
+    return seat_dollar_ev(after, payouts, bounty_values, seat, 0.0);
 }
 
 }  // namespace
@@ -234,7 +245,8 @@ PkoSpotEvResult pko_call_ev_vs_shove(const std::vector<double>& stacks, const st
     normalize_outcomes(p_win, p_tie, p_lose);
 
     PkoSpotEvResult r;
-    r.fold_ev = seat_dollar_ev(stacks, payouts, bounty_values, hero, 0.0);
+    // Folding gives the pot to the shover.
+    r.fold_ev = pot_awarded_ev(stacks, payouts, bounty_values, hero, villain, pot);
 
     const auto win = resolve_all_in(stacks, hero, villain, pot, 0, bounty_values);
     const auto lose = resolve_all_in(stacks, hero, villain, pot, 1, bounty_values);
@@ -268,11 +280,9 @@ PkoSpotEvResult pko_jam_ev_vs_fold(const std::vector<double>& stacks, const std:
     normalize_outcomes(p_win, p_tie, p_lose);
 
     PkoSpotEvResult r;
-    r.fold_ev = seat_dollar_ev(stacks, payouts, bounty_values, hero, 0.0);
-
-    auto folded_stacks = stacks;
-    folded_stacks[hero] += pot;
-    const double ev_fold_out = seat_dollar_ev(folded_stacks, payouts, bounty_values, hero, 0.0);
+    // Hero folding gives the pot to the villain; villain folding to the jam gives it to hero.
+    r.fold_ev = pot_awarded_ev(stacks, payouts, bounty_values, hero, villain, pot);
+    const double ev_fold_out = pot_awarded_ev(stacks, payouts, bounty_values, hero, hero, pot);
 
     const auto called = pko_call_ev_vs_shove(stacks, payouts, bounty_values, hero, villain, pot, p_win,
                                              p_tie, p_lose);
@@ -295,33 +305,54 @@ MysteryBountyEvResult mystery_bounty_expected_value(const std::vector<double>& v
         throw std::invalid_argument("mystery bounty: weights length must match values");
     }
     require_finite_nonneg(w, "weights");
-    const double wsum = std::accumulate(w.begin(), w.end(), 0.0);
-    if (wsum <= 0.0) {
+    if (k < 0) {
+        throw std::invalid_argument("mystery bounty: k must be non-negative");
+    }
+    // Each value is one bounty in the pool. A draw takes a remaining bounty with probability
+    // proportional to its weight (weights are relative draw chances, scaled by the largest so huge
+    // or tiny weights keep their proportions), without replacement.
+    double largest = 0.0;
+    for (double x : w) {
+        largest = std::max(largest, x);
+    }
+    if (!(largest > 0.0)) {
         throw std::invalid_argument("mystery bounty: positive weight sum required");
+    }
+    const int scale = weight_scale_exponent(largest);
+    double wsum = 0.0;
+    for (double x : w) {
+        wsum += std::ldexp(x, scale);
     }
 
     MysteryBountyEvResult r;
     r.all_remaining = std::accumulate(values.begin(), values.end(), 0.0);
+    if (!std::isfinite(r.all_remaining)) {
+        throw std::invalid_argument("mystery bounty: the pool total exceeds the largest double");
+    }
     double mean = 0.0;
     for (std::size_t i = 0; i < values.size(); ++i) {
-        mean += values[i] * (w[i] / wsum);
+        mean += values[i] * (std::ldexp(w[i], scale) / wsum);
     }
     r.one_draw = mean;
-    const int n = static_cast<int>(values.size());
-    if (k < 0) {
-        throw std::invalid_argument("mystery bounty: k must be non-negative");
-    }
+    const std::size_t n = values.size();
     r.k = k;
     if (k == 0) {
         r.sample_k = 0.0;
-    } else if (k >= n) {
+    } else if (static_cast<std::size_t>(k) >= n) {
         r.sample_k = r.all_remaining;
-        r.k = n;
-    } else {
-        // Equal-weight WOR: E[sum of k] = k * mean. Same linearity used as the
-        // weighted with-replacement mean when weights differ (documented ceiling:
-        // exact WOR inclusion for unequal weights is O(2^n); upgrade with DP).
+        r.k = static_cast<int>(n);
+    } else if (std::all_of(w.begin(), w.end(), [&](double x) { return x == w.front(); })) {
+        // Equal weights: every bounty is among the k drawn with probability k / n.
         r.sample_k = static_cast<double>(k) * r.one_draw;
+    } else {
+        // Unequal weights: E[sum] = sum_i value_i * P(i among the first k draws). Weighted draws
+        // without replacement are Harville placements, so inclusion is the top-k probability.
+        const auto placed = harville_top_places(w, static_cast<std::size_t>(k));
+        double total = 0.0;
+        for (std::size_t i = 0; i < n; ++i) {
+            total += values[i] * std::accumulate(placed[i].begin(), placed[i].end(), 0.0);
+        }
+        r.sample_k = std::min(total, r.all_remaining);
     }
     return r;
 }
@@ -396,8 +427,11 @@ PkoCoveringHuntResult pko_covering_hunt_ev(const std::vector<double>& stacks,
     PkoCoveringHuntResult r;
     r.equity_used = eq;
     r.hunt_ev = spot.take_ev;
-    r.check_down_ev = spot.fold_ev;
-    r.delta = spot.delta;
+    // Checking it down: no more chips go in and the pot goes to the showdown winner at the same
+    // equity, so nobody can bust and no bounty changes hands.
+    r.check_down_ev = eq * pot_awarded_ev(stacks, payouts, bounty_values, hunter, hunter, pot) +
+                      (1.0 - eq) * pot_awarded_ev(stacks, payouts, bounty_values, hunter, prey, pot);
+    r.delta = r.hunt_ev - r.check_down_ev;
     return r;
 }
 

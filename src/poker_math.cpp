@@ -1,4 +1,6 @@
 #include "poker/poker_math.hpp"
+#include "poker/bit_utils.hpp"
+#include "poker/range.hpp"
 
 #include "poker/cancel.hpp"
 #include "poker/card_string.hpp"
@@ -48,6 +50,16 @@ void assert_positive_finite(const char* name, double x) {
     return std::clamp(x, 0.0, 1.0);
 }
 
+/// A planned trial count as an integer, rejected before conversion when it is not finite or
+/// exceeds 2^53 - 1 (the largest count a JavaScript number holds exactly).
+[[nodiscard]] std::int64_t checked_trial_count(double n, const char* fn) {
+    constexpr double kMaxSafe = 9007199254740991.0;
+    if (!std::isfinite(n) || n > kMaxSafe) {
+        throw std::invalid_argument(std::string(fn) + ": the required number of trials exceeds 2^53 - 1");
+    }
+    return static_cast<std::int64_t>(std::max(1.0, n));
+}
+
 [[nodiscard]] int hand_rank_order(HandRank r) {
     return static_cast<int>(r);
 }
@@ -60,17 +72,66 @@ void assert_positive_finite(const char* name, double x) {
     return oa + ob - shared;
 }
 
+/// Size of the union of k <= 4 sets of outs from the size of every intersection, `size[mask]` for
+/// mask = 1 .. 2^k - 1 (bit i = set i). The sizes must describe real sets: each exclusive Venn
+/// region, found by inclusion-exclusion over the supersets of its mask, must be non-negative (so,
+/// for example, no pairwise intersection exceeds either of its sets).
+[[nodiscard]] double union_outs_checked(const double* size, int k) {
+    const int full = (1 << k) - 1;
+    double largest = 0.0;
+    for (int m = 1; m <= full; ++m) {
+        if (!std::isfinite(size[m]) || size[m] < 0.0) {
+            throw std::invalid_argument("outs and shared outs must be finite and non-negative");
+        }
+        largest = std::max(largest, size[m]);
+    }
+    const double tol = 1e-9 * std::max(1.0, largest);
+    double total = 0.0;
+    for (int t = 1; t <= full; ++t) {
+        double region = 0.0;
+        for (int sup = t; sup <= full; ++sup) {
+            if ((sup & t) == t) {
+                const int extra = popcount_u32(static_cast<std::uint32_t>(sup & ~t));
+                region += (extra % 2 == 0 ? 1.0 : -1.0) * size[sup];
+            }
+        }
+        if (region < -tol) {
+            throw std::invalid_argument(
+                "shared outs are inconsistent: an intersection exceeds a set it belongs to, or the "
+                "overlaps imply a negative number of outs in some region");
+        }
+        total += std::max(0.0, region);
+    }
+    return total;
+}
+
 [[nodiscard]] double union_outs_three(double oa, double ob, double oc, double sab, double sac,
                                      double sbc, double sabc) {
-    return oa + ob + oc - sab - sac - sbc + sabc;
+    const double size[8] = {0.0, oa, ob, sab, oc, sac, sbc, sabc};
+    return union_outs_checked(size, 3);
 }
 
 [[nodiscard]] double union_outs_four(double oa, double ob, double oc, double od, double s01,
                                    double s02, double s03, double s12, double s13, double s23,
                                    double s012, double s013, double s023, double s123,
                                    double four_way) {
-    return oa + ob + oc + od - s01 - s02 - s03 - s12 - s13 - s23 + s012 + s013 + s023 + s123 -
-           four_way;
+    double size[16] = {};
+    size[1] = oa;
+    size[2] = ob;
+    size[4] = oc;
+    size[8] = od;
+    size[3] = s01;
+    size[5] = s02;
+    size[9] = s03;
+    size[6] = s12;
+    size[10] = s13;
+    size[12] = s23;
+    size[7] = s012;
+    size[11] = s013;
+    size[13] = s023;
+    size[14] = s123;
+    size[15] = four_way;
+    return union_outs_checked(size, 4);
 }
 
 [[nodiscard]] double final_pot_after_hu_call(double pot_before_call, double to_call) {
@@ -376,7 +437,7 @@ double flop_to_river_at_least_one_hit_union_three_categories(double unseen_after
     assert_non_neg_finite("sharedBc", shared_bc);
     assert_non_neg_finite("sharedAbc", shared_abc);
     const double union_outs =
-        outs_a + outs_b + outs_c - shared_ab - shared_ac - shared_bc + shared_abc;
+        union_outs_three(outs_a, outs_b, outs_c, shared_ab, shared_ac, shared_bc, shared_abc);
     if (!std::isfinite(union_outs) || union_outs < 0.0) {
         throw std::invalid_argument("computed union outs must be non-negative and finite");
     }
@@ -403,9 +464,8 @@ double flop_to_river_at_least_one_hit_union_four_categories(
     assert_non_neg_finite("s023", s023);
     assert_non_neg_finite("s123", s123);
     assert_non_neg_finite("fourWay", four_way);
-    const double pair_sum = s01 + s02 + s03 + s12 + s13 + s23;
-    const double triple_sum = s012 + s013 + s023 + s123;
-    const double union_outs = oa + ob + oc + od - pair_sum + triple_sum - four_way;
+    const double union_outs =
+        union_outs_four(oa, ob, oc, od, s01, s02, s03, s12, s13, s23, s012, s013, s023, s123, four_way);
     if (!std::isfinite(union_outs) || union_outs < 0.0) {
         throw std::invalid_argument("computed union outs must be non-negative and finite");
     }
@@ -519,7 +579,7 @@ Beta_binomial_fold_posterior beta_binomial_fold_update(double prior_alpha, doubl
     Beta_binomial_fold_posterior out{};
     out.alpha = a;
     out.beta = b;
-    out.posterior_mean = a / (a + b);
+    out.posterior_mean = 1.0 / (1.0 + b / a);  // a / (a + b) without overflowing a + b
     return out;
 }
 
@@ -654,13 +714,8 @@ std::int64_t monte_carlo_trials_for_hoeffding_bound(double epsilon, double delta
     if (!std::isfinite(delta) || delta <= 0.0 || delta >= 1.0) {
         throw std::invalid_argument("delta must be finite and in (0, 1)");
     }
-    const double num = std::log(2.0 / delta);
-    const double den = 2.0 * epsilon * epsilon;
-    const double raw = num / den;
-    if (!std::isfinite(raw) || raw <= 0.0) {
-        throw std::invalid_argument("hoeffding trial bound overflowed");
-    }
-    return static_cast<std::int64_t>(std::ceil(raw - 1e-15));
+    const double raw = std::log(2.0 / delta) / (2.0 * epsilon * epsilon);
+    return checked_trial_count(std::ceil(raw), "monteCarloTrialsForHoeffdingBound");
 }
 
 double breakeven_call_equity_from_pot_odds_display_ratio(double display_pot_to_call_ratio) {
@@ -694,17 +749,25 @@ std::vector<double> normalized_stack_fractions(const std::vector<double>& stacks
     if (stacks.empty()) {
         throw std::invalid_argument("normalizedStackFractions: stacks must be non-empty");
     }
-    const double sum = std::accumulate(stacks.begin(), stacks.end(), 0.0, [](double acc, double s) {
+    double largest = 0.0;
+    for (double s : stacks) {
         assert_non_neg_finite("stack", s);
-        return acc + s;
-    });
-    if (sum <= 0.0) {
+        largest = std::max(largest, s);
+    }
+    if (!(largest > 0.0)) {
         throw std::invalid_argument("normalizedStackFractions: sum of stacks must be positive");
+    }
+    // Shares are scale-free: scale by the largest stack first (exact) so the total cannot overflow.
+    const int k = weight_scale_exponent(largest);
+    double sum = 0.0;
+    for (double s : stacks) {
+        sum += std::ldexp(s, k);
     }
     std::vector<double> out;
     out.reserve(stacks.size());
-    std::transform(stacks.begin(), stacks.end(), std::back_inserter(out),
-                   [sum](double s) { return s / sum; });
+    for (double s : stacks) {
+        out.push_back(std::ldexp(s, k) / sum);
+    }
     return out;
 }
 
@@ -1071,30 +1134,39 @@ std::int64_t monte_carlo_trials_for_standard_error_bound(double p_hat, double ta
                                     "variance");
     }
     const double v = p_hat * (1.0 - p_hat);
-    const double n_float = v / (target_se * target_se);
-    std::int64_t n = static_cast<std::int64_t>(std::ceil(n_float - 1e-15));
-    if (n < 1) {
-        n = 1;
+    // Smallest n with sqrt(v / n) <= targetSe, checked on the standard error itself so rounding in
+    // v / targetSe^2 cannot move it by one.
+    double n = std::max(1.0, std::ceil(v / target_se / target_se));
+    (void)checked_trial_count(n, "monteCarloTrialsForStandardErrorBound");
+    while (n > 1.0 && std::sqrt(v / (n - 1.0)) <= target_se) {
+        n -= 1.0;
     }
-    return n;
+    while (std::sqrt(v / n) > target_se) {
+        n += 1.0;
+    }
+    return checked_trial_count(n, "monteCarloTrialsForStandardErrorBound");
 }
 
-double estimated_outs_from_rule_of_two(double equity, double unseen_cards) {
-    if (!std::isfinite(equity)) {
-        throw std::invalid_argument("equity must be finite");
+namespace {
+
+/// Outs from the rule of thumb `equity = outs * percent_per_out / 100`, i.e. `equity * 100 /
+/// percent_per_out`, at most `unseen_cards` (no more outs than unseen cards).
+double outs_from_rule(double equity, double unseen_cards, double percent_per_out) {
+    if (!std::isfinite(equity) || equity < 0.0 || equity > 1.0) {
+        throw std::invalid_argument("equity must be in [0, 1]");
     }
     assert_positive_finite("unseenCards", unseen_cards);
-    const double e = clamp01(equity);
-    return std::clamp(e * unseen_cards / 2.0, 0.0, unseen_cards);
+    return std::min(equity * 100.0 / percent_per_out, unseen_cards);
+}
+
+}  // namespace
+
+double estimated_outs_from_rule_of_two(double equity, double unseen_cards) {
+    return outs_from_rule(equity, unseen_cards, 2.0);
 }
 
 double estimated_outs_from_rule_of_four(double equity, double unseen_cards) {
-    if (!std::isfinite(equity)) {
-        throw std::invalid_argument("equity must be finite");
-    }
-    assert_positive_finite("unseenCards", unseen_cards);
-    const double e = clamp01(equity);
-    return std::clamp(e * unseen_cards / 4.0, 0.0, unseen_cards);
+    return outs_from_rule(equity, unseen_cards, 4.0);
 }
 
 double expected_value_call_with_rake(double equity, double pot_before_call, double to_call,
@@ -1344,6 +1416,8 @@ double net_pot_after_rake(double pot_chips, double rake_fraction, double rake_ca
 
 double net_pot_after_call_and_rake(double pot_before_call, double to_call, double rake_fraction,
                                    double rake_cap) {
+    assert_non_neg_finite("potBeforeCall", pot_before_call);
+    assert_non_neg_finite("toCall", to_call);
     const double final_pot = final_pot_after_hu_call(pot_before_call, to_call);
     return net_pot_after_rake(final_pot, rake_fraction, rake_cap);
 }
@@ -1694,11 +1768,13 @@ double reverse_implied_odds_min_equity(double pot_before_call, double to_call, d
     assert_non_neg_finite("potBeforeCall", pot_before_call);
     assert_non_neg_finite("toCall", to_call);
     assert_non_neg_finite("maxFutureLoss", max_future_loss);
-    const double denom = pot_before_call + to_call + max_future_loss;
+    // Losing costs the call plus the later loss L: e * pot - (1 - e) * (toCall + L) = 0.
+    const double risk = to_call + max_future_loss;
+    const double denom = pot_before_call + risk;
     if (denom <= 0.0) {
         throw std::invalid_argument("denominator must be positive");
     }
-    return to_call / denom;
+    return risk / denom;
 }
 
 double geometric_pot_after_single_matched_bet(double pot0, double bet_size) {
@@ -1721,8 +1797,31 @@ std::int64_t monte_carlo_trials_for_wilson_half_width(double p_hat, double targe
     if (!std::isfinite(z) || z <= 0.0) {
         throw std::invalid_argument("z must be finite and positive");
     }
-    const double se_target = target_half_width / z;
-    return monte_carlo_trials_for_standard_error_bound(p_hat, se_target);
+    // The Wilson half-width at mean p over n trials, z sqrt(p q n + z^2/4) / (n + z^2), strictly
+    // decreases in n for every p (its derivative has the sign of (pq/2)(z^2 - n) - z^2/4 < 0), so
+    // the smallest n meeting the target is found by doubling and then bisecting on the interval itself.
+    const auto half_width = [&](double n) {
+        const Wilson_interval w = wilson_score_interval_for_mean(p_hat, n, z);
+        return 0.5 * (w.upper - w.lower);
+    };
+    double hi = 1.0;
+    while (half_width(hi) > target_half_width) {
+        hi *= 2.0;
+        (void)checked_trial_count(hi / 2.0, "monteCarloTrialsForWilsonHalfWidth");
+    }
+    double lo = hi / 2.0;  // half_width(lo) > target unless hi == 1
+    if (hi == 1.0) {
+        return 1;
+    }
+    while (hi - lo > 1.0) {
+        const double mid = std::floor((lo + hi) / 2.0);
+        if (half_width(mid) <= target_half_width) {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    return checked_trial_count(hi, "monteCarloTrialsForWilsonHalfWidth");
 }
 
 double variance_to_standard_deviation_per_hand(double variance_per_hand) {

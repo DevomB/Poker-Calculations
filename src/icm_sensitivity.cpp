@@ -3,6 +3,7 @@
 #include "poker/icm.hpp"
 
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace poker {
@@ -13,15 +14,26 @@ std::vector<double> icm_harville_stack_jacobian(const std::vector<double>& stack
     if (n == 0 || payouts.size() != n) {
         throw std::invalid_argument("icmHarvilleStackJacobian: stacks and payouts must match");
     }
+    for (double s : stacks) {
+        if (!std::isfinite(s) || !(s > 0.0)) {
+            throw std::invalid_argument("icmHarvilleStackJacobian: stacks must be finite and positive");
+        }
+    }
     std::vector<double> j(n * n, 0.0);
-    const auto base = icm_expected_payouts(stacks, payouts);
+    // Central differences with a step relative to the stack (ICM only depends on stack ratios, so
+    // the derivative scales as 1 / stack): h = eps^(1/3) * s balances truncation and rounding error,
+    // keeps s - h positive, and the difference of the two bumped stacks is the exact step used.
+    const double rel = std::cbrt(std::numeric_limits<double>::epsilon());
     for (std::size_t col = 0; col < n; ++col) {
-        const double eps = std::max(1.0, 1e-6 * stacks[col]);
-        auto bumped = stacks;
-        bumped[col] += eps;
-        const auto ev = icm_expected_payouts(bumped, payouts);
+        auto up = stacks;
+        auto down = stacks;
+        up[col] = stacks[col] * (1.0 + rel);
+        down[col] = stacks[col] * (1.0 - rel);
+        const double step = up[col] - down[col];
+        const auto ev_up = icm_expected_payouts(up, payouts);
+        const auto ev_down = icm_expected_payouts(down, payouts);
         for (std::size_t row = 0; row < n; ++row) {
-            j[row * n + col] = (ev[row] - base[row]) / eps;
+            j[row * n + col] = (ev_up[row] - ev_down[row]) / step;
         }
     }
     return j;

@@ -186,8 +186,8 @@ Napi::Value PkoCallEvVsShove(const Napi::CallbackInfo& info) {
     if (!info[3].IsNumber() || !info[4].IsNumber() || !info[5].IsNumber()) {
         POKER_FAIL_TYPE(env, "pkoCallEvVsShove: heroIndex, villainIndex, pot must be numbers");
     }
-    const std::size_t hero = static_cast<std::size_t>(info[3].As<Napi::Number>().Uint32Value());
-    const std::size_t vil = static_cast<std::size_t>(info[4].As<Napi::Number>().Uint32Value());
+    const std::size_t hero = poker_bind::checked_index(info[3], "heroIndex");
+    const std::size_t vil = poker_bind::checked_index(info[4], "villainIndex");
     const double pot = info[5].As<Napi::Number>().DoubleValue();
     double p_win = 0, p_tie = 0, p_lose = 0;
     if (!parse_outcomes(info[6], p_win, p_tie, p_lose, &err)) {
@@ -217,8 +217,8 @@ Napi::Value PkoJamEvVsFold(const Napi::CallbackInfo& info) {
     if (!info[3].IsNumber() || !info[4].IsNumber() || !info[5].IsNumber() || !info[6].IsNumber()) {
         POKER_FAIL_TYPE(env, "pkoJamEvVsFold: heroIndex, villainIndex, pot, foldEquity must be numbers");
     }
-    const std::size_t hero = static_cast<std::size_t>(info[3].As<Napi::Number>().Uint32Value());
-    const std::size_t vil = static_cast<std::size_t>(info[4].As<Napi::Number>().Uint32Value());
+    const std::size_t hero = poker_bind::checked_index(info[3], "heroIndex");
+    const std::size_t vil = poker_bind::checked_index(info[4], "villainIndex");
     const double pot = info[5].As<Napi::Number>().DoubleValue();
     const double fe = info[6].As<Napi::Number>().DoubleValue();
     double p_win = 0, p_tie = 0, p_lose = 0;
@@ -244,13 +244,13 @@ Napi::Value MysteryBountyExpectedValue(const Napi::CallbackInfo& info) {
     int k = 0;
     if (info.Length() >= 2 && !info[1].IsUndefined() && !info[1].IsNull()) {
         if (info[1].IsNumber() && info.Length() == 2) {
-            k = info[1].As<Napi::Number>().Int32Value();
+            k = poker_bind::checked_int32(info[1], "k");
         } else if (!read_f64_vector(info[1], "weights", weights, &err)) {
             POKER_FAIL_TYPE(env, err);
         }
     }
     if (info.Length() >= 3 && info[2].IsNumber()) {
-        k = info[2].As<Napi::Number>().Int32Value();
+        k = poker_bind::checked_int32(info[2], "k");
     }
     POKER_TRY(env, {
         const auto r = poker::mystery_bounty_expected_value(values, weights, k);
@@ -303,8 +303,8 @@ Napi::Value PkoCoveringHuntEv(const Napi::CallbackInfo& info) {
     if (!info[3].IsNumber() || !info[4].IsNumber() || !info[5].IsNumber()) {
         POKER_FAIL_TYPE(env, "pkoCoveringHuntEv: hunterIndex, preyIndex, pot must be numbers");
     }
-    const std::size_t hunter = static_cast<std::size_t>(info[3].As<Napi::Number>().Uint32Value());
-    const std::size_t prey = static_cast<std::size_t>(info[4].As<Napi::Number>().Uint32Value());
+    const std::size_t hunter = poker_bind::checked_index(info[3], "hunter");
+    const std::size_t prey = poker_bind::checked_index(info[4], "prey");
     const double pot = info[5].As<Napi::Number>().DoubleValue();
     double equity = 0.0;
     bool provided = false;

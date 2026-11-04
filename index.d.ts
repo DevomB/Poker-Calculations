@@ -317,8 +317,10 @@ declare namespace api {
   }
 
   export interface PreflopMatrixOptions {
+    /** Monte Carlo trials per hand-class matchup (default 5000). */
     iterations?: number;
     seed?: number;
+    /** @deprecated Ignored: the matrix is computed on the calling thread (run it in a Worker to keep the main thread free). */
     threads?: number;
   }
 
@@ -386,9 +388,10 @@ declare namespace api {
   }
 
   /**
-   * Mystery bounty remaining-prize EV.
-   * `oneDraw` is the weighted mean of one knockout. `allRemaining` is the leftover pool
-   * (winner-take-all). `sampleK` is E[sum of k draws]; equal-weight WOR is exact via linearity.
+   * Mystery bounty remaining-prize EV. Each value is one bounty and a draw takes a remaining bounty
+   * with probability proportional to its weight, without replacement. `oneDraw` is the weighted mean
+   * of one draw, `allRemaining` the pool, and `sampleK` the expected total of `k` draws: never above
+   * the pool, rising with `k` to `allRemaining` at `k = n`.
    */
   export interface MysteryBountyEvResult {
     oneDraw: number;
@@ -539,6 +542,10 @@ declare namespace api {
   export interface NashJamCallSolveResult {
     jam: Float64Array;
     call: Float64Array;
+    /**
+     * Root value for the jammer (SB): expected final minus starting stack in chip mode, expected prize
+     * with ICM. `heroEv + villainEv` is the dead ante (chips) or the pool less other seats' share (ICM).
+     */
     heroEv: number;
     villainEv: number;
     iterations: number;
@@ -576,7 +583,8 @@ declare namespace api {
   /**
    * Heads-up gambler's ruin: each all-in moves `chipsPerAllIn`; hero busts after
    * ceil(heroStack/chipsPerAllIn) net losses and wins after ceil(villainStack/chipsPerAllIn) net wins.
-   * Closed form, so `heroWinProbability` is the chip share at p = 0.5.
+   * Closed form evaluated in log/expm1 form, so long uneven duels stay finite (1000 vs 1000 at
+   * p = 0.1: win probability ≈ 0, 1250 expected all-ins); `heroWinProbability` is the chip share at p = 0.5.
    */
   export interface TournamentDuelAbsorptionResult {
     heroWinProbability: number;
@@ -907,11 +915,12 @@ declare namespace api {
     ruleOfFourEquity(outs: number): number;
     ruleOfTwoEquity(outs: number): number;
     /**
-     * Algebraic inverse of the uncapped rule-of-two line: `equity * unseen / 2` clamped to `[0, unseen]`
-     * (not a full inverse of capped `ruleOfTwoEquity`).
+     * Outs implied by the rule of two (2% per out): `equity × 50`, the uncapped inverse of
+     * `ruleOfTwoEquity` (0.18 → 9 outs), at most `unseenCards`. `equity` must be in [0, 1].
+     * `ruleOfTwoEquity` itself saturates (48 outs, equity 1), so equities near 1 have no unique inverse.
      */
     estimatedOutsFromRuleOfTwo(equity: number, unseenCards: number): number;
-    /** Same for two streets vs the rule-of-four line: `equity * unseen / 4` clamped to `[0, unseen]`. */
+    /** Rule of four (4% per out, two cards to come): `equity × 25` (0.36 → 9 outs), at most `unseenCards`. */
     estimatedOutsFromRuleOfFour(equity: number, unseenCards: number): number;
     /**
      * Extra chips hero must win later for a call to break even: `max(0, toCall / equity − potBeforeCall
@@ -1175,11 +1184,13 @@ declare namespace api {
       deadMoneyChips: number,
       maxStackChips: number
     ): number;
-    /** Harville first-place probabilities. */
+    /** Harville first-place probabilities: each stack's share of the chips (no enumeration; up to 31 players). */
     icmWinProbabilitiesHarville(stacks: F64VectorInput, returnFormat?: F64ReturnFormat): number[] | Float64Array;
     /**
      * Full Harville placement matrix, row-major `n × n`: entry `player * n + place` is the probability
      * that `player` finishes in `place` (0 = first). A `Float64Array` when `returnFormat` is `'float64'`.
+     * Computed over subsets of already-placed players (2^n states), so it is supported for up to 20
+     * players; larger fields throw (use `icmTopKFinishProbabilities` or payouts with few paid places).
      */
     icmHarvillePlacementProbabilities(
       stacks: F64VectorInput,
@@ -1199,7 +1210,13 @@ declare namespace api {
       stacks: F64VectorInput,
       returnFormat?: F64ReturnFormat
     ): number[] | Float64Array;
-    /** ICM expected payouts (prize vector length = players). */
+    /**
+     * Harville ICM expected payouts (prize vector length = players). Only the places paying more than
+     * last place are resolved, so equal prizes cost nothing and a field of up to 31 players works when
+     * the number of subset states for those places stays within 2^20 (every place for up to 20
+     * players; e.g. 3 paid places for 31). Shares are scaled over the players still unplaced, so huge
+     * or tiny stacks keep their proportions. Stacks must be positive.
+     */
     icmExpectedPayouts(
       stacks: F64VectorInput,
       payouts: F64VectorInput,
@@ -1213,7 +1230,13 @@ declare namespace api {
       villainIndex: number,
       potChips: number
     ): number;
-    /** side-pot ladder from per-player committed chips. */
+    /**
+     * Main pot and side pots from each player's total commitment: one layer per distinct positive
+     * commitment level, holding `level − previous level` from every player who reached that level
+     * (exact comparisons, so the layers add up to the commitments and a player with nothing in
+     * contributes to nothing). A top layer with a single contributor is an uncalled excess returned to
+     * that player. Folded players' chips are included; who may win each layer is up to the caller.
+     */
     sidePotLadderFromCommitments(committedChips: F64VectorInput): SidePotLayer[];
     /** chip EV from per-layer pot sizes and per-player per-layer equities (columns sum to 1). */
     layeredPotChipEvFromEquities(
@@ -1356,7 +1379,11 @@ declare namespace api {
       seed: number,
       villains?: number
     ): McEquityDetailedResult;
-    /** Preflop 169×169 equity matrix (row-major `Float64Array`, length `169*169`). */
+    /**
+     * Preflop 169×169 equity matrix (row-major `Float64Array`, length `169*169`): Monte Carlo
+     * equity of one representative combo per class against another (suits fixed per class, so
+     * class-level card removal is approximate). Computed on one thread; `threads` is ignored.
+     */
     buildPreflopEquityMatrix(options?: PreflopMatrixOptions): Float64Array;
     /** Change in exact range equity when `removedDeckIndex` is treated as dead. */
     equityDeltaIfCardRemoved(
@@ -1365,7 +1392,12 @@ declare namespace api {
       range: Float64Array | SparseRangeSpec,
       removedDeckIndex: number
     ): number;
-    /** Independent Weitzman chip-utility ICM (`alpha` defaults to 2). */
+    /**
+     * @deprecated Not a tournament payout model. It splits the whole prize pool in proportion to
+     * `stack^alpha` (`alpha` defaults to 2), ignoring finishing positions, so prizes every player is
+     * guaranteed are not respected: `([1, 3], [100, 100])` gives `[20, 180]` although both players
+     * receive 100. Use `icmExpectedPayouts` (Harville) for payouts by finishing position.
+     */
     icmExpectedPayoutsWeitzman(
       stacks: F64VectorInput,
       payouts: F64VectorInput,
@@ -1399,7 +1431,7 @@ declare namespace api {
     ): Promise<number>;
     /**
      * largest integer jam stack in `[1, maxStackChips]` with nonnegative symmetric-jam EV using
-     * exact HU equity vs a random hand (`exactHuEquityVsRandomHand`); board 3–5.
+     * exact HU equity vs a random hand (`exactHuEquityVsRandomHand`); board 3–5 (preflop throws).
      * `maxStackChips` is a double (clamped to int range in native code).
      */
     chubukovMaxSymmetricJamStackBinarySearch(
@@ -1410,7 +1442,7 @@ declare namespace api {
     ): number;
     /**
      * same integer search as `chubukovMaxSymmetricJamStackBinarySearch` (equity from the hand, then
-     * `chubukovMaxSymmetricJamStackChipsBinarySearch`). `maxStackChips` is coerced with **int32** semantics in native code.
+     * `chubukovMaxSymmetricJamStackChipsBinarySearch`). `maxStackChips` must be an integer (fractions, NaN, and values outside the int32 range throw).
      */
     chubukovMaxSymmetricJamStackFromHandBinarySearch(
       heroHoleCards: CardInput,
@@ -1418,6 +1450,11 @@ declare namespace api {
       deadMoneyChips: number,
       maxStackChips: number
     ): number;
+    /**
+     * `J[i * n + j]` = ∂(ICM EV of seat i) / ∂(stack j), by central differences with a step of about
+     * 6e-6 × stack j (two ICM evaluations per column). Columns sum to 0 (the prize pool is fixed) and
+     * `Σ_j stack_j J[i * n + j] = 0` (ICM depends only on stack ratios). Stacks must be positive.
+     */
     icmHarvilleStackJacobian(
       stacks: F64VectorInput,
       payouts: F64VectorInput,
@@ -1564,6 +1601,12 @@ declare namespace api {
       outsB: number,
       sharedAb: number
     ): number;
+    /**
+     * P(at least one out on the turn) for the union of three out categories, from their sizes and
+     * every intersection (inclusion–exclusion). The sizes must describe real sets: no intersection may
+     * exceed a set it belongs to, and every Venn region must be non-negative, or it throws. The other
+     * `*Union*Categories` helpers apply the same check.
+     */
     flopToTurnAtLeastOneHitUnionThreeCategories(
       unseen: number,
       outsA: number,
@@ -1770,6 +1813,11 @@ declare namespace api {
       toCall: number,
       symmetricExtraCallers: number
     ): number;
+    /**
+     * Equity a call needs when losing also costs `maxFutureLoss` later:
+     * `(toCall + L) / (potBeforeCall + toCall + L)`, from `e × pot − (1 − e) × (toCall + L) = 0`.
+     * Never below `breakevenCallEquity(potBeforeCall, toCall)`.
+     */
     reverseImpliedOddsMinEquity(
       potBeforeCall: number,
       toCall: number,
@@ -1806,6 +1854,10 @@ declare namespace api {
     sidePotBreakevenCallEquity(layerPotChips: number, toCall: number): number;
     /** Combos of `notation` ("AA", "AKs", "AKo") whose two cards are both outside `deadCards`. */
     preflopCombosFromNotationMinusBlockers(notation: string, deadCards: CardInput): number;
+    /**
+     * @deprecated Despite its name this returns the pot-to-stack ratio, `1 / sprAfterCall(...)`
+     * (`(100, 50, 500)` gives 1/3). Use `sprAfterCall` for stack-to-pot (3 there).
+     */
     stackToPotAfterCall(
       potBeforeCall: number,
       toCall: number,
@@ -1909,6 +1961,10 @@ declare namespace api {
     rangeBucketWeightsByHandClass(range: SparseRangeSpec | Float64Array): RangeClassWeights;
     rangeBucketWeightsByNotation(range: SparseRangeSpec | Float64Array): RangeNotationWeight[];
     rangeFromNotationWeights(entries: RangeNotationWeight[]): Float64Array;
+    /**
+     * Per card (52 entries, deck order): the total range weight of the combos holding that card, after
+     * removing combos that use a `deadCards` card. Raw weighted counts in the range's units, not shares.
+     */
     rangeBlockerPressureByCard(range: SparseRangeSpec | Float64Array, deadCards?: CardInput): Float64Array;
     /**
      * Per card `c`: hero's exact equity when villain's combos holding `c` are removed (`c` can still
@@ -1922,10 +1978,17 @@ declare namespace api {
       range: SparseRangeSpec | Float64Array
     ): Float64Array;
 
+    /** Alias of `rangeBlockerPressureByCard` with `board` as the dead cards; a 52-element vector, not a matrix. */
     blockerMatrixByCard(range: SparseRangeSpec | Float64Array, board?: CardInput): Float64Array;
 
     geometricStreetSizingPlan(pot: number, effectiveStack: number, streetsRemaining: number): Float64Array;
     thinValueMargin(heroEquityWhenCalled: number, pot: number, betSize: number): number;
+    /**
+     * Largest bet `B` into `pot` that breaks even, from `EV(B) = fe × pot + (1 − fe) × (eq × (pot + 2B) −
+     * B) = 0`: `(fe + eq (1 − fe)) pot / ((1 − fe)(1 − 2 eq))` (pot 100, fe 0.2, eq 0.3 → 137.5).
+     * `Infinity` when no finite size breaks even because betting is profitable at every size
+     * (`fe = 1`, or `eq ≥ 0.5`); 0 when the EV is 0 at every size. Inputs outside their ranges throw.
+     */
     betSizingIndifferencePoint(pot: number, foldFrequency: number, equityWhenCalled: number): number;
     /** `betaBinomialFoldPosterior` with c-bet counts: folds and continues (calls or raises) to c-bets. */
     opponentFoldToCbetPosterior(
@@ -1951,7 +2014,11 @@ declare namespace api {
     /** Legal actions for the acting player (player 0 when `actingIndex` is -1). */
     legalActionSummary(state: NativePokerState | PokerStateBytes): LegalActionSummaryResult;
     actionMaskFromState(state: NativePokerState | PokerStateBytes): number;
-    /** Fills defaults and clamps: thresholds to [0, 1], at least 1 simulation and 1 villain. */
+    /**
+     * Fills defaults and clamps: `aggressionThreshold` and `riskTolerance` to [0, 1], `raisePotFraction`
+     * to at least 0, at least 1 simulation and 1 villain. NaN or infinite numbers keep the default;
+     * finite numbers outside the 32-bit float range throw (they would become Infinity).
+     */
     normalizeBotConfig(config: Partial<NativeBotConfig>): NativeBotConfig;
     /**
      * Every problem with a state object or PKST bytes (same rules for both; see `NativePokerState`).
@@ -2013,9 +2080,10 @@ declare namespace api {
     ): PkoBountyRiskPremiumResult;
 
     /**
-     * $EV(call all-in) vs $EV(fold) when villain has a bounty. Fold leaves stacks as given
-     * (pot already posted). Call uses ICM on post-hand stacks; hero collects villain's bounty
-     * if the villain busts.
+     * $EV(call all-in) vs $EV(fold) when villain has a bounty. `stacks` are the chips behind and `pot`
+     * is what is already in the middle (in no stack). Folding gives the pot to the villain; calling
+     * resolves the all-in (the covered amount from each, plus the pot) and hero collects villain's
+     * bounty if villain busts. Both use ICM plus expected bounties on the resulting stacks.
      */
     pkoCallEvVsShove(
       stacks: F64VectorInput,
@@ -2028,8 +2096,9 @@ declare namespace api {
     ): PkoCallEvResult;
 
     /**
-     * $EV(jam) vs $EV(fold) including bounties. Villain folds with `foldEquity`: hero is assigned
-     * `pot`. Called: same all-in resolution as `pkoCallEvVsShove`.
+     * $EV(jam) vs $EV(fold) including bounties. Hero folding gives `pot` to the villain; after a jam the
+     * villain folds with `foldEquity` (hero takes `pot`) or calls (same all-in resolution as
+     * `pkoCallEvVsShove`).
      */
     pkoJamEvVsFold(
       stacks: F64VectorInput,
@@ -2044,7 +2113,9 @@ declare namespace api {
 
     /**
      * Remaining mystery prizes: weighted mean of one knockout, leftover-pool sum, and optional
-     * E[sum of k draws] (`k` omitted or 0 skips the sample). Equal weights if `weights` omitted.
+     * expected total of `k` draws without replacement (`k` omitted or 0 skips it). `weights` are
+     * relative draw chances of each bounty (equal if omitted); unequal weights with `0 < k < n` use the
+     * Harville top-k inclusion probabilities, bounded like ICM (fields over 20 need few draws).
      */
     mysteryBountyExpectedValue(
       values: F64VectorInput,
@@ -2066,7 +2137,8 @@ declare namespace api {
 
     /**
      * Isolate vs a covered shorter stack (HU all-in, rest fold). Default equity is the
-     * stack-ratio proxy hunter / (hunter + prey). Check-down is the fold $EV.
+     * stack-ratio proxy hunter / (hunter + prey). `checkDownEv` is the alternative of putting no more
+     * chips in: the pot goes to the showdown winner at the same equity.
      */
     pkoCoveringHuntEv(
       stacks: F64VectorInput,
@@ -2236,7 +2308,9 @@ declare namespace api {
     /**
      * HU river CFR. Tree: bettor Check or Bet; vs Check defender checks back to showdown;
      * vs Bet defender Fold or Call. Showdown via exact 7-card compare.
-     * `heroRange` is the bettor. Default 400 iterations.
+     * `heroRange` is the bettor. Default 400 iterations (at most 20,000). Regrets are counterfactual:
+     * the defender's call values keep the bettor's bet frequencies as opponent reach. Returns the
+     * average strategy; on value-vs-bluff-catcher spots it approaches the analytic equilibrium.
      */
     cfrRiverBetCallFoldSolve(
       pot: number,
@@ -2400,7 +2474,9 @@ declare namespace api {
 
     /**
      * HU Nash with Harville ICM $EV. `otherStacks` are remaining table stacks;
-     * `payouts` is first-to-last prize. Showdown ties use equity split (no chop vector).
+     * `payouts` is first-to-last prize. Showdown ties use equity split (no chop vector). A called jam
+     * commits the smaller total stack from each player (the excess is returned); `heroEv` and
+     * `villainEv` are prize EVs over the same joint deal, so heads-up they sum to the prize pool.
      */
     nashIcmHeadsUpJamCallSolve(options: NashPushFoldOptions): NashJamCallSolveResult;
 

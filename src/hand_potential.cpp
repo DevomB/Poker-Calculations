@@ -407,7 +407,7 @@ std::vector<double> combo_strength_table_vs_range(const std::vector<Card>& board
         throw std::invalid_argument("combo EHS table requires a flop or turn (3 or 4 board cards)");
     }
     DeckBitset board_dead;
-    board_dead.mark_cards(board_cards);
+    board_dead.mark_cards_distinct(board_cards, "board");
     int board[5]{};
     const int board_n = static_cast<int>(n);
     for (int i = 0; i < board_n; ++i) {

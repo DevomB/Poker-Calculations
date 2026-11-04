@@ -20,7 +20,7 @@ Napi::Value IcmPayoutsAfterBlindPost(const Napi::CallbackInfo& info) {
         !read_f64_vector(info[4], "posts", posts, &err)) {
         POKER_FAIL_TYPE(env, err);
     }
-    const std::size_t hero = static_cast<std::size_t>(info[2].As<Napi::Number>().Uint32Value());
+    const std::size_t hero = poker_bind::checked_index(info[2], "heroIndex");
     const double hero_post = info[3].As<Napi::Number>().DoubleValue();
     const auto fmt = poker_bind::parse_return_format(info, 5);
     POKER_TRY(env, {
@@ -38,8 +38,8 @@ Napi::Value IcmCallingBubbleFactor(const Napi::CallbackInfo& info) {
     if (!read_f64_vector(info[0], "stacks", stacks, &err) || !read_f64_vector(info[1], "payouts", payouts, &err)) {
         POKER_FAIL_TYPE(env, err);
     }
-    const std::size_t hero = static_cast<std::size_t>(info[2].As<Napi::Number>().Uint32Value());
-    const std::size_t villain = static_cast<std::size_t>(info[3].As<Napi::Number>().Uint32Value());
+    const std::size_t hero = poker_bind::checked_index(info[2], "heroIndex");
+    const std::size_t villain = poker_bind::checked_index(info[3], "villain");
     const double risk = info[4].As<Napi::Number>().DoubleValue();
     POKER_TRY(env, { return Napi::Number::New(env, poker::icm_calling_bubble_factor(stacks, payouts, hero, villain, risk)); });
 }
@@ -74,7 +74,7 @@ Napi::Value IcmDeadPotDollarEv(const Napi::CallbackInfo& info) {
     if (!read_f64_vector(info[0], "stacks", stacks, &err) || !read_f64_vector(info[1], "payouts", payouts, &err)) {
         POKER_FAIL_TYPE(env, err);
     }
-    const std::size_t hero = static_cast<std::size_t>(info[2].As<Napi::Number>().Uint32Value());
+    const std::size_t hero = poker_bind::checked_index(info[2], "heroIndex");
     const double dead = info[3].As<Napi::Number>().DoubleValue();
     POKER_TRY(env, {
         const auto r = poker::icm_dead_pot_dollar_ev(stacks, payouts, hero, dead);

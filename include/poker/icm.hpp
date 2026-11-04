@@ -5,6 +5,22 @@
 
 namespace poker {
 
+/// Full placement matrices are computed for up to this many players (all 2^n subsets).
+inline constexpr std::size_t kHarvilleDenseMaxPlayers = 20;
+/// Above that, the number of subset states needed for the places asked for must stay within this.
+inline constexpr std::size_t kHarvilleMaxStates = std::size_t{1} << 20;
+
+/**
+ * Harville placement probabilities for the first `places` places from first-place weights:
+ * `out[i][j]` = P(player `i` finishes in place `j + 1`). Each place goes to a remaining player with
+ * probability proportional to their weight (scaled over the remaining players only); players whose
+ * weights are all 0 among the remaining finish in a uniformly random order. Computed over subsets
+ * of already-placed players, not orderings; throws when that needs more than `kHarvilleMaxStates`
+ * states for a field larger than `kHarvilleDenseMaxPlayers`.
+ */
+[[nodiscard]] std::vector<std::vector<double>> harville_top_places(const std::vector<double>& weights,
+                                                                   std::size_t places);
+
 /**
  * full Harville / Malmuth–Harville placement matrix.
  * `out[i][r]` = P(player index `i` finishes in place `r+1`), where `r=0` is first place.
@@ -42,8 +58,9 @@ namespace poker {
                                                 std::size_t villain, double pot_chips);
 
 /**
- * Independent Weitzman-style chip utility: each payout tier `k` is split among players in proportion to
- * `stack_i^alpha` (default `alpha = 2`). Simpler than Harville placement; useful as an alternative model.
+ * Deprecated power-utility allocator, not a payout model: the whole prize pool is split in proportion
+ * to `stack_i^alpha` (default `alpha = 2`), ignoring finishing positions, so guaranteed prizes are not
+ * respected. Use `icm_expected_payouts`.
  */
 [[nodiscard]] std::vector<double> icm_expected_payouts_weitzman(const std::vector<double>& stacks,
                                                                 const std::vector<double>& payouts,

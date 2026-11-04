@@ -22,6 +22,9 @@ void fill_seven_from_indices(int h0, int h1, const std::vector<Card>& board, con
     ranks[1] = static_cast<std::uint8_t>(h1 / 4);
     suits[1] = static_cast<std::uint8_t>(h1 % 4);
     const std::size_t board_n = board.size();
+    if (board_n > 5 || run_k < 0 || board_n + static_cast<std::size_t>(run_k) != 5) {
+        throw std::invalid_argument("range equity: board and runout must make five cards");
+    }
     for (std::size_t bi = 0; bi < board_n; ++bi) {
         ranks[2 + bi] = board[bi].rank();
         suits[2 + bi] = board[bi].suit();
@@ -112,7 +115,7 @@ double exact_hu_equity_vs_known_hand(const std::vector<Card>& hero_hole_cards,
     used.mark_cards(board_cards);
     const int v0 = deck_index_from_card(villain_hole_cards[0]);
     const int v1 = deck_index_from_card(villain_hole_cards[1]);
-    if (used.test(v0) || used.test(v1)) {
+    if (v0 == v1 || used.test(v0) || used.test(v1)) {
         throw std::invalid_argument("duplicate card in hero, board, or villain");
     }
     const int need_board = 5 - static_cast<int>(board_cards.size());

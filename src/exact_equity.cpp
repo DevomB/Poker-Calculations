@@ -24,6 +24,9 @@ void fill_seven_from_hole_board_run(const std::vector<Card>& hole, const std::ve
     suits[0] = hole[0].suit();
     ranks[1] = hole[1].rank();
     suits[1] = hole[1].suit();
+    if (board.size() > 5 || run_k < 0 || board.size() + static_cast<std::size_t>(run_k) != 5) {
+        throw std::invalid_argument("exact equity: board and runout must make five cards");
+    }
     for (std::size_t bi = 0; bi < board.size(); ++bi) {
         ranks[2 + bi] = board[bi].rank();
         suits[2 + bi] = board[bi].suit();
@@ -159,6 +162,11 @@ double straight_made_flop_to_river_exact_probability(const std::vector<Card>& he
 int chubukov_max_symmetric_jam_stack_from_hand_binary_search(const std::vector<Card>& hero_hole_cards,
                                                              const std::vector<Card>& board_cards,
                                                              double dead_money_chips, int max_stack_chips) {
+    // Documented domain: a flop, turn, or river. Preflop would need exact enumeration over every
+    // board for each search, so it is rejected before any work.
+    if (board_cards.size() < 3 || board_cards.size() > 5) {
+        throw std::invalid_argument("chubukov jam-stack search needs a board of 3 to 5 cards");
+    }
     if (!std::isfinite(dead_money_chips) || dead_money_chips < 0.0) {
         throw std::invalid_argument("deadMoneyChips must be finite and non-negative");
     }
@@ -176,6 +184,11 @@ double chubukov_max_symmetric_jam_stack_binary_search(const std::vector<Card>& h
                                                      const std::vector<Card>& board_cards,
                                                      double dead_money_chips, double max_stack_chips,
                                                      int iterations) {
+    // Documented domain: a flop, turn, or river. Preflop would need exact enumeration over every
+    // board for each search, so it is rejected before any work.
+    if (board_cards.size() < 3 || board_cards.size() > 5) {
+        throw std::invalid_argument("chubukov jam-stack search needs a board of 3 to 5 cards");
+    }
     if (!std::isfinite(dead_money_chips) || dead_money_chips < 0.0) {
         throw std::invalid_argument("deadMoneyChips must be finite and non-negative");
     }

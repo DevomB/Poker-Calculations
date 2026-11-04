@@ -33,7 +33,7 @@ Napi::Value SpinGoPayouts(const Napi::CallbackInfo& info) {
         wta = info[2].As<Napi::Boolean>().Value();
         fmt_i = 3;
     } else if (info.Length() >= 3 && info[2].IsNumber()) {
-        wta = info[2].As<Napi::Number>().Int32Value() != 0;
+        wta = poker_bind::checked_int32(info[2], "wta") != 0;
         fmt_i = 3;
     }
     const auto fmt = poker_bind::parse_return_format(info, fmt_i);
@@ -64,7 +64,7 @@ Napi::Value PkoFgsPayouts(const Napi::CallbackInfo& info) {
         !read_f64_vector(info[2], "bountyValues", bounties, &err)) {
         POKER_FAIL_TYPE(env, err);
     }
-    const int orbits = info[3].As<Napi::Number>().Int32Value();
+    const int orbits = poker_bind::checked_int32(info[3], "orbits");
     const double sb = info[4].As<Napi::Number>().DoubleValue();
     const double bb = info[5].As<Napi::Number>().DoubleValue();
     double ante = 0.0;

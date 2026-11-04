@@ -17,9 +17,17 @@
 ## What it does
 
 - **Texas Hold'em** (unprefixed functions): best-hand evaluation; Monte Carlo equity (sync, async, parallel, batch, with uncertainty, and against one weighted range per opponent); exact heads-up and multiway equity; range tools over the 1326 combos and 169 hand classes; hand potential (HS, PPot, NPot, EHS2); suit-isomorphic boards.
-- **Chip and tournament math:** pot odds, call and raise EV with rake, SPR, MDF, fold-equity breakevens, Harrington M, Kelly; Harville and Weitzman ICM, bubble factors, side-pot ladders, PKO bounties, Nash push/fold, and small river and subgame solvers.
+- **Chip and tournament math:** pot odds, call and raise EV with rake, SPR, MDF, fold-equity breakevens, Harrington M, Kelly; Harville ICM, bubble factors, side-pot ladders, PKO bounties, Nash push/fold, and small river and subgame solvers.
 - **Other games** (prefixed functions): Omaha Hi and Hi-Lo, Big O, short deck (6+), seven-card stud and razz, 2-7 single draw.
 - **Table state:** a PKST binary state format, validation, legal actions, and `decideAction`, a rule-based policy from Monte Carlo equity and pot odds for simulators and research.
+
+What kind of answer each family gives:
+
+- **Exact:** hand evaluation, `exact*` equity and runout enumerations, combinatorics, chip-math formulas, side-pot ladders, and Harville ICM (computed over subsets of players: every place for up to 20 players, fewer places for larger fields).
+- **Monte Carlo estimates:** `simulate*` equity (seeded, with standard errors where reported) and the preflop and push/fold equity tables.
+- **Numerical approximations:** the ICM stack Jacobian (central differences), iterative solvers (river CFR, fictitious play, Nash push/fold by fictitious play over 169 hand classes with one representative combo per class).
+- **Heuristics:** `decideAction` and the opponent-model helpers.
+- **Simplified tournament models:** PKO bounty collection by stack ratios, the FGS blind-decay model, and the deprecated power-utility allocator `icmExpectedPayoutsWeitzman`, which is not a finishing-position model.
 
 It is a calculation library. It has no full-game solver, no HTTP layer, and the state and decision APIs model no-limit Hold'em only.
 

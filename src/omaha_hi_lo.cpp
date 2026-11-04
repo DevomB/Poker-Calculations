@@ -457,17 +457,33 @@ bool omaha_lo_nuts_on_board(const std::vector<Card>& hero, const std::vector<Car
     block.mark_cards(hero);  // villain holdings cannot contain hero's cards
     block.mark_cards(board);
     block.mark_cards(extra_dead);
-    bool beaten = false;
-    for_each_combo_indices(block.unused_indices(), 4, [&](const int* vil, int) {
-        if (beaten) {
-            return;
+    // Exactly two hole cards play, so a better low exists iff some pair of live cards (which extends
+    // to a legal holding when two more live cards remain) makes one with three board cards.
+    const std::vector<int> pool = block.unused_indices();
+    if (pool.size() < 4) {
+        return true;
+    }
+    std::uint8_t br[5]{};
+    idx_to_ranks(b, bn, br);
+    for (std::size_t i = 0; i < pool.size(); ++i) {
+        for (std::size_t j = i + 1; j < pool.size(); ++j) {
+            const std::uint8_t ra = static_cast<std::uint8_t>(pool[i] / 4);
+            const std::uint8_t rb = static_cast<std::uint8_t>(pool[j] / 4);
+            for (int x = 0; x < bn - 2; ++x) {
+                for (int y = x + 1; y < bn - 1; ++y) {
+                    for (int z = y + 1; z < bn; ++z) {
+                        const std::uint8_t ranks[5] = {ra, rb, br[x], br[y], br[z]};
+                        std::uint8_t sorted[5]{};
+                        std::uint32_t key = kOmahaNoLow;
+                        if (pack_five_card_low(ranks, sorted, &key) && key < hero_lo.key) {
+                            return false;
+                        }
+                    }
+                }
+            }
         }
-        const OmahaLoHand v = omaha_lo_from_idx(vil, b, bn);
-        if (v.qualifies && v.key < hero_lo.key) {
-            beaten = true;
-        }
-    });
-    return !beaten;
+    }
+    return true;
 }
 
 OmahaHiLoNuttedness omaha_hi_lo_nuttedness(const std::vector<Card>& hero, const std::vector<Card>& board,

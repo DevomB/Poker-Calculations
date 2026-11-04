@@ -9,7 +9,7 @@ namespace poker {
 struct PreflopMatrixOptions {
     int iterations{5000};
     std::uint32_t seed{1};
-    std::size_t num_threads{1};
+    std::size_t num_threads{1};  // ignored: the matrix is computed on the calling thread
 };
 
 /// Fill length `169 * 169` row-major: equity of hand row vs hand column (MC, symmetric triangle computed).

@@ -58,6 +58,31 @@ struct NashJamCallResult {
 [[nodiscard]] int nash_hand169_from_notation(const std::string& notation);
 [[nodiscard]] double nash_combo_weight(int hand169);
 
+/// Hero / villain stacks at each way a heads-up jam-or-fold hand ends.
+struct NashTerminalStacks {
+    std::array<double, 2> fold{};          // hero folds
+    std::array<double, 2> jam_fold{};      // hero jams, villain folds
+    std::array<double, 2> hero_wins{};     // jam called, hero wins
+    std::array<double, 2> villain_wins{};  // jam called, villain wins
+    double matched{0.0};                   // total each player commits when called
+    double called_pot{0.0};                // 2 * matched + ante
+};
+
+/**
+ * Terminal stacks from total stacks (posted blinds included) and the dead ante. A called all-in
+ * commits the smaller total stack from each player and returns the bigger stack's excess; each
+ * player's call costs that amount minus what they already posted. Chips are conserved:
+ * every terminal sums to hero_stack + villain_stack + ante.
+ */
+[[nodiscard]] NashTerminalStacks nash_terminal_stacks(double hero_stack, double villain_stack,
+                                                      double hero_posted, double villain_posted,
+                                                      double ante);
+
+/**
+ * SB jam/fold vs BB call/fold by fictitious play over the 169 classes. `hero_ev` / `villain_ev`
+ * are root values over the same joint deal: expected final stack minus starting stack (chip mode;
+ * they sum to the ante) or expected prize (ICM; they sum to the pool less the other seats' share).
+ */
 [[nodiscard]] NashJamCallResult nash_heads_up_jam_call_solve(const NashPushFoldSpec& spec);
 
 [[nodiscard]] std::array<double, kNashHandCount> nash_jam_threshold_stack_bb(

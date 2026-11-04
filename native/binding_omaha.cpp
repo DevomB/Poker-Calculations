@@ -215,7 +215,7 @@ Napi::Value SimulateOmahaEquityVsRandom(const Napi::CallbackInfo& info) {
     if (!err.empty()) {
         POKER_FAIL_TYPE(env, err);
     }
-    const int trials = info[2].As<Napi::Number>().Int32Value();
+    const int trials = poker_bind::checked_int32(info[2], "trials");
     const std::uint32_t seed = static_cast<std::uint32_t>(info[3].As<Napi::Number>().Uint32Value());
     std::mt19937 rng(seed);
     POKER_TRY(env, {
@@ -240,7 +240,7 @@ Napi::Value SimulateOmahaEquityVsRange(const Napi::CallbackInfo& info) {
     if (!parse_omaha_range(info[2], range, &err)) {
         POKER_FAIL_TYPE(env, err);
     }
-    const int trials = info[3].As<Napi::Number>().Int32Value();
+    const int trials = poker_bind::checked_int32(info[3], "trials");
     const std::uint32_t seed = static_cast<std::uint32_t>(info[4].As<Napi::Number>().Uint32Value());
     std::mt19937 rng(seed);
     POKER_TRY(env, {
@@ -339,7 +339,7 @@ Napi::Value OmahaMultiwayEquityMc(const Napi::CallbackInfo& info) {
     if (!err.empty()) {
         POKER_FAIL_TYPE(env, err);
     }
-    const int trials = info[2].As<Napi::Number>().Int32Value();
+    const int trials = poker_bind::checked_int32(info[2], "trials");
     const std::uint32_t seed = static_cast<std::uint32_t>(info[3].As<Napi::Number>().Uint32Value());
     std::mt19937 rng(seed);
     POKER_TRY(env, {

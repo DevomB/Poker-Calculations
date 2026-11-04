@@ -163,7 +163,7 @@ Napi::Value HandPotentialBreakdownBind(const Napi::CallbackInfo& info) {
             if (!o.Get("streets").IsNumber()) {
                 POKER_FAIL_TYPE(env, "handPotentialBreakdown: streets must be 1 or 2");
             }
-            const int s = o.Get("streets").As<Napi::Number>().Int32Value();
+            const int s = poker_bind::checked_int32(o.Get("streets"), "streets");
             if (s != 1 && s != 2) {
                 POKER_FAIL_TYPE(env, "handPotentialBreakdown: streets must be 1 or 2");
             }
@@ -209,7 +209,7 @@ Napi::Value EquityBucketFromEhs(const Napi::CallbackInfo& info) {
                   "equityBucketFromEhs(ehs, k)");
     POKER_TRY(env, {
         return Napi::Number::New(env, poker::equity_bucket_from_ehs(info[0].As<Napi::Number>().DoubleValue(),
-                                                                    info[1].As<Napi::Number>().Int32Value()));
+                                                                    poker_bind::checked_int32(info[1], "k")));
     });
 }
 
@@ -229,7 +229,7 @@ Napi::Value ComboEhsTableVsRange(const Napi::CallbackInfo& info) {
     if (info.Length() >= 3 && info[2].IsObject() && !info[2].IsTypedArray()) {
         const Napi::Object o = info[2].As<Napi::Object>();
         if (o.Has("trials") && o.Get("trials").IsNumber()) {
-            const int t = o.Get("trials").As<Napi::Number>().Int32Value();
+            const int t = poker_bind::checked_int32(o.Get("trials"), "trials");
             opt.trials = t < 0 ? 0 : static_cast<std::size_t>(t);
         }
         if (o.Has("seed") && o.Get("seed").IsNumber()) {

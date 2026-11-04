@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <stdexcept>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -124,7 +126,15 @@ void read_bool_field(const Napi::Object& o, const char* key, const std::string& 
 
 [[nodiscard]] float config_float(const Napi::Object& o, const char* key, float default_val) {
     const double d = get_number_prop(o, key, static_cast<double>(default_val));
-    return std::isfinite(d) ? static_cast<float>(d) : default_val;
+    if (!std::isfinite(d)) {
+        return default_val;  // NaN / Infinity keep the default; they never reach the policy
+    }
+    // Config values are stored as 32-bit floats; a finite double beyond that range would become
+    // Infinity there, so it is rejected instead.
+    if (std::abs(d) > static_cast<double>(std::numeric_limits<float>::max())) {
+        throw std::invalid_argument(std::string(key) + " must be within the 32-bit float range (|x| <= 3.4e38)");
+    }
+    return static_cast<float>(d);
 }
 
 /// Seeds reduce modulo 2^32 (negative integers wrap the usual way).
@@ -369,12 +379,12 @@ bool parse_decide_action_inputs(const Napi::CallbackInfo& info, DecideActionPars
     out.opponent.reset();
     out.hero_seat = -1;
     if (last_idx >= 3 && info[last_idx].IsNumber()) {
-        out.hero_seat = info[last_idx].As<Napi::Number>().Int32Value();
+        out.hero_seat = poker_bind::checked_int32(info[last_idx], "heroSeat");
         if (info[2].IsObject() && !poker_bind::is_async_options(info[2])) {
             out.opponent = parse_opponent_model(info[2].As<Napi::Object>());
         }
     } else if (last_idx >= 2 && info[last_idx].IsNumber()) {
-        out.hero_seat = info[last_idx].As<Napi::Number>().Int32Value();
+        out.hero_seat = poker_bind::checked_int32(info[last_idx], "heroSeat");
     } else if (last_idx >= 2 && info[last_idx].IsObject() && !poker_bind::is_async_options(info[last_idx])) {
         out.opponent = parse_opponent_model(info[last_idx].As<Napi::Object>());
     }

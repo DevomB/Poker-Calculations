@@ -164,7 +164,7 @@ Napi::Value SimulateStudEquityVsRandom(const Napi::CallbackInfo& info) {
     if (!err.empty()) {
         POKER_FAIL_TYPE(env, err);
     }
-    const int trials = info[1].As<Napi::Number>().Int32Value();
+    const int trials = poker_bind::checked_int32(info[1], "trials");
     const std::uint32_t seed = static_cast<std::uint32_t>(info[2].As<Napi::Number>().Uint32Value());
     const std::vector<poker::Card> extra = parse_optional_cards(info, 3, &err);
     if (!err.empty()) {
@@ -185,7 +185,7 @@ Napi::Value SimulateRazzEquityVsRandom(const Napi::CallbackInfo& info) {
     if (!err.empty()) {
         POKER_FAIL_TYPE(env, err);
     }
-    const int trials = info[1].As<Napi::Number>().Int32Value();
+    const int trials = poker_bind::checked_int32(info[1], "trials");
     const std::uint32_t seed = static_cast<std::uint32_t>(info[2].As<Napi::Number>().Uint32Value());
     const std::vector<poker::Card> extra = parse_optional_cards(info, 3, &err);
     if (!err.empty()) {

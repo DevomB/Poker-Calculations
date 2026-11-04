@@ -51,7 +51,7 @@ bool parse_suit_perm(const Napi::Value& v, poker::SuitPerm& out, std::string* er
             }
             return false;
         }
-        out[i] = e.As<Napi::Number>().Int32Value();
+        out[i] = poker_bind::checked_int32(e, "suit perm entry");
     }
     if (!poker::is_valid_suit_perm(out)) {
         if (err) {
@@ -202,6 +202,6 @@ Napi::Value IsomorphicFlopIndex(const Napi::CallbackInfo& info) {
 Napi::Value FlopIndexToCanonical(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     POKER_REQUIRE(env, info.Length() >= 1 && info[0].IsNumber(), "flopIndexToCanonical(index)");
-    const int index = info[0].As<Napi::Number>().Int32Value();
+    const int index = poker_bind::checked_int32(info[0], "index");
     POKER_TRY(env, { return cards_to_js(env, poker::flop_index_to_canonical(index)); });
 }

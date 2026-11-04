@@ -8,6 +8,7 @@
 #include <array>
 #include <cmath>
 #include <cctype>
+#include <memory>
 #include <mutex>
 #include <random>
 #include <stdexcept>
@@ -146,20 +147,24 @@ void fill_hand169_equity_matrix(int iterations, std::uint32_t seed, std::vector<
     }
 }
 
-const std::vector<double>& cached_equity_matrix(int iterations, std::uint32_t seed) {
+/// The equity matrix for (iterations, seed), shared by solves on any thread. The caller gets an
+/// immutable snapshot taken under the lock: a later rebuild for other settings swaps in a new
+/// matrix instead of overwriting the one another solve is still reading.
+std::shared_ptr<const std::vector<double>> cached_equity_matrix(int iterations, std::uint32_t seed) {
     static std::mutex mu;
     static int cached_iters = -1;
     static std::uint32_t cached_seed = 0;
-    static std::vector<double> cached;
+    static std::shared_ptr<const std::vector<double>> cached;
     if (iterations < 1) {
         throw std::invalid_argument("equityIterations must be positive");
     }
     std::lock_guard<std::mutex> lock(mu);
-    if (cached_iters == iterations && cached_seed == seed &&
-        cached.size() == static_cast<std::size_t>(kHands * kHands)) {
+    if (cached && cached_iters == iterations && cached_seed == seed) {
         return cached;
     }
-    fill_hand169_equity_matrix(iterations, seed, cached);
+    auto fresh = std::make_shared<std::vector<double>>();
+    fill_hand169_equity_matrix(iterations, seed, *fresh);
+    cached = std::move(fresh);
     cached_iters = iterations;
     cached_seed = seed;
     return cached;
@@ -259,33 +264,6 @@ int clamp_iters(int n) {
     return std::max(1, std::min(n, kNashMaxIterations));
 }
 
-struct ChipSpot {
-    double pot{0.0};
-    double eff{0.0};
-};
-
-ChipSpot chip_spot(double hero_stack, double villain_stack, double hero_posted, double villain_posted,
-                   double ante) {
-    ChipSpot s;
-    s.pot = hero_posted + villain_posted + ante;
-    const double rh = hero_stack - hero_posted;
-    const double rv = villain_stack - villain_posted;
-    s.eff = std::min(rh, rv);
-    if (!(s.pot > 0.0) || !(s.eff > 0.0)) {
-        throw std::invalid_argument("pot and effective remaining stack must be positive");
-    }
-    return s;
-}
-
-double chip_called_ev(double eq, const ChipSpot& spot) {
-    return eq * spot.pot + (2.0 * eq - 1.0) * spot.eff;
-}
-
-double chip_jam_ev(double eq, double p_call, const ChipSpot& spot) {
-    const double p_fold = 1.0 - p_call;
-    return p_fold * spot.pot + p_call * chip_called_ev(eq, spot);
-}
-
 struct IcmPair {
     double hero{0.0};
     double villain{0.0};
@@ -295,45 +273,47 @@ IcmPair icm_for_stacks(double hero, double villain, const std::vector<double>& o
                        const std::vector<double>& payouts) {
     std::vector<double> stacks;
     stacks.reserve(2 + others.size());
-    stacks.push_back(std::max(hero, 1e-6));
-    stacks.push_back(std::max(villain, 1e-6));
+    stacks.push_back(hero);
+    stacks.push_back(villain);
     stacks.insert(stacks.end(), others.begin(), others.end());
-    const auto ev = icm_expected_payouts(stacks, payouts);
-    IcmPair p;
-    p.hero = ev[0];
-    p.villain = ev.size() > 1 ? ev[1] : 0.0;
-    return p;
+    // Prizes for every seat (missing places pay 0); a busted seat takes the bottom prize it can no
+    // longer avoid, so each terminal conserves the prize pool.
+    std::vector<double> prizes = payouts;
+    prizes.resize(stacks.size(), 0.0);
+    const auto ev = icm_expected_payouts_allowing_busts(stacks, prizes);
+    return IcmPair{ev[0], ev[1]};
 }
 
-struct IcmTerminals {
+/// Each player's value at each way the hand can end: final stacks minus starting stacks in chip
+/// mode, ICM prize EV otherwise.
+struct Terminals {
     IcmPair fold{};
     IcmPair jam_fold{};
     IcmPair hero_wins{};
     IcmPair villain_wins{};
 };
 
-IcmTerminals build_icm_terminals(const NashPushFoldSpec& spec, const ChipSpot& spot) {
-    IcmTerminals t;
-    const double h_behind = spec.hero_stack - spec.hero_posted;
-    const double v_behind = spec.villain_stack - spec.villain_posted;
-    t.fold = icm_for_stacks(h_behind, v_behind + spot.pot, spec.other_stacks, spec.payouts);
-    t.jam_fold = icm_for_stacks(h_behind + spot.pot, v_behind, spec.other_stacks, spec.payouts);
-    t.hero_wins =
-        icm_for_stacks(h_behind - spot.eff + spot.pot + 2.0 * spot.eff, v_behind - spot.eff, spec.other_stacks,
-                       spec.payouts);
-    t.villain_wins =
-        icm_for_stacks(h_behind - spot.eff, v_behind - spot.eff + spot.pot + 2.0 * spot.eff, spec.other_stacks,
-                       spec.payouts);
-    return t;
+Terminals build_terminals(const NashPushFoldSpec& spec) {
+    const NashTerminalStacks t = nash_terminal_stacks(spec.hero_stack, spec.villain_stack, spec.hero_posted,
+                                                      spec.villain_posted, spec.ante);
+    const auto value = [&](const std::array<double, 2>& st) {
+        if (spec.use_icm) {
+            return icm_for_stacks(st[0], st[1], spec.other_stacks, spec.payouts);
+        }
+        return IcmPair{st[0] - spec.hero_stack, st[1] - spec.villain_stack};
+    };
+    return Terminals{value(t.fold), value(t.jam_fold), value(t.hero_wins), value(t.villain_wins)};
 }
 
-double icm_jam_ev(double eq, double p_call, const IcmTerminals& t) {
+/// Hero's value from jamming hand with equity `eq` against the calls it meets (`p_call`).
+double jam_value(double eq, double p_call, const Terminals& t) {
     const double show = eq * t.hero_wins.hero + (1.0 - eq) * t.villain_wins.hero;
     return (1.0 - p_call) * t.jam_fold.hero + p_call * show;
 }
 
-double icm_call_ev(double eq, const IcmTerminals& t) {
-    return eq * t.villain_wins.villain + (1.0 - eq) * t.hero_wins.villain;
+/// Villain's value from calling with equity `eq_villain` against the jams it faces.
+double call_value(double eq_villain, const Terminals& t) {
+    return eq_villain * t.villain_wins.villain + (1.0 - eq_villain) * t.hero_wins.villain;
 }
 
 }  // namespace
@@ -385,15 +365,39 @@ double nash_combo_weight(int hand169) {
     return combo_weights()[static_cast<std::size_t>(hand169)];
 }
 
+NashTerminalStacks nash_terminal_stacks(double hero_stack, double villain_stack, double hero_posted,
+                                        double villain_posted, double ante) {
+    for (double x : {hero_stack, villain_stack, hero_posted, villain_posted, ante}) {
+        if (!std::isfinite(x) || x < 0.0) {
+            throw std::invalid_argument("stacks, posted blinds, and ante must be finite and non-negative");
+        }
+    }
+    if (!(hero_stack > hero_posted) || !(villain_stack > villain_posted)) {
+        throw std::invalid_argument("stack must exceed posted blind");
+    }
+    // Stacks include the posted blinds; the ante is dead money in the pot. A called all-in commits
+    // the smaller total stack M from each player (the bigger stack's excess is returned), so the
+    // pot is 2M + ante and each player's call cost is M minus what they already posted.
+    NashTerminalStacks t;
+    t.matched = std::min(hero_stack, villain_stack);
+    t.called_pot = 2.0 * t.matched + ante;
+    const double pot_now = hero_posted + villain_posted + ante;
+    t.fold = {hero_stack - hero_posted, villain_stack - villain_posted + pot_now};
+    t.jam_fold = {hero_stack - hero_posted + pot_now, villain_stack - villain_posted};
+    t.hero_wins = {hero_stack - t.matched + t.called_pot, villain_stack - t.matched};
+    t.villain_wins = {hero_stack - t.matched, villain_stack - t.matched + t.called_pot};
+    return t;
+}
+
 NashJamCallResult nash_heads_up_jam_call_solve(const NashPushFoldSpec& spec) {
     validate_spec(spec);
     const int iters = clamp_iters(spec.max_iterations);
-    const auto& matrix = cached_equity_matrix(spec.equity_iterations, spec.equity_seed);
-    const ChipSpot spot =
-        chip_spot(spec.hero_stack, spec.villain_stack, spec.hero_posted, spec.villain_posted, spec.ante);
-    const IcmTerminals icm = spec.use_icm ? build_icm_terminals(spec, spot) : IcmTerminals{};
-    const double fold_hero = spec.use_icm ? icm.fold.hero : 0.0;
-    const double fold_villain = spec.use_icm ? icm.jam_fold.villain : 0.0;
+    const std::shared_ptr<const std::vector<double>> snapshot =
+        cached_equity_matrix(spec.equity_iterations, spec.equity_seed);
+    const std::vector<double>& matrix = *snapshot;
+    const Terminals term = build_terminals(spec);
+    const double fold_hero = term.fold.hero;
+    const double fold_villain = term.jam_fold.villain;
     const auto& w = combo_weights();
     std::array<double, kHands> ones{};
     ones.fill(1.0);
@@ -408,18 +412,14 @@ NashJamCallResult nash_heads_up_jam_call_solve(const NashPushFoldSpec& spec) {
     std::array<double, kHands> call_br{};
 
     for (int iter = 0; iter < iters; ++iter) {
-        const double call_mass = weight_sum(call_avg);
-        const double p_call = call_mass / w_all;
+        const double p_call = weight_sum(call_avg) / w_all;
         for (int i = 0; i < kHands; ++i) {
             const double eq = equity_vs_freq(i, call_avg, matrix);
-            const double ev =
-                spec.use_icm ? icm_jam_ev(eq, p_call, icm) : chip_jam_ev(eq, p_call, spot);
-            jam_br[static_cast<std::size_t>(i)] = br_from_ev(ev, fold_hero, spec.tolerance);
+            jam_br[static_cast<std::size_t>(i)] = br_from_ev(jam_value(eq, p_call, term), fold_hero, spec.tolerance);
         }
         for (int j = 0; j < kHands; ++j) {
             const double eq = equity_vs_freq(j, jam_avg, matrix);
-            const double ev = spec.use_icm ? icm_call_ev(eq, icm) : chip_called_ev(eq, spot);
-            call_br[static_cast<std::size_t>(j)] = br_from_ev(ev, fold_villain, spec.tolerance);
+            call_br[static_cast<std::size_t>(j)] = br_from_ev(call_value(eq, term), fold_villain, spec.tolerance);
         }
         mix_avg(jam_avg, jam_br, iter);
         mix_avg(call_avg, call_br, iter);
@@ -429,27 +429,27 @@ NashJamCallResult nash_heads_up_jam_call_solve(const NashPushFoldSpec& spec) {
     out.jam = jam_avg;
     out.call = call_avg;
     out.iterations = iters;
-    const double call_mass = weight_sum(call_avg);
-    const double p_call = call_mass / w_all;
+    // Root values for both players over the same joint deal of hand classes (combo-weighted), so
+    // they add up to what the terminals conserve: the ante in chip mode, the prize pool less the
+    // other seats' share under ICM.
     double hero = 0.0;
     double villain = 0.0;
     for (int i = 0; i < kHands; ++i) {
-        const double p = w[static_cast<std::size_t>(i)] / w_all;
-        const double eq = equity_vs_freq(i, call_avg, matrix);
-        const double ev_j = spec.use_icm ? icm_jam_ev(eq, p_call, icm) : chip_jam_ev(eq, p_call, spot);
-        hero += p * (jam_avg[static_cast<std::size_t>(i)] * ev_j +
-                     (1.0 - jam_avg[static_cast<std::size_t>(i)]) * fold_hero);
-    }
-    if (spec.use_icm) {
+        const double pi = w[static_cast<std::size_t>(i)] / w_all;
+        const double jam = jam_avg[static_cast<std::size_t>(i)];
+        double h_jam = 0.0;
+        double v_jam = 0.0;
         for (int j = 0; j < kHands; ++j) {
-            const double p = w[static_cast<std::size_t>(j)] / w_all;
-            const double eq = equity_vs_freq(j, jam_avg, matrix);
-            const double ev_c = icm_call_ev(eq, icm);
-            villain += p * (call_avg[static_cast<std::size_t>(j)] * ev_c +
-                            (1.0 - call_avg[static_cast<std::size_t>(j)]) * fold_villain);
+            const double pj = w[static_cast<std::size_t>(j)] / w_all;
+            const double call = call_avg[static_cast<std::size_t>(j)];
+            const double e = matrix[static_cast<std::size_t>(i) * kHands + static_cast<std::size_t>(j)];
+            h_jam += pj * ((1.0 - call) * term.jam_fold.hero +
+                           call * (e * term.hero_wins.hero + (1.0 - e) * term.villain_wins.hero));
+            v_jam += pj * ((1.0 - call) * term.jam_fold.villain +
+                           call * (e * term.hero_wins.villain + (1.0 - e) * term.villain_wins.villain));
         }
-    } else {
-        villain = -hero;
+        hero += pi * ((1.0 - jam) * term.fold.hero + jam * h_jam);
+        villain += pi * ((1.0 - jam) * term.fold.villain + jam * v_jam);
     }
     out.hero_ev = hero;
     out.villain_ev = villain;

@@ -157,11 +157,18 @@ const char* unavailable_actor_reason(const PokerGameState& state, int player_ind
 LegalActions legal_actions_for(const PokerGameState& state, int player_index) {
     LegalActions out{};
     const int full = full_raise_size(state);
-    out.min_raise_to = state.current_bet + full;
+    // The current bet plus a full raise can pass 2^31 - 1 even when every chip count fits (a raise
+    // that size is then impossible), so it is formed in 64 bits and capped: by the player's all-in
+    // total, which is at most the chips in play, or by the largest int when there is no player.
+    const std::int64_t full_raise_to = static_cast<std::int64_t>(state.current_bet) + full;
+    out.min_raise_to = static_cast<int>(std::min<std::int64_t>(full_raise_to, std::numeric_limits<int>::max()));
     if (player_index >= 0 && player_index < static_cast<int>(state.players.size())) {
         const Player& p = state.players[static_cast<std::size_t>(player_index)];
         out.to_call = state.to_call(p);
-        out.max_raise_to = p.committed_this_street + p.stack;
+        out.max_raise_to = static_cast<int>(std::min<std::int64_t>(
+            static_cast<std::int64_t>(p.committed_this_street) + p.stack, std::numeric_limits<int>::max()));
+        // "All-in when shorter": a stack below a full raise can only raise all-in.
+        out.min_raise_to = static_cast<int>(std::min<std::int64_t>(full_raise_to, out.max_raise_to));
     }
     if (unavailable_actor_reason(state, player_index) != nullptr) {
         return out;
@@ -184,9 +191,6 @@ LegalActions legal_actions_for(const PokerGameState& state, int player_index) {
         }
     }
     out.can_raise = p.stack > out.to_call && reopened && opponent_can_respond;
-    if (out.can_raise) {
-        out.min_raise_to = std::min(out.min_raise_to, out.max_raise_to);
-    }
     return out;
 }
 

@@ -59,7 +59,7 @@ bool parse_side_spec(const Napi::Object& o, const char* discard_key, const char*
         const Napi::Value v = o.Get(discard_key);
         if (v.IsNumber()) {
             spec.has_count = true;
-            spec.discard_count = v.As<Napi::Number>().Int32Value();
+            spec.discard_count = poker_bind::checked_int32(v, "discardCount");
             return true;
         }
         spec.discard_cards = parse_cards_from_js(o.Env(), v, err);
@@ -152,7 +152,7 @@ Napi::Value DeuceSevenDrawEquityVsKnown(const Napi::CallbackInfo& info) {
             }
         }
         if (o.Has("trials") && o.Get("trials").IsNumber()) {
-            trials = o.Get("trials").As<Napi::Number>().Int32Value();
+            trials = poker_bind::checked_int32(o.Get("trials"), "trials");
         }
         if (o.Has("seed") && o.Get("seed").IsNumber()) {
             seed = o.Get("seed").As<Napi::Number>().Uint32Value();

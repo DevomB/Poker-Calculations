@@ -84,16 +84,20 @@ bool big_o_nuts_from_idx(const int hole[5], const int* board, int board_n, std::
     }
     const std::uint64_t hero_s = big_o_strength_from_idx(hole, board, board_n);
     const std::vector<int> pool = used.unused_indices();
-    bool beaten = false;
-    for_each_combo_indices(pool, 5, [&](const int* vil, int) {
-        if (beaten) {
-            return;
+    // Exactly two hole cards play: some holding beats hero iff some pair of live cards does, and a
+    // pair extends to a legal five-card holding when three more live cards remain.
+    if (pool.size() < 5) {
+        return true;  // no villain holding can be dealt
+    }
+    for (std::size_t i = 0; i < pool.size(); ++i) {
+        for (std::size_t j = i + 1; j < pool.size(); ++j) {
+            const int pair[2] = {pool[i], pool[j]};
+            if (pack_hand_strength(plo_best_two_plus_three(pair, 2, board, board_n)) > hero_s) {
+                return false;
+            }
         }
-        if (big_o_strength_from_idx(vil, board, board_n) > hero_s) {
-            beaten = true;
-        }
-    });
-    return !beaten;
+    }
+    return true;
 }
 
 double showdown_share(std::uint64_t hero, std::uint64_t villain) {

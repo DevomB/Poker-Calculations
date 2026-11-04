@@ -141,7 +141,7 @@ double opt_num(const Napi::Object& o, const char* key, double def) {
 
 int opt_int(const Napi::Object& o, const char* key, int def) {
     if (o.Has(key) && o.Get(key).IsNumber()) {
-        return o.Get(key).As<Napi::Number>().Int32Value();
+        return poker_bind::checked_int32(o.Get(key), key);
     }
     return def;
 }
@@ -220,7 +220,7 @@ Napi::Value SimulateShortDeckEquityVsRandom(const Napi::CallbackInfo& info) {
     if (!err.empty()) {
         POKER_FAIL_TYPE(env, err);
     }
-    const int sims = info[2].As<Napi::Number>().Int32Value();
+    const int sims = poker_bind::checked_int32(info[2], "sims");
     const std::uint32_t seed = info[3].As<Napi::Number>().Uint32Value();
     std::mt19937 rng(seed);
     POKER_TRY(env, {
@@ -253,7 +253,7 @@ Napi::Value SimulateShortDeckEquityVsRange(const Napi::CallbackInfo& info) {
         dead |= (1ULL << poker::deck_index_from_card(c));
     }
     const poker::SparseRange range = poker::short_deck_range_from_class_weights(weights, dead);
-    const int sims = info[3].As<Napi::Number>().Int32Value();
+    const int sims = poker_bind::checked_int32(info[3], "sims");
     const std::uint32_t seed = info[4].As<Napi::Number>().Uint32Value();
     std::mt19937 rng(seed);
     POKER_TRY(env, {

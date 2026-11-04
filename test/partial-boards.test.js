@@ -43,8 +43,12 @@ test('the turn category counts six real cards, not phantom 2c fillers', () => {
   got.forEach((v, i) => near(v, expected[i] / deals, 1e-12, `cell ${Math.floor(i / 9)},${i % 9}`));
   const turn = (row) => got.slice(row * 9, row * 9 + 9).reduce((a, b) => a + b, 0);
   near(turn(0), 24 / 47, 1e-12, 'turn high card'); // 51.0638%
+  near(turn(1), 14 / 47, 1e-12, 'turn one pair');
+  near(turn(5), 9 / 47, 1e-12, 'turn flush');
   assert.equal(turn(2), 0, 'no two pair is possible on the turn');
   assert.equal(turn(3), 0, 'no trips are possible on the turn');
+  // The river hand is the best five of a superset of the turn cards: its category never drops.
+  for (let t = 0; t < 9; t++) for (let r = 0; r < t; r++) assert.equal(got[t * 9 + r], 0, `turn ${t} -> river ${r}`);
 });
 
 test('both dealing orders of a turn-river pair count', () => {

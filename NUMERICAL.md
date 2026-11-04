@@ -90,8 +90,12 @@ call profitable.
 ## Tournament duel
 
 `tournamentDuelAbsorptionProbabilities` is closed-form gambler's ruin with `h = ceil(heroStack / chipsPerAllIn)`
-and `v = ceil(villainStack / chipsPerAllIn)` steps: `P(hero) = (1 − r^h) / (1 − r^(h+v))`, `r = (1 − p) / p`,
-or `h / (h + v)` when `p = 0.5`; expected all-ins `h × v` at `p = 0.5`.
+and `v = ceil(villainStack / chipsPerAllIn)` steps, `N = h + v`, `r = q / p = e^L`:
+`P(hero) = (1 − r^h) / (1 − r^N)` and `E[all-ins] = (h − N P) / (q − p)` (`h / N` and `h v` at `p = 0.5`).
+`r^N` overflows in long uneven duels, so `L = log1p((1 − 2p) / p)` is used with `expm1`: for an
+underdog `P = e^{−vL} expm1(−hL) / expm1(−NL)`, otherwise `expm1(hL) / expm1(NL)`; when `|L| N / 2 ≤ 1`,
+`h − N P` is formed from `sinh(x)/x` differences to avoid cancellation. Example: 1000 vs 1000 one-chip
+all-ins at `p = 0.1` gives `P` ≈ 0 and 1250 expected all-ins.
 
 ## Monte Carlo uncertainty
 
@@ -111,6 +115,13 @@ A trial pays hero `X` in [0, 1]: 1 for a win, `1/k` for a k-way chop, 0 for a lo
   they quantify Monte Carlo error only, and seeds make results repeatable rather than independent.
 
 `monteCarloStandardError(pHat, n)` stays the Bernoulli formula `sqrt(pHat (1 - pHat) / n)`.
+
+Trial planners return the smallest count meeting their bound and reject counts above 2^53 − 1:
+`monteCarloTrialsForStandardErrorBound` checks `sqrt(p(1 − p)/n)` itself at the answer and one below;
+`monteCarloTrialsForWilsonHalfWidth` searches the Wilson half-width `z √(pq n + z²/4) / (n + z²)`,
+which strictly decreases in `n`, so the answer `n` meets the target and `n − 1` does not
+(`p = 0.001`, half-width 0.01 at z = 1.96: 209 trials); `monteCarloTrialsForHoeffdingBound` is
+`ceil(ln(2/δ) / (2ε²))`.
 
 ## Range weights
 
@@ -186,7 +197,8 @@ other 90 go back to villain). At 40% equity that is `0.4 × 30 − 10 = +2`, whe
 `legalActionSummary`, `decideAction`, and the C++ `GameEngine` share one rule set:
 
 - A full raise is at least the last full bet or raise this street (never below the big blind).
-  The minimum raise-to is `currentBet + that increment`, or all-in when the stack is shorter.
+  The minimum raise-to is `currentBet + that increment` (formed in 64 bits), or all-in when the
+  stack is shorter.
 - Raising needs another player still in the hand with chips behind. Against opponents who are all
   in, the choices are call (or check) and fold.
 - An all-in raise short of a full raise keeps the previous increment and does not reopen betting:
@@ -208,11 +220,63 @@ other 90 go back to villain). At 40% equity that is `0.4 × 30 − 10 = +2`, whe
 
 ## Preflop matrix
 
-`buildPreflopEquityMatrix` uses Monte Carlo with fixed villain holes per cell (disjoint suit assignment). Matrix entries satisfy `M[j,i] = 1 - M[i,j]` for `i ≠ j`.
+`buildPreflopEquityMatrix` uses Monte Carlo with one representative combo per class and fixed
+villain holes per cell (disjoint suit assignment), on the calling thread (`threads` is ignored).
+Matrix entries satisfy `M[j,i] = 1 - M[i,j]` for `i ≠ j`.
 
-## ICM Weitzman
+## ICM (Harville)
 
-`icmExpectedPayoutsWeitzman` splits each prize tier independently with weight `stack^alpha` (default `alpha = 2`). This is an independent chip-utility model, not Harville placement.
+Each place goes to a remaining player with probability proportional to their stack among the
+players still unplaced. Placement probabilities are accumulated over the set of players already
+placed (not over finishing orders), and each step's shares are scaled by the largest remaining
+stack, so huge or tiny stacks keep their proportions after bigger stacks are placed
+(`([1e308, 1e-308, 1e-308], [100, 50, 0])` gives `[100, 25, 25]`). Payouts only resolve the places
+paying more than last place (`EV_i = last + Σ_{j<K} P(i at j)(pay_j − last)`), so equal prizes need
+no enumeration and first place is each stack's share. The work is bounded: every place for up to 20
+players (2^20 states), or fewer resolved places in fields up to 31 as long as `Σ_{j<K} C(n, j) ≤ 2^20`.
+The skill-adjusted variant uses blended first-place weights; seats whose weights are all zero among
+the remaining players finish in a uniformly random order. `icmHarvilleStackJacobian` uses central
+differences with a step of `ε^{1/3} × stack` (about 6e-6 relative); its columns sum to 0 and each
+row satisfies `Σ_j s_j ∂EV_i/∂s_j = 0`.
+
+`icmExpectedPayoutsWeitzman` is deprecated: it splits the whole prize pool by `stack^alpha`
+(`alpha = 2` by default) and ignores finishing positions, so it is not a payout model
+(`([1, 3], [100, 100])` gives `[20, 180]` although both players are guaranteed 100).
+
+## PKO terminals
+
+`stacks` are chips behind and `pot` is already in the middle. In `pkoCallEvVsShove` and
+`pkoJamEvVsFold` a fold gives the pot to the villain, a called all-in moves the covered amount from
+each player plus the pot to the winner (bounty to the winner if the loser busts), and every terminal is
+valued by Harville ICM plus expected bounties. `pkoCoveringHuntEv`'s check-down puts no more chips in:
+the pot goes to the showdown winner at the same equity. Expected bounty collection uses the
+stack-ratio knockout matrix above, a simplified model.
+
+## Mystery bounties
+
+Each value is one bounty; a draw takes a remaining bounty with probability proportional to its weight,
+without replacement. `sampleK` is `Σ_i value_i × P(i among k draws)`: `k × mean` for equal weights,
+otherwise the Harville top-k inclusion probabilities (same subset bound as ICM). It never exceeds the
+pool and reaches it at `k = n`.
+
+## River CFR
+
+`cfrRiverBetCallFoldSolve` / `solveHuRiverCheckBetTree` run simultaneous vanilla CFR. Bettor values
+are averaged over the defender hands each bettor hand can face (a constant chance weight per hand);
+defender regrets use counterfactual call values weighted by the bettor's bet frequencies (opponent
+reach), divided only by the chance mass, so each iteration's regret keeps its reach weight. Best
+responses compare conditional values. On a value hand vs a bluff catcher (pot 100, bet 50) the
+averages approach bet 2/3, call 2/3, bettor EV 66 2/3.
+
+## Nash push/fold
+
+Stacks include posted blinds and the ante is dead money. A called jam commits the smaller total
+stack `M` from each player (the bigger stack's excess is returned), so the pot is `2M + ante` and each
+player's call costs `M` minus their own blind. `heroEv` / `villainEv` are root values over one joint
+deal of hand classes: final minus starting stack in chip mode (they sum to the ante) or ICM prize EV
+(they sum to the pool less the other seats' share). Equities come from a class matrix with one
+representative combo per class (class blockers and suits are approximated); the matrix cache hands
+each solve an immutable snapshot, so concurrent solves with different settings do not interfere.
 
 ## Flop EHS2 buckets
 

@@ -28,7 +28,7 @@ double opt_num(const Napi::Object& o, const char* key, double def) {
 
 int opt_int(const Napi::Object& o, const char* key, int def) {
     if (o.Has(key) && o.Get(key).IsNumber()) {
-        return o.Get(key).As<Napi::Number>().Int32Value();
+        return poker_bind::checked_int32(o.Get(key), key);
     }
     return def;
 }
@@ -122,7 +122,7 @@ Napi::Object solve_to_js(Napi::Env env, const poker::NashJamCallResult& r) {
 
 int parse_hand_arg(const Napi::Value& v) {
     if (v.IsNumber()) {
-        return v.As<Napi::Number>().Int32Value();
+        return poker_bind::checked_int32(v, "hand");
     }
     if (v.IsString()) {
         return poker::nash_hand169_from_notation(v.As<Napi::String>().Utf8Value());

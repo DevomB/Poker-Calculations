@@ -57,6 +57,14 @@ function checkReleaseFixes(poker, encode) {
   assert.ok(Math.abs(Array.from(joint.slice(0, 9)).reduce((a, b) => a + b, 0) - 24 / 47) < 1e-12, 'turn high card');
   assert.equal(poker.exactVillainLeapfrogOutCounts(['Ah', 'Kh'], ['2h', '7h', '9c']).heroImproveDeckIndices.length, 47);
   assert.throws(() => poker.exactHeroEquityRunoutQuantiles(['Ah', 'Kd'], []), /3-card flop/);
+  // 4.2.0: stable ICM over active subsets, conserved Nash root values, physical PKO folds, checked integers.
+  assert.deepEqual(Array.from(poker.icmExpectedPayouts([1e308, 1e-308, 1e-308], [100, 50, 0])), [100, 25, 25]);
+  assert.deepEqual(Array.from(poker.icmExpectedPayouts(Array(12).fill(1), Array(12).fill(100))), Array(12).fill(100));
+  const nash = poker.nashIcmHeadsUpJamCallSolve({ heroStack: 10, villainStack: 10, smallBlind: 0.5, bigBlind: 1, payouts: [100, 0], equityIterations: 1, equitySeed: 42, maxIterations: 1 });
+  assert.ok(Math.abs(nash.heroEv + nash.villainEv - 100) < 1e-9);
+  assert.ok(Math.abs(poker.pkoCallEvVsShove([100, 100], [100, 0], [0, 0], 0, 1, 100, 0).foldEv - 100 / 3) < 1e-12);
+  assert.throws(() => poker.wilsonScoreInterval(4294967297, 10, 1.96), /successes must be an integer/);
+  assert.deepEqual(poker.omahaWrapDrawOuts(['Kc', 'Qd', '9c', '8d'], ['Jh', 'Ts', '2c']), { outs: 20, nutOuts: 14 });
   // Wilson interval: 100 of 100 reaches 1.
   const w = poker.wilsonScoreInterval(100, 100, 1.96);
   assert.equal(w.upper, 1);

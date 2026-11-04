@@ -195,11 +195,17 @@ void values_for_bettor(const RiverWorkspace& ws, std::size_t i, const std::vecto
     v_bet = acc.ratio(1);
 }
 
+/// Defender combo j's call value against the bets it faces. With `counterfactual` false it is the
+/// conditional value given a bet (the average over bettor hands weighted by range weight times bet
+/// frequency), which is what a best response compares with folding. With `counterfactual` true it
+/// is also multiplied by the chance that j faces a bet at all (bet-weighted mass over the range mass
+/// compatible with j): the opponent-reach weighting CFR regrets need. Dividing by the bet mass
+/// instead would weight every iteration's regret differently as the bettor's strategy changes.
 void values_for_defender(const RiverWorkspace& ws, std::size_t j, const std::vector<double>& bet_p, double& v_fold,
-                         double& v_call) {
+                         double& v_call, bool counterfactual = false) {
     v_fold = 0.0;
-    // Bettor combos that can face defender combo j, weighted by range weight times bet frequency.
-    ScaledWeightedSums<1> acc;
+    ScaledWeightedSums<1> facing_bet;
+    ScaledWeightedSums<0> compatible;
     for (std::size_t i = 0; i < ws.bettor.size(); ++i) {
         const double e = ws.equity(i, j);
         if (e < 0.0) {
@@ -209,9 +215,15 @@ void values_for_defender(const RiverWorkspace& ws, std::size_t j, const std::vec
         // before the accumulator rescales it.
         int bet_exp = 0;
         const double bet_mant = std::frexp(bet_p[i], &bet_exp);
-        acc.add(ws.bettor[i].mant * bet_mant, ws.bettor[i].exp + bet_exp, {defender_call_ev(e, ws.pot, ws.bet)});
+        facing_bet.add(ws.bettor[i].mant * bet_mant, ws.bettor[i].exp + bet_exp, {defender_call_ev(e, ws.pot, ws.bet)});
+        compatible.add(ws.bettor[i].mant, ws.bettor[i].exp, {});
     }
-    v_call = acc.ratio();
+    v_call = facing_bet.ratio();
+    if (counterfactual) {
+        v_call = facing_bet.any && compatible.den > 0.0
+                     ? v_call * std::ldexp(facing_bet.den / compatible.den, facing_bet.exp - compatible.exp)
+                     : 0.0;
+    }
 }
 
 [[nodiscard]] RiverProfileEv profile_ev(const RiverWorkspace& ws, const std::vector<double>& bet_p,
@@ -341,10 +353,17 @@ std::vector<double> regret_matching_strategy(const std::vector<double>& regrets)
         throw std::invalid_argument("regrets must be non-empty");
     }
     std::vector<double> pos(regrets.size(), 0.0);
-    double sum = 0.0;
+    double largest = 0.0;
     for (std::size_t i = 0; i < regrets.size(); ++i) {
         const double x = std::isfinite(regrets[i]) ? std::max(0.0, regrets[i]) : 0.0;
         pos[i] = x;
+        largest = std::max(largest, x);
+    }
+    // Normalize with the largest positive regret's scale (exact) so the sum cannot overflow.
+    const int scale = weight_scale_exponent(largest);
+    double sum = 0.0;
+    for (double& x : pos) {
+        x = std::ldexp(x, scale);
         sum += x;
     }
     if (sum <= 0.0) {
@@ -441,7 +460,7 @@ RiverCfrResult cfr_river_bet_call_fold_solve(double pot, double bet_size, const 
         for (std::size_t j = 0; j < nD; ++j) {
             double v_fold = 0.0;
             double v_call = 0.0;
-            values_for_defender(ws, j, bet_p, v_fold, v_call);
+            values_for_defender(ws, j, bet_p, v_fold, v_call, /*counterfactual=*/true);
             const double v_sigma = (1.0 - call_p[j]) * v_fold + call_p[j] * v_call;
             r_call[j][0] += v_fold - v_sigma;
             r_call[j][1] += v_call - v_sigma;

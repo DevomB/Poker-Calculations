@@ -7,6 +7,8 @@
 #include "poker/range.hpp"
 #include "poker/short_deck.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <numeric>
@@ -307,7 +309,43 @@ void hand169_order_round_trips() {
 
 }  // namespace
 
+bool close(double a, double b) { return std::abs(a - b) <= 1e-12 * std::max(1.0, std::abs(b)); }
+
+void nash_terminals_match_commitments_and_refund_excess() {
+    // Equal 10/10 with blinds 0.5/1: a called jam commits 10 each, so the pot is 20 and the loser
+    // keeps nothing (accounting with the smaller remaining stack charged 9 each left 0.5 behind).
+    const auto t = poker::nash_terminal_stacks(10.0, 10.0, 0.5, 1.0, 0.0);
+    CHECK(close(t.matched, 10.0));
+    CHECK(close(t.called_pot, 20.0));
+    CHECK(close(t.hero_wins[0], 20.0) && close(t.hero_wins[1], 0.0));
+    CHECK(close(t.villain_wins[0], 0.0) && close(t.villain_wins[1], 20.0));
+    CHECK(close(t.fold[0], 9.5) && close(t.fold[1], 10.5));
+    CHECK(close(t.jam_fold[0], 11.0) && close(t.jam_fold[1], 9.0));
+    // Unequal stacks and a dead ante: the bigger stack's excess comes back, the ante goes to the winner.
+    const auto u = poker::nash_terminal_stacks(10.0, 30.0, 0.5, 1.0, 0.4);
+    CHECK(close(u.matched, 10.0));
+    CHECK(close(u.called_pot, 20.4));
+    CHECK(close(u.hero_wins[0], 20.4) && close(u.hero_wins[1], 20.0));
+    CHECK(close(u.villain_wins[0], 0.0) && close(u.villain_wins[1], 40.4));
+    CHECK(close(u.fold[0], 9.5) && close(u.fold[1], 30.9));
+    CHECK(close(u.jam_fold[0], 11.4) && close(u.jam_fold[1], 29.0));
+    const auto w = poker::nash_terminal_stacks(25.0, 8.0, 1.0, 0.5, 1.5);
+    for (const auto& st : {w.fold, w.jam_fold, w.hero_wins, w.villain_wins}) {
+        CHECK(close(st[0] + st[1], 25.0 + 8.0 + 1.5));  // chips conserved at every terminal
+        CHECK(st[0] >= 0.0 && st[1] >= 0.0);
+    }
+    CHECK(close(w.villain_wins[0], 17.0));  // hero's excess over the 8 matched comes back
+    bool threw = false;
+    try {
+        (void)poker::nash_terminal_stacks(1.0, 10.0, 1.0, 0.5, 0.0);
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    CHECK(threw);  // a stack must exceed its posted blind
+}
+
 int main() {
+    nash_terminals_match_commitments_and_refund_excess();
     combo_index_covers_every_pair_in_both_orders();
     hand169_order_round_trips();
     heads_up_button_posts_small_blind_and_acts_first();

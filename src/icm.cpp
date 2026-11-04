@@ -1,136 +1,202 @@
 #include "poker/bit_utils.hpp"
 #include "poker/icm.hpp"
+#include "poker/range.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <numeric>
 #include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <utility>
 
 namespace poker {
 
 namespace {
 
-[[nodiscard]] int lowest_bit_index(std::uint32_t mask) {
-    for (int i = 0; i < 32; ++i) {
-        if ((mask & (1U << i)) != 0) {
-            return i;
+void require_player_count(std::size_t n, const char* what) {
+    if (n == 0 || n > 31) {
+        throw std::invalid_argument(std::string(what) + ": need 1..31 players");
+    }
+}
+
+void require_positive_stacks(const std::vector<double>& stacks, const char* what) {
+    for (double s : stacks) {
+        if (!std::isfinite(s) || !(s > 0.0)) {
+            throw std::invalid_argument(std::string(what) + ": stacks must be finite and positive");
         }
     }
-    return 0;
 }
 
-[[nodiscard]] double sum_stacks_mask(const std::vector<double>& stacks, std::uint32_t mask) {
-    double s = 0.0;
-    for (std::uint32_t m = mask; m != 0; ) {
-        const int i = lowest_bit_index(m);
-        s += stacks[static_cast<std::size_t>(i)];
-        m &= m - 1;
+void require_payouts(const std::vector<double>& payouts, std::size_t n, const char* what) {
+    if (payouts.size() != n) {
+        throw std::invalid_argument(std::string(what) + ": payouts vector must match number of players");
     }
-    return s;
-}
-
-void harville_placement_recur(const std::vector<double>& stacks, std::uint32_t mask, int next_rank,
-                              double path_prob, std::vector<std::vector<double>>& placement) {
-    if (path_prob < 1e-300) {
-        return;
-    }
-    const int alive = popcount_u32(mask);
-    if (alive == 1) {
-        const int i = lowest_bit_index(mask);
-        placement[static_cast<std::size_t>(i)][static_cast<std::size_t>(next_rank - 1)] += path_prob;
-        return;
-    }
-    const double sum_chips = sum_stacks_mask(stacks, mask);
-    if (sum_chips <= 0.0) {
-        throw std::invalid_argument("ICM: positive total stack required among remaining players");
-    }
-    for (std::uint32_t m = mask; m != 0; ) {
-        const int i = lowest_bit_index(m);
-        const double take = stacks[static_cast<std::size_t>(i)] / sum_chips * path_prob;
-        placement[static_cast<std::size_t>(i)][static_cast<std::size_t>(next_rank - 1)] += take;
-        const std::uint32_t sub = mask & ~(1U << i);
-        harville_placement_recur(stacks, sub, next_rank + 1, take, placement);
-        m &= m - 1;
+    for (double p : payouts) {
+        if (!std::isfinite(p) || p < 0.0) {
+            throw std::invalid_argument(std::string(what) + ": payouts must be finite and non-negative");
+        }
     }
 }
 
-void harville_placement_recur_weighted(const std::vector<double>& first_place_weights,
-                                       std::uint32_t mask, int next_rank, double path_prob,
-                                       std::vector<std::vector<double>>& placement) {
-    if (path_prob < 1e-300) {
-        return;
+/// Places that need resolving: those paying something other than last place. Every player is
+/// paid at least the last-place prize, so EV_i = last + sum_{j < K} P(i at j) (payout_j - last).
+std::size_t places_paying_above_last(const std::vector<double>& payouts) {
+    std::size_t k = 0;
+    const double last = payouts.back();
+    for (std::size_t j = 0; j + 1 < payouts.size(); ++j) {
+        if (payouts[j] != last) {
+            k = j + 1;
+        }
     }
-    const int alive = popcount_u32(mask);
-    if (alive == 1) {
-        const int i = lowest_bit_index(mask);
-        placement[static_cast<std::size_t>(i)][static_cast<std::size_t>(next_rank - 1)] += path_prob;
-        return;
+    return k;
+}
+
+std::vector<double> payouts_from_placements(const std::vector<std::vector<double>>& placement,
+                                            const std::vector<double>& payouts) {
+    const double last = payouts.back();
+    std::vector<double> ev(placement.size(), last);
+    for (std::size_t i = 0; i < placement.size(); ++i) {
+        for (std::size_t j = 0; j < placement[i].size(); ++j) {
+            ev[i] += placement[i][j] * (payouts[j] - last);
+        }
     }
-    double sum_w = 0.0;
-    for (std::uint32_t m = mask; m != 0; ) {
-        const int i = lowest_bit_index(m);
-        sum_w += first_place_weights[static_cast<std::size_t>(i)];
-        m &= m - 1;
-    }
-    if (sum_w <= 0.0) {
-        throw std::invalid_argument("ICM skill-adjusted: positive weight sum required");
-    }
-    for (std::uint32_t m = mask; m != 0; ) {
-        const int i = lowest_bit_index(m);
-        const double take =
-            first_place_weights[static_cast<std::size_t>(i)] / sum_w * path_prob;
-        placement[static_cast<std::size_t>(i)][static_cast<std::size_t>(next_rank - 1)] += take;
-        const std::uint32_t sub = mask & ~(1U << i);
-        harville_placement_recur_weighted(first_place_weights, sub, next_rank + 1, take, placement);
-        m &= m - 1;
-    }
+    return ev;
 }
 
 }  // namespace
 
-std::vector<std::vector<double>> icm_harville_placement_probabilities(const std::vector<double>& stacks) {
-    const std::size_t n = stacks.size();
-    if (n == 0 || n > 31) {
-        throw std::invalid_argument("ICM: need 1..31 players");
+std::vector<std::vector<double>> harville_top_places(const std::vector<double>& weights, std::size_t places) {
+    const std::size_t n = weights.size();
+    require_player_count(n, "Harville placement");
+    if (places > n) {
+        throw std::invalid_argument("Harville placement: more places than players");
     }
-    for (double s : stacks) {
-        if (!std::isfinite(s) || s < 0.0) {
-            throw std::invalid_argument("ICM: stacks must be finite and non-negative");
+    for (double w : weights) {
+        if (!std::isfinite(w) || w < 0.0) {
+            throw std::invalid_argument("Harville placement: weights must be finite and non-negative");
         }
     }
-    std::uint32_t mask = 0;
-    for (std::size_t i = 0; i < n; ++i) {
-        if (stacks[i] <= 0.0) {
-            throw std::invalid_argument("ICM: all stacks must be positive for Harville weighting");
-        }
-        mask |= (1U << static_cast<unsigned>(i));
+    std::vector<std::vector<double>> placement(n, std::vector<double>(places, 0.0));
+    if (places == 0) {
+        return placement;
     }
-    std::vector<std::vector<double>> placement(n, std::vector<double>(n, 0.0));
-    harville_placement_recur(stacks, mask, 1, 1.0, placement);
+    // A state is the set of players already placed; `j` = its size is the next place to fill. The
+    // number of states up to place `places` is sum_{j < places} C(n, j); bound it before any work.
+    double states = 0.0;
+    double binom = 1.0;
+    for (std::size_t j = 0; j < places; ++j) {
+        states += binom;
+        binom = binom * static_cast<double>(n - j) / static_cast<double>(j + 1);
+    }
+    if (n > kHarvilleDenseMaxPlayers && states > static_cast<double>(kHarvilleMaxStates)) {
+        throw std::invalid_argument("Harville placement: resolving " + std::to_string(places) + " places for " +
+                                    std::to_string(n) + " players needs more than " +
+                                    std::to_string(kHarvilleMaxStates) +
+                                    " subset states (supported: every place for up to " +
+                                    std::to_string(kHarvilleDenseMaxPlayers) +
+                                    " players, or fewer places for larger fields)");
+    }
+    const std::uint32_t full = (1U << n) - 1U;  // n <= 31
+    // From `placed` with probability `prob`: each remaining player takes place j with probability
+    // weight / (sum of remaining weights), scaled by the largest remaining weight so huge or tiny
+    // weights never overflow or vanish against players already gone. If every remaining weight is
+    // 0, the remaining players are equally likely (a tie with no information).
+    const auto expand = [&](std::uint32_t placed, std::size_t j, double prob, auto&& emit) {
+        const std::uint32_t remaining = full & ~placed;
+        double largest = 0.0;
+        int count = 0;
+        for (std::uint32_t m = remaining; m != 0; m &= m - 1) {
+            largest = std::max(largest, weights[static_cast<std::size_t>(std::countr_zero(m))]);
+            ++count;
+        }
+        const int scale = weight_scale_exponent(largest);
+        double sum = 0.0;
+        for (std::uint32_t m = remaining; m != 0; m &= m - 1) {
+            sum += std::ldexp(weights[static_cast<std::size_t>(std::countr_zero(m))], scale);
+        }
+        for (std::uint32_t m = remaining; m != 0; m &= m - 1) {
+            const int i = std::countr_zero(m);
+            const double share = sum > 0.0 ? std::ldexp(weights[static_cast<std::size_t>(i)], scale) / sum
+                                           : 1.0 / static_cast<double>(count);
+            const double t = prob * share;
+            if (t == 0.0) {
+                continue;
+            }
+            placement[static_cast<std::size_t>(i)][j] += t;
+            if (j + 1 < places) {
+                emit(placed | (1U << i), t);
+            }
+        }
+    };
+    if (n <= kHarvilleDenseMaxPlayers) {
+        // Dense table over all subsets; a superset always has a larger index, so one increasing
+        // pass sees every state after all of its predecessors.
+        std::vector<double> f(std::size_t{1} << n, 0.0);
+        f[0] = 1.0;
+        for (std::uint32_t placed = 0; placed <= full; ++placed) {
+            const double prob = f[placed];
+            const std::size_t j = static_cast<std::size_t>(popcount_u32(placed));
+            if (prob != 0.0 && j < places) {
+                expand(placed, j, prob, [&](std::uint32_t next, double t) { f[next] += t; });
+            }
+            if (placed == full) {
+                break;
+            }
+        }
+        return placement;
+    }
+    // Larger fields: only the subsets of size < places, one layer at a time in mask order (so the
+    // summation order, and the result, do not depend on hash-table iteration order).
+    std::vector<std::pair<std::uint32_t, double>> layer{{0U, 1.0}};
+    for (std::size_t j = 0; j < places; ++j) {
+        std::unordered_map<std::uint32_t, double> next;
+        for (const auto& [placed, prob] : layer) {
+            expand(placed, j, prob, [&](std::uint32_t nxt, double t) { next[nxt] += t; });
+        }
+        layer.assign(next.begin(), next.end());
+        std::sort(layer.begin(), layer.end());
+    }
     return placement;
 }
 
+std::vector<std::vector<double>> icm_harville_placement_probabilities(const std::vector<double>& stacks) {
+    require_player_count(stacks.size(), "ICM");
+    require_positive_stacks(stacks, "ICM");
+    return harville_top_places(stacks, stacks.size());
+}
+
 std::vector<double> icm_win_probabilities_harville(const std::vector<double>& stacks) {
-    const auto p = icm_harville_placement_probabilities(stacks);
-    const std::size_t n = stacks.size();
-    std::vector<double> win(n, 0.0);
-    std::transform(p.begin(), p.end(), win.begin(), [](const auto& row) { return row[0]; });
+    // First place is just each stack's share; no enumeration.
+    require_player_count(stacks.size(), "ICM");
+    require_positive_stacks(stacks, "ICM");
+    const auto first = harville_top_places(stacks, 1);
+    std::vector<double> win(stacks.size(), 0.0);
+    for (std::size_t i = 0; i < stacks.size(); ++i) {
+        win[i] = first[i][0];
+    }
     return win;
 }
 
 std::vector<double> icm_top_k_finish_probabilities(const std::vector<double>& stacks, int k) {
     const std::size_t n = stacks.size();
+    require_player_count(n, "ICM");
+    require_positive_stacks(stacks, "ICM");
     if (k < 1 || static_cast<std::size_t>(k) > n) {
         throw std::invalid_argument("ICM top-k: k must be between 1 and number of players inclusive");
     }
-    const auto placement = icm_harville_placement_probabilities(stacks);
+    if (static_cast<std::size_t>(k) == n) {
+        return std::vector<double>(n, 1.0);
+    }
+    const auto placement = harville_top_places(stacks, static_cast<std::size_t>(k));
     std::vector<double> out(n, 0.0);
-    std::transform(placement.begin(), placement.end(), out.begin(), [k](const auto& row) {
-        return std::accumulate(row.begin(), row.begin() + k, 0.0);
-    });
+    std::transform(placement.begin(), placement.end(), out.begin(),
+                   [](const auto& row) { return std::accumulate(row.begin(), row.end(), 0.0); });
     return out;
 }
 
@@ -147,20 +213,10 @@ std::vector<double> icm_last_place_probabilities_harville(const std::vector<doub
 std::vector<double> icm_expected_payouts(const std::vector<double>& stacks,
                                          const std::vector<double>& payouts) {
     const std::size_t n = stacks.size();
-    if (payouts.size() != n) {
-        throw std::invalid_argument("ICM: payouts vector must match number of players");
-    }
-    for (double p : payouts) {
-        if (!std::isfinite(p) || p < 0.0) {
-            throw std::invalid_argument("ICM: payouts must be finite and non-negative");
-        }
-    }
-    const auto placement = icm_harville_placement_probabilities(stacks);
-    std::vector<double> ev(n, 0.0);
-    std::transform(placement.begin(), placement.end(), ev.begin(), [&payouts](const auto& row) {
-        return std::inner_product(row.begin(), row.end(), payouts.begin(), 0.0);
-    });
-    return ev;
+    require_player_count(n, "ICM");
+    require_payouts(payouts, n, "ICM");
+    require_positive_stacks(stacks, "ICM");
+    return payouts_from_placements(harville_top_places(stacks, places_paying_above_last(payouts)), payouts);
 }
 
 /// Harville ICM on alive seats using the top-k prizes. Busted seats have already finished and
@@ -276,7 +332,18 @@ std::vector<double> icm_expected_payouts_weitzman(const std::vector<double>& sta
             util[i] = 0.0;
             continue;
         }
-        util[i] = std::pow(s, alpha);
+        util[i] = std::log(s);
+    }
+    // stack^alpha / sum stack^alpha, formed as exp(alpha (ln s - ln s_max)) so neither the powers
+    // nor their sum overflow or underflow to 0 when stacks are huge or tiny.
+    double log_max = -std::numeric_limits<double>::infinity();
+    for (std::size_t i = 0; i < n; ++i) {
+        if (stacks[i] > 0.0) {
+            log_max = std::max(log_max, util[i]);
+        }
+    }
+    for (std::size_t i = 0; i < n; ++i) {
+        util[i] = stacks[i] > 0.0 ? std::exp(alpha * (util[i] - log_max)) : 0.0;
         sum_util += util[i];
     }
     if (sum_util <= 0.0) {
@@ -300,42 +367,52 @@ std::vector<double> icm_harville_skill_adjusted_payouts(const std::vector<double
                                                         const std::vector<double>& skill_weights,
                                                         double blend) {
     const std::size_t n = stacks.size();
-    if (payouts.size() != n || skill_weights.size() != n) {
+    require_player_count(n, "ICM skill-adjusted");
+    if (skill_weights.size() != n) {
         throw std::invalid_argument("ICM skill-adjusted: vector lengths must match");
     }
+    require_payouts(payouts, n, "ICM skill-adjusted");
+    require_positive_stacks(stacks, "ICM skill-adjusted");
     if (!std::isfinite(blend) || blend < 0.0 || blend > 1.0) {
         throw std::invalid_argument("ICM skill-adjusted: blend must be in [0,1]");
     }
-    double sum_s = 0.0;
-    double sum_pi = 0.0;
-    for (std::size_t i = 0; i < n; ++i) {
-        if (stacks[i] <= 0.0) {
-            throw std::invalid_argument("ICM skill-adjusted: positive stacks required");
+    for (double w : skill_weights) {
+        if (!std::isfinite(w) || w < 0.0) {
+            throw std::invalid_argument("ICM skill-adjusted: skill weights must be finite and non-negative");
         }
-        if (skill_weights[i] < 0.0 || !std::isfinite(skill_weights[i])) {
-            throw std::invalid_argument("ICM skill-adjusted: skill weights must be non-negative");
-        }
-        sum_s += stacks[i];
-        sum_pi += skill_weights[i];
     }
-    if (sum_s <= 0.0 || sum_pi <= 0.0) {
-        throw std::invalid_argument("ICM skill-adjusted: positive sums required");
+    // First-place weights: blend of stack shares and skill shares, each normalized with the scale of
+    // its own largest entry so huge or tiny inputs keep their proportions.
+    const auto shares = [](const std::vector<double>& v) {
+        double largest = 0.0;
+        for (double x : v) {
+            largest = std::max(largest, x);
+        }
+        const int k = weight_scale_exponent(largest);
+        double sum = 0.0;
+        for (double x : v) {
+            sum += std::ldexp(x, k);
+        }
+        std::vector<double> out(v.size(), 0.0);
+        if (sum > 0.0) {
+            for (std::size_t i = 0; i < v.size(); ++i) {
+                out[i] = std::ldexp(v[i], k) / sum;
+            }
+        }
+        return out;
+    };
+    const std::vector<double> stack_share = shares(stacks);
+    const std::vector<double> skill_share = shares(skill_weights);
+    if (blend > 0.0 && std::all_of(skill_share.begin(), skill_share.end(), [](double x) { return x == 0.0; })) {
+        throw std::invalid_argument("ICM skill-adjusted: skill weights need a positive sum when blend > 0");
     }
     std::vector<double> w(n, 0.0);
     for (std::size_t i = 0; i < n; ++i) {
-        w[i] = (1.0 - blend) * (stacks[i] / sum_s) + blend * (skill_weights[i] / sum_pi);
+        w[i] = (1.0 - blend) * stack_share[i] + blend * skill_share[i];
     }
-    std::uint32_t mask = 0;
-    for (std::size_t i = 0; i < n; ++i) {
-        mask |= (1U << static_cast<unsigned>(i));
-    }
-    std::vector<std::vector<double>> placement(n, std::vector<double>(n, 0.0));
-    harville_placement_recur_weighted(w, mask, 1, 1.0, placement);
-    std::vector<double> ev(n, 0.0);
-    std::transform(placement.begin(), placement.end(), ev.begin(), [&payouts](const auto& row) {
-        return std::inner_product(row.begin(), row.end(), payouts.begin(), 0.0);
-    });
-    return ev;
+    // With blend = 1 a zero skill weight is a zero first-place weight: such seats finish after every
+    // positive-weight seat, in a uniformly random order among themselves.
+    return payouts_from_placements(harville_top_places(w, places_paying_above_last(payouts)), payouts);
 }
 
 std::vector<double> icm_equal_chop_payouts(const std::vector<double>& payouts) {

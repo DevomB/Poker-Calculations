@@ -98,37 +98,6 @@ std::uint64_t max_villain_strength_on_board(const std::vector<Card>& board, std:
     return best;
 }
 
-bool any_villain_beats_hero(const std::vector<Card>& board, std::uint64_t dead_mask, int h0, int h1,
-                            std::uint64_t hero_strength, const CancelPredicate* cancel) {
-    std::vector<int> deck;
-    for (int i = 0; i < 52; ++i) {
-        if ((dead_mask & (std::uint64_t{1} << i)) == 0 && i != h0 && i != h1) {
-            deck.push_back(i);
-        }
-    }
-    std::uint8_t vil_r[7]{};
-    std::uint8_t vil_s[7]{};
-    bool found = false;
-    for_each_combo_indices(deck, 2, [&](const int* vc, int) {
-        if (found) {
-            return;
-        }
-        throw_if_cancelled(cancel);
-        vil_r[0] = static_cast<std::uint8_t>(vc[0] / 4);
-        vil_s[0] = static_cast<std::uint8_t>(vc[0] % 4);
-        vil_r[1] = static_cast<std::uint8_t>(vc[1] / 4);
-        vil_s[1] = static_cast<std::uint8_t>(vc[1] % 4);
-        for (std::size_t bi = 0; bi < board.size(); ++bi) {
-            vil_r[2 + bi] = board[bi].rank();
-            vil_s[2 + bi] = board[bi].suit();
-        }
-        if (strength_of(vil_r, vil_s, 2 + static_cast<int>(board.size())) > hero_strength) {
-            found = true;
-        }
-    });
-    return found;
-}
-
 void validate_board_runout(const std::vector<Card>& hero, const std::vector<Card>& board) {
     if (hero.size() != 2) {
         throw std::invalid_argument("hero must have exactly two cards");
@@ -326,7 +295,7 @@ HeroRunoutVulnerabilityResult exact_hero_runout_vulnerability(
         if (hero_st >= max_vil) {
             ++nuts_count;
         }
-        if (any_villain_beats_hero(full_board, dead, h0, h1, hero_st, cancel)) {
+        if (max_vil > hero_st) {  // some villain hand beats hero: the strongest one does
             ++dom_count;
         }
         ++out.runout_count;

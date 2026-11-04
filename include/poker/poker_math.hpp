@@ -198,12 +198,13 @@ enum class Multiway_symmetric_pot_share_model {
 [[nodiscard]] std::int64_t monte_carlo_trials_for_standard_error_bound(double p_hat, double target_se);
 
 /**
- * Uncapped algebraic inverse of the rule-of-two heuristic: `outs ≈ equity * unseen / 2`, clamped to
- * `[0, unseen]` — not an exact inverse of `rule_ofTwoEquity` (which caps outs at 48 and equity at 1).
+ * Uncapped inverse of `rule_of_two_equity` (2% per out): `equity * 50`, at most `unseen_cards`.
+ * `equity` must be in [0, 1]. `rule_of_two_equity` saturates (48 outs, equity 1), so equities near 1
+ * have no unique inverse.
  */
 [[nodiscard]] double estimated_outs_from_rule_of_two(double equity, double unseen_cards);
 
-/// Same idea for two streets vs `ruleOfFourEquity`: `outs ≈ equity * unseen / 4`, clamped to `[0, unseen]`.
+/// Uncapped inverse of `rule_of_four_equity` (4% per out): `equity * 25`, at most `unseen_cards`.
 [[nodiscard]] double estimated_outs_from_rule_of_four(double equity, double unseen_cards);
 
 /**
@@ -517,6 +518,7 @@ struct Wilson_interval {
                                                   int symmetric_extra_callers);
 
 // --- reverse implied / geometry ---
+/// `(to_call + L) / (pot + to_call + L)`: losing costs the call plus the later loss `L`.
 [[nodiscard]] double reverse_implied_odds_min_equity(double pot_before_call, double to_call,
                                                      double max_future_loss);
 [[nodiscard]] double geometric_pot_after_single_matched_bet(double pot0, double bet_size);
@@ -531,6 +533,7 @@ struct Wilson_interval {
 /// Combos of `notation` (e.g. "AA", "AKs", "AKo") whose two cards are both outside `dead_cards`.
 [[nodiscard]] int preflop_combos_from_notation_minus_blockers(const std::string& notation,
                                                               const std::vector<Card>& dead_cards);
+/// Deprecated: returns pot / stack after the call (`1 / spr_after_call`) despite its name.
 [[nodiscard]] double stack_to_pot_after_call(double pot_before_call, double to_call,
                                              double effective_stack_before_call);
 

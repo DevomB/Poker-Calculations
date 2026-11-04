@@ -17,9 +17,13 @@ const SUITS = 'cdhs';
  * @returns {Card52}
  */
 function cardStringToDeckIndex(s) {
-  // Same rule as the native parser: surrounding whitespace is ignored, rank and suit are
-  // case-insensitive, ten may be written "10", and nothing else may follow ("Ahjunk" is invalid).
-  const m = /^(10|[2-9TJQKA])([CDHS])$/i.exec(String(s).trim());
+  // Same rule as the native parser: only strings are cards (no String() coercion of other values),
+  // surrounding whitespace is ignored, rank and suit are case-insensitive, ten may be written "10",
+  // and nothing else may follow ("Ahjunk" is invalid).
+  if (typeof s !== 'string') {
+    throw new TypeError(`card must be a string, got ${s === null ? 'null' : typeof s}`);
+  }
+  const m = /^(10|[2-9TJQKA])([CDHS])$/i.exec(s.trim());
   if (!m) {
     throw new Error(`invalid card string: ${s}`);
   }

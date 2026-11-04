@@ -28,6 +28,23 @@ enum class BindStatus { Ok, TypeError, RangeError };
 
 [[nodiscard]] F64ReturnFormat parse_return_format(const Napi::CallbackInfo& info, std::size_t format_index);
 
+/**
+ * An integer argument (count, index, size, flag), checked as a double before any conversion: throws
+ * std::invalid_argument (a JavaScript Error) unless `v` is a number holding an integer in [lo, hi].
+ * `Int32Value` / `Uint32Value` would instead truncate 1.9 to 1, turn NaN into 0, and wrap 2^32 + 1
+ * to 1 before validation could see the value. Seeds keep their documented modulo-2^32 conversion.
+ */
+[[nodiscard]] std::int64_t checked_integer(const Napi::Value& v, const char* name, std::int64_t lo, std::int64_t hi);
+
+[[nodiscard]] inline int checked_int32(const Napi::Value& v, const char* name) {
+    return static_cast<int>(checked_integer(v, name, -2147483648LL, 2147483647LL));
+}
+
+/// A non-negative index or count that fits in an int.
+[[nodiscard]] inline std::size_t checked_index(const Napi::Value& v, const char* name) {
+    return static_cast<std::size_t>(checked_integer(v, name, 0, 2147483647LL));
+}
+
 [[nodiscard]] bool is_abort_signal(const Napi::Value& v);
 
 [[nodiscard]] bool is_async_options(const Napi::Value& v);

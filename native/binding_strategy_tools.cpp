@@ -417,7 +417,7 @@ Napi::Value RangeWeightTopKMass(const Napi::CallbackInfo& info) {
     }
     r = normalized(r);
     std::sort(r.begin(), r.end(), std::greater<>());
-    const int k = std::max(0, info[1].As<Napi::Number>().Int32Value());
+    const int k = std::max(0, poker_bind::checked_int32(info[1], "k"));
     return Napi::Number::New(env, std::accumulate(r.begin(), r.begin() + std::min<int>(k, r.size()), 0.0));
 }
 
@@ -515,7 +515,7 @@ Napi::Value RangeTopCombos(const Napi::CallbackInfo& info) {
     }
     // Stable, so equal weights stay in combo order on every standard library.
     std::stable_sort(pairs.begin(), pairs.end(), [](const auto& x, const auto& y) { return x.second > y.second; });
-    const int k = std::min<int>(std::max(0, info[1].As<Napi::Number>().Int32Value()), pairs.size());
+    const int k = std::min<int>(std::max(0, poker_bind::checked_int32(info[1], "k")), pairs.size());
     Napi::Array arr = Napi::Array::New(env, k);
     for (int i = 0; i < k; ++i) {
         const auto [a, b] = combo_cards(pairs[static_cast<std::size_t>(i)].first);
@@ -648,9 +648,22 @@ Napi::Value RangeBlockerPressureByCard(const Napi::CallbackInfo& info) {
     if (info.Length() < 1 || !read_range_dense(info[0], r, &err)) {
         POKER_FAIL_TYPE(env, err.empty() ? "rangeBlockerPressureByCard(range, deadCards?)" : err);
     }
+    // Known dead cards (board, hero, mucked): combos holding one are impossible and drop out first.
+    std::uint64_t dead = 0;
+    if (info.Length() >= 2 && !info[1].IsUndefined() && !info[1].IsNull()) {
+        const auto cards = parse_cards_from_js(env, info[1], &err);
+        if (!err.empty()) {
+            POKER_FAIL_TYPE(env, "deadCards: " + err);
+        }
+        dead = dead_mask_from_cards(cards);
+    }
+    // Raw weighted counts: out[c] is the total weight of the live combos that hold card c.
     std::vector<double> out(52, 0.0);
     for (int i = 0; i < static_cast<int>(r.size()); ++i) {
         const auto [a, b] = combo_cards(i);
+        if ((dead & ((std::uint64_t{1} << a) | (std::uint64_t{1} << b))) != 0) {
+            continue;
+        }
         out[static_cast<std::size_t>(a)] += r[static_cast<std::size_t>(i)];
         out[static_cast<std::size_t>(b)] += r[static_cast<std::size_t>(i)];
     }
@@ -719,7 +732,7 @@ Napi::Value GeometricStreetSizingPlan(const Napi::CallbackInfo& info) {
     if (info.Length() < 3) POKER_FAIL_TYPE(env, "geometricStreetSizingPlan(pot, effectiveStack, streetsRemaining)");
     const double pot = std::max(1e-9, get_number(info, 0));
     const double stack = std::max(0.0, get_number(info, 1));
-    const int n = std::max(0, info[2].As<Napi::Number>().Int32Value());
+    const int n = std::max(0, poker_bind::checked_int32(info[2], "n"));
     std::vector<double> bets;
     if (n > 0) {
         const double f = (std::pow((pot + 2.0 * stack) / pot, 1.0 / n) - 1.0) / 2.0;
@@ -742,11 +755,22 @@ Napi::Value ThinValueMargin(const Napi::CallbackInfo& info) {
 Napi::Value BetSizingIndifferencePoint(const Napi::CallbackInfo& info) {
     const Napi::Env env = info.Env();
     if (info.Length() < 3) POKER_FAIL_TYPE(env, "betSizingIndifferencePoint(pot, foldFrequency, equityWhenCalled)");
-    const double pot = get_number(info, 0);
-    const double fe = clamp01(get_number(info, 1));
-    const double eq = clamp01(get_number(info, 2));
-    const double denom = std::max(1e-9, 1.0 - fe - 2.0 * eq * (1.0 - fe));
-    return Napi::Number::New(env, std::max(0.0, ((fe + eq * (1.0 - fe)) * pot) / denom));
+    const double pot = get_number(info, 0, -1.0);
+    const double fe = get_number(info, 1, -1.0);
+    const double eq = get_number(info, 2, -1.0);
+    if (!std::isfinite(pot) || pot < 0.0) POKER_FAIL_RANGE(env, "pot must be finite and non-negative");
+    if (!std::isfinite(fe) || fe < 0.0 || fe > 1.0) POKER_FAIL_RANGE(env, "foldFrequency must be in [0, 1]");
+    if (!std::isfinite(eq) || eq < 0.0 || eq > 1.0) POKER_FAIL_RANGE(env, "equityWhenCalled must be in [0, 1]");
+    // Betting B into `pot`: EV(B) = fe * pot + (1 - fe) * (eq * (pot + 2B) - B) = A - D * B with
+    // A = (fe + eq (1 - fe)) * pot >= 0 and D = (1 - fe)(1 - 2 eq). The bet size where EV is 0 is
+    // A / D when D > 0. Otherwise EV never falls to 0 for any B > 0: it is constant (D = 0) or grows
+    // (D < 0), so there is no finite break-even size (Infinity), unless A = 0, where B = 0 is it.
+    const double a = (fe + eq * (1.0 - fe)) * pot;
+    const double d = (1.0 - fe) * (1.0 - 2.0 * eq);
+    if (d > 0.0) {
+        return Napi::Number::New(env, a / d);
+    }
+    return Napi::Number::New(env, a == 0.0 ? 0.0 : std::numeric_limits<double>::infinity());
 }
 
 Napi::Value OpponentAggressionFactor(const Napi::CallbackInfo& info) {
@@ -810,7 +834,7 @@ Napi::Value NormalizeBotConfig(const Napi::CallbackInfo& info) {
         cfg = poker_bind::parse_bot_config(info[0].As<Napi::Object>());
     }
     cfg.aggression_threshold = static_cast<float>(clamp01(cfg.aggression_threshold));
-    cfg.risk_tolerance = static_cast<float>(std::max(0.0f, cfg.risk_tolerance));
+    cfg.risk_tolerance = static_cast<float>(clamp01(cfg.risk_tolerance));
     cfg.monte_carlo_simulations = std::max(1, cfg.monte_carlo_simulations);
     cfg.monte_carlo_villains = std::max(1, cfg.monte_carlo_villains);
     cfg.raise_pot_fraction = static_cast<float>(std::max(0.0f, cfg.raise_pot_fraction));

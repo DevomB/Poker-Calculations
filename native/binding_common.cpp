@@ -1,5 +1,9 @@
 #include "binding_common.hpp"
 
+#include <cmath>
+#include <stdexcept>
+#include <string>
+
 namespace poker_bind {
 
 F64ReturnFormat parse_return_format(const Napi::CallbackInfo& info, std::size_t format_index) {
@@ -86,6 +90,18 @@ Napi::Promise reject_aborted_promise(Napi::Env env) {
     auto deferred = Napi::Promise::Deferred::New(env);
     deferred.Reject(make_abort_error(env));
     return deferred.Promise();
+}
+
+std::int64_t checked_integer(const Napi::Value& v, const char* name, std::int64_t lo, std::int64_t hi) {
+    const std::string range = " must be an integer from " + std::to_string(lo) + " to " + std::to_string(hi);
+    if (!v.IsNumber()) {
+        throw std::invalid_argument(std::string(name) + range);
+    }
+    const double d = v.As<Napi::Number>().DoubleValue();
+    if (!std::isfinite(d) || std::floor(d) != d || d < static_cast<double>(lo) || d > static_cast<double>(hi)) {
+        throw std::invalid_argument(std::string(name) + range + " (got " + v.ToString().Utf8Value() + ")");
+    }
+    return static_cast<std::int64_t>(d);
 }
 
 }  // namespace poker_bind

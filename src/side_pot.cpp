@@ -42,7 +42,9 @@ std::vector<Side_pot_layer> side_pot_ladder_from_commitments(
         layer.player_cap_contribution.resize(committed_chips.size(), 0.0);
         double pot = 0.0;
         for (std::size_t i = 0; i < committed_chips.size(); ++i) {
-            if (committed_chips[i] >= u - 1e-12) {
+            // Levels are the commitments themselves, so the exact comparison is the right one; a
+            // tolerance would count players below the level (or with nothing in) and create chips.
+            if (committed_chips[i] >= u) {
                 layer.player_cap_contribution[i] = delta;
                 pot += delta;
             }

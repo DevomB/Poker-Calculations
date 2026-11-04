@@ -108,7 +108,7 @@ Napi::Value SimulateEquityVsRange(const Napi::CallbackInfo& info) {
     if (!parse_sparse_range(env, info[2], dead, range, &err)) {
         POKER_FAIL_TYPE(env, err);
     }
-    const int sims = info[3].As<Napi::Number>().Int32Value();
+    const int sims = poker_bind::checked_int32(info[3], "sims");
     const std::uint32_t seed = static_cast<std::uint32_t>(info[4].As<Napi::Number>().Uint32Value());
     std::mt19937 rng(seed);
     POKER_TRY(env, {
@@ -205,11 +205,11 @@ Napi::Value SimulateHandOutcomeDetailed(const Napi::CallbackInfo& info) {
                                               "simulateHandOutcomeDetailed(holeCards, board, ...)")) {
         return env.Null();
     }
-    const int sims = info[2].As<Napi::Number>().Int32Value();
+    const int sims = poker_bind::checked_int32(info[2], "sims");
     const std::uint32_t seed = static_cast<std::uint32_t>(info[3].As<Napi::Number>().Uint32Value());
     int villains = 1;
     if (info.Length() >= 5 && info[4].IsNumber()) {
-        villains = info[4].As<Napi::Number>().Int32Value();
+        villains = poker_bind::checked_int32(info[4], "villains");
     }
     std::mt19937 rng(seed);
     const poker::McEquityDetailedResult r =
@@ -229,14 +229,14 @@ Napi::Value BuildPreflopEquityMatrix(const Napi::CallbackInfo& info) {
     if (info.Length() >= 1 && info[0].IsObject()) {
         const Napi::Object o = info[0].As<Napi::Object>();
         if (o.Has("iterations") && o.Get("iterations").IsNumber()) {
-            opts.iterations = o.Get("iterations").As<Napi::Number>().Int32Value();
+            opts.iterations = poker_bind::checked_int32(o.Get("iterations"), "iterations");
         }
         if (o.Has("seed") && o.Get("seed").IsNumber()) {
             opts.seed = static_cast<std::uint32_t>(o.Get("seed").As<Napi::Number>().Uint32Value());
         }
         if (o.Has("threads") && o.Get("threads").IsNumber()) {
             opts.num_threads =
-                static_cast<std::size_t>(o.Get("threads").As<Napi::Number>().Uint32Value());
+                poker_bind::checked_index(o.Get("threads"), "threads");
         }
     }
     std::vector<double> out;
@@ -267,7 +267,7 @@ Napi::Value EquityDeltaIfCardRemoved(const Napi::CallbackInfo& info) {
     if (!parse_sparse_range(env, info[2], dead, range, &err)) {
         POKER_FAIL_TYPE(env, err);
     }
-    const int removed = info[3].As<Napi::Number>().Int32Value();
+    const int removed = poker_bind::checked_int32(info[3], "removed");
     const double d = poker::equity_delta_if_card_removed(hero, board, removed, range);
     return Napi::Number::New(env, d);
 }
