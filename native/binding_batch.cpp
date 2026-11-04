@@ -10,6 +10,7 @@
 #include "poker/fast_evaluator.hpp"
 #include "poker/monte_carlo.hpp"
 
+#include <cmath>
 #include <random>
 #include <stdexcept>
 
@@ -202,21 +203,21 @@ bool parse_straight_made_args(const Napi::CallbackInfo& info, StraightMadeParsed
 }
 
 std::size_t parse_benchmark_iterations(const Napi::CallbackInfo& info, std::string* err) {
-    std::size_t iterations = 200000;
+    // Checked before conversion: NaN or Infinity cast to an integer is undefined and used to run
+    // for hours. The cap keeps one call to a few seconds.
+    constexpr double kMaxIterations = 100000000.0;
     const int opts_idx = poker_bind::trailing_async_options_index(info);
-    if (info.Length() >= 1 && info[0].IsNumber()) {
-        const double n = info[0].As<Napi::Number>().DoubleValue();
-        if (n < 1.0) {
-            if (err) {
-                *err = "benchmarkEvaluatorThroughput(iterations): iterations must be >= 1";
-            }
-            return 0;
-        }
-        iterations = static_cast<std::size_t>(n);
-    } else if (opts_idx == 0) {
-        iterations = 200000;
+    if (info.Length() < 1 || info[0].IsUndefined() || opts_idx == 0) {
+        return 200000;
     }
-    return iterations;
+    const double n = info[0].IsNumber() ? info[0].As<Napi::Number>().DoubleValue() : -1.0;
+    if (!std::isfinite(n) || std::trunc(n) != n || n < 1.0 || n > kMaxIterations) {
+        if (err) {
+            *err = "benchmarkEvaluatorThroughput(iterations): iterations must be an integer from 1 to 100000000";
+        }
+        return 0;
+    }
+    return static_cast<std::size_t>(n);
 }
 
 Napi::Value SimulateHandOutcome(const Napi::CallbackInfo& info) {

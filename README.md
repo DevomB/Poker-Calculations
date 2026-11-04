@@ -53,7 +53,7 @@ Every `*Async` export runs on the libuv thread pool and accepts a final `{ signa
 
 ## Conventions
 
-- **Cards** are strings such as `'Ah'` or `'Td'` (`'10h'` also parses), or a `Uint8Array` of deck ids `rank * 4 + suit` (rank 0 = 2 … 12 = A; suits c, d, h, s).
+- **Cards** are strings such as `'Ah'` or `'td'` (case-insensitive; `'10h'` also parses; anything else, such as `'Ahx'`, is rejected), or a `Uint8Array` of deck ids `rank * 4 + suit` (rank 0 = 2 … 12 = A; suits c, d, h, s).
 - **Equity** is hero's expected share of the pot at showdown; a k-way tie pays `1/k`.
 - **Pot** (`pot`, `potBeforeCall`) is everything in the middle when hero acts, villain's bet included: `expectedValueCall(e, pot, toCall) = e × pot − (1 − e) × toCall`.
 - **Monte Carlo** results are reproducible for a given seed on one platform; low digits can differ between platforms.

@@ -1,5 +1,22 @@
 # Changelog
 
+## 4.1.1
+
+Bug fixes. Some intervals change, and inputs that used to give meaningless results now throw.
+
+### Fixed — results change
+
+- **Wilson intervals.** The interval divided its `z²/4n²` term by an extra `n`, so it was too narrow and could exclude its own estimate: 100 successes in 100 gave [0.97965, 0.98335] instead of [0.96301, 1]. This affects `wilsonScoreInterval`, `binomialProportionCiWidth`, and the `ciLow`/`ciHigh` of `simulateHandOutcomeDetailed` and `simulateEquityVsRanges`; a guaranteed win now reports an upper bound of 1.
+- **No raises against opponents who are all in.** `legalActionSummary`, `actionMaskFromState`, the `decideAction` family, and the C++ `GameEngine` allowed hero to raise when every other player still in the hand had no chips left; hero now calls (or checks) or folds.
+- **Card strings are parsed by one strict rule.** The native parser rejected lowercase ranks (`'ah'`, `'td'`) while `poker-calculations/encode` accepted them, and `encode` read `'Ahjunk'` as `Ah`. Both now accept rank and suit in either case, `'10'` for ten, and surrounding whitespace, and reject anything else.
+
+### Now rejected
+
+- `benchmarkEvaluatorThroughput` / `benchmarkEvaluatorThroughputAsync` with an iteration count that is not an integer from 1 to 100,000,000; NaN or Infinity used to run for hours.
+- Dead cards that are already in hero's hand or on the flop in `straightMadeFlopToRiverExactProbability`, `flushMadeFlopToRiverExactProbability`, `fullHouseMadeFlopToRiverExactProbability`, `tripsMadeFlopToRiverExactProbability`, and `twoPairMadeFlopToRiverExactProbability` (and their async forms); hero cards that are also on the board in `materializeVillainRangeAfterBlockers` and `exactRangeDominatedComboFraction`.
+- Packed card input that is not a `Uint8Array` (or `Buffer`). A `Float64Array`, `Int32Array`, `Uint16Array`, or `DataView` had its raw bytes read as deck ids.
+- An invalid `knownDead` in `exactVillainLeapfrogOutCounts` and `exactHeroCategoryJointFlopToRiver`, which was silently treated as no dead cards.
+
 ## 4.1.0
 
 Correctness release for the decision, state, and Monte Carlo uncertainty APIs. Some results change, and inputs that used to produce meaningless results are now rejected.

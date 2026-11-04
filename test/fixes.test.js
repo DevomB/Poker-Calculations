@@ -725,3 +725,135 @@ test('range rankings order equal weights the same way on every platform', () => 
   // Offsuit classes (12 combos) outweigh pairs and suited hands; ties keep first-seen order: 32o, 42o, ...
   assert.deepEqual(poker.rangeBucketWeightsByNotation(uniform).slice(0, 3).map((b) => b.notation), ['32o', '42o', '52o']);
 });
+
+test('Wilson intervals match the textbook formula and published values', () => {
+  // Wilson (1927): (p + z²/2n ± z sqrt(p(1-p)/n + z²/4n²)) / (1 + z²/n), written out here
+  // independently of the package.
+  const wilson = (x, n, z) => {
+    const p = x / n;
+    const d = 1 + (z * z) / n;
+    const c = (p + (z * z) / (2 * n)) / d;
+    const h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+    return [Math.max(0, c - h), Math.min(1, c + h)];
+  };
+  for (const [x, n] of [[100, 100], [0, 10], [50, 100], [3, 20], [997, 1000], [1, 1]]) {
+    const w = poker.wilsonScoreInterval(x, n, 1.96);
+    const [lo, hi] = wilson(x, n, 1.96);
+    near(w.lower, lo, 1e-12, `${x}/${n} lower`);
+    near(w.upper, hi, 1e-12, `${x}/${n} upper`);
+    near(poker.binomialProportionCiWidth(x, n, 1.96), hi - lo, 1e-12, `${x}/${n} width`);
+  }
+  // Published 95% values: 100/100 -> [0.96301, 1]; 0/10 -> [0, 0.27754]; 50/100 -> [0.40383, 0.59617].
+  const all = poker.wilsonScoreInterval(100, 100, 1.96);
+  near(all.lower, 0.96301, 5e-6, '100/100 lower');
+  assert.equal(all.upper, 1);
+  const none = poker.wilsonScoreInterval(0, 10, 1.96);
+  assert.equal(none.lower, 0);
+  near(none.upper, 0.27754, 5e-6, '0/10 upper');
+  const half = poker.wilsonScoreInterval(50, 100, 1.96);
+  near(half.lower, 0.40383, 5e-6, '50/100 lower');
+  near(half.upper, 0.59617, 5e-6, '50/100 upper');
+  // Agresti-Coull and Wald at 50/100: p~ = 0.5 with n~ = 103.8416, and 0.5 ± 0.098.
+  const ac = poker.agrestiCoullInterval(50, 100, 1.96);
+  near(ac.upper - ac.lower, 2 * 1.96 * Math.sqrt(0.25 / (100 + 1.96 * 1.96)), 1e-12, 'Agresti-Coull');
+  const wald = poker.normalWaldBinomialInterval(50, 100, 1.96);
+  near(wald.lower, 0.5 - 1.96 * 0.05, 1e-12, 'Wald');
+
+  // A guaranteed win: every trial pays 1, so the interval must reach 100%.
+  for (const run of [
+    poker.simulateHandOutcomeDetailed(['As', 'Ks'], ['Qs', 'Js', 'Ts', '2c', '3d'], 100, 1, 1),
+    poker.simulateEquityVsRanges(['As', 'Ks'], ['Qs', 'Js', 'Ts', '2c', '3d'], [new Float64Array(1326).fill(1)], 100, 1),
+  ]) {
+    assert.equal(run.estimate, 1);
+    assert.equal(run.ciHigh, 1);
+    near(run.ciLow, 0.96301, 5e-6, 'royal flush lower bound');
+  }
+});
+
+test('no raise against opponents who are all in', async () => {
+  // Hero has the nuts with 200 behind; the only opponent moved all in for 10.
+  const state = {
+    players: [
+      { holeCards: ['As', 'Ks'], stack: 200, seat: 0, committedThisStreet: 0 },
+      { holeCards: ['7c', '7d'], stack: 0, seat: 1, committedThisStreet: 10 },
+    ],
+    communityCards: ['Qs', 'Js', 'Ts'],
+    phase: 'flop',
+    pot: 30,
+    currentBet: 10,
+    smallBlind: 1,
+    bigBlind: 2,
+    actingIndex: 0,
+    actedThisStreet: [false, true],
+  };
+  const legal = poker.legalActionSummary(state);
+  assert.equal(legal.canRaise, false);
+  assert.equal(legal.canCall, true);
+  assert.equal(poker.actionMaskFromState(state), 1 | 4); // fold, call
+  const cfg = { monteCarloSimulations: 500, rngSeed: 1 };
+  const call = { action: 'call', raiseBy: 0 };
+  assert.deepEqual(poker.decideAction(state, cfg, null, 0), call);
+  assert.deepEqual(await poker.decideActionAsync(state, cfg, null, 0), call);
+  assert.deepEqual(poker.decideActionWithDiagnostics(state, cfg, null, 0).decision, call);
+  assert.deepEqual(poker.runBotPolicyBatch([state], cfg)[0].decision, call);
+  // Nothing to call either: hero may check but not bet into an all-in player.
+  const checked = { ...state, players: [{ ...state.players[0], committedThisStreet: 10 }, state.players[1]], pot: 40 };
+  assert.equal(poker.legalActionSummary(checked).canRaise, false);
+  assert.deepEqual(poker.decideAction(checked, cfg, null, 0), { action: 'check', raiseBy: 0 });
+  // With a third player who still has chips, raising is legal again.
+  const multi = {
+    ...state,
+    players: [...state.players, { holeCards: ['2h', '2d'], stack: 150, seat: 2, committedThisStreet: 10 }],
+    pot: 40,
+    actedThisStreet: [false, true, true],
+  };
+  assert.equal(poker.legalActionSummary(multi).canRaise, true);
+});
+
+test('native and encode parse card strings by the same strict rule', () => {
+  const encode = require(path.join(__dirname, '..', 'encode'));
+  const native = (c) => { try { return poker.canonicalCardString(c); } catch { return null; } };
+  const js = (c) => { try { return encode.deckIndexToCardString(encode.cardStringToDeckIndex(c)); } catch { return null; } };
+  const expected = {
+    Ah: 'Ah', ah: 'Ah', AH: 'Ah', aH: 'Ah', td: 'Td', Td: 'Td', '10h': 'Th', '10H': 'Th', ' Ah ': 'Ah',
+    Ahjunk: null, Ahh: null, 'A h': null, '1h': null, '10': null, h: null, '': null, Ax: null, '11h': null,
+  };
+  for (const [input, card] of Object.entries(expected)) {
+    assert.equal(native(input), card, `native ${JSON.stringify(input)}`);
+    assert.equal(js(input), card, `encode ${JSON.stringify(input)}`);
+  }
+  assert.deepEqual(poker.parseCompactCardList('ahkhTD'), ['Ah', 'Kh', 'Td']);
+  // Packed input is a Uint8Array (a Buffer is one); other views are not read as deck ids.
+  assert.equal(poker.evaluateBestHand(Buffer.from([50, 46])).rank, 'highCard');
+  assert.equal(poker.evaluateBestHand(Uint8Array.of(1, 50, 46).subarray(1)).rank, 'highCard');
+  for (const view of [new Float64Array([50, 46]), new Int32Array([50, 46]), new Uint16Array([50, 46]), new DataView(new ArrayBuffer(2))]) {
+    assert.throws(() => poker.evaluateBestHand(view), /must be Uint8Array/, view.constructor.name);
+  }
+});
+
+test('benchmark iteration counts are finite, integral, and bounded', async () => {
+  for (const bad of [NaN, Infinity, 1e15, 2.5, 0, -1, 'x']) {
+    assert.throws(() => poker.benchmarkEvaluatorThroughput(bad), /integer from 1 to 100000000/, String(bad));
+    assert.throws(() => poker.benchmarkEvaluatorThroughputAsync(bad), /integer from 1 to 100000000/, String(bad));
+  }
+  assert.equal(typeof poker.benchmarkEvaluatorThroughput(1000).fastEvalsPerSecond, 'number');
+  assert.equal(typeof (await poker.benchmarkEvaluatorThroughputAsync(1000)).fastEvalsPerSecond, 'number');
+});
+
+test('draw and range functions reject dead cards that are already known', () => {
+  const hero = ['Ah', 'Kh'];
+  const flop = ['Qh', '7h', '2c'];
+  const made = Object.keys(poker).filter((n) => /MadeFlopToRiverExactProbability$/.test(n));
+  assert.ok(made.length >= 5, made.join(', '));
+  for (const name of made) {
+    assert.throws(() => poker[name](hero, flop, ['Ah']), /duplicate card/, `${name}: dead card in hero's hand`);
+    assert.throws(() => poker[name](hero, flop, ['7h']), /duplicate card/, `${name}: dead card on the flop`);
+    assert.ok(Number.isFinite(poker[name](hero, flop, ['9h'])), `${name}: a real dead card still works`);
+  }
+  // Removing a live heart lowers the flush probability.
+  assert.ok(poker.flushMadeFlopToRiverExactProbability(hero, flop, ['9h']) < poker.flushMadeFlopToRiverExactProbability(hero, flop, []));
+  const range = new Float64Array(1326).fill(1);
+  assert.throws(() => poker.materializeVillainRangeAfterBlockers(range, hero, ['Ah', '7h', '2c']), /duplicate card/);
+  assert.throws(() => poker.exactRangeDominatedComboFraction(hero, ['Ah', '7h', '2c', '3d', '4s'], range), /duplicate card/);
+  assert.throws(() => poker.exactVillainLeapfrogOutCounts(hero, ['Qh', '7h', '2c', '3d'], [3]), /knownDead/);
+});

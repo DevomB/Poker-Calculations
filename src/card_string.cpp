@@ -21,15 +21,22 @@ constexpr unsigned char ascii_toupper(unsigned char c) noexcept {
     return c;
 }
 
+constexpr unsigned char ascii_tolower(unsigned char c) noexcept {
+    if (c >= 'A' && c <= 'Z') {
+        return static_cast<unsigned char>(c - 'A' + 'a');
+    }
+    return c;
+}
+
+// Ranks and suits are case-insensitive: "Ah", "ah", "AH", and "aH" are the same card.
 constexpr std::array<std::uint8_t, 256> make_rank_lut() {
     std::array<std::uint8_t, 256> lut{};
     lut.fill(kLutInvalid);
     std::uint8_t rank = 0;
     for (const char ch : std::string_view{"23456789TJQKA"}) {
-        const unsigned char lo = static_cast<unsigned char>(ch);
-        const unsigned char up = ascii_toupper(lo);
-        lut[lo] = rank;
-        lut[up] = rank;
+        const unsigned char c = static_cast<unsigned char>(ch);
+        lut[ascii_tolower(c)] = rank;
+        lut[ascii_toupper(c)] = rank;
         ++rank;
     }
     return lut;

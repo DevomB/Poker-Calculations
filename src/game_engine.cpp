@@ -174,7 +174,16 @@ LegalActions legal_actions_for(const PokerGameState& state, int player_index) {
     // have grown by at least one full raise since that player's last action.
     const bool reopened =
         !has_acted(state, static_cast<std::size_t>(player_index)) || out.to_call >= full;
-    out.can_raise = p.stack > out.to_call && reopened;
+    // A raise needs someone to answer it: another player still in the hand with chips behind.
+    // Against opponents who are all in, the only choices are call (or check) and fold.
+    bool opponent_can_respond = false;
+    for (std::size_t i = 0; i < state.players.size(); ++i) {
+        if (static_cast<int>(i) != player_index && player_can_act(state.players[i])) {
+            opponent_can_respond = true;
+            break;
+        }
+    }
+    out.can_raise = p.stack > out.to_call && reopened && opponent_can_respond;
     if (out.can_raise) {
         out.min_raise_to = std::min(out.min_raise_to, out.max_raise_to);
     }

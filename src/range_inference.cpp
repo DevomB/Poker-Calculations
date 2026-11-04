@@ -38,9 +38,9 @@ MaterializedRangeResult materialize_villain_range_after_blockers(
         throw std::invalid_argument("materializeVillainRange: dense range must have length 1326");
     }
     DeckBitset dead;
-    dead.mark_cards(hero_hole_cards);
-    dead.mark_cards(board_cards);
-    dead.mark_cards(known_dead_cards);
+    dead.mark_cards_distinct(hero_hole_cards, "hero, board, or dead cards");
+    dead.mark_cards_distinct(board_cards, "hero, board, or dead cards");
+    dead.mark_cards_distinct(known_dead_cards, "hero, board, or dead cards");
     const SparseRange sparse = sparse_range_from_dense1326(dense1326, dense_len, dead.mask);
     return from_sparse(sparse);
 }
@@ -49,9 +49,9 @@ MaterializedRangeResult materialize_villain_range_after_blockers_sparse(
     const SparseRange& prior, const std::vector<Card>& hero_hole_cards,
     const std::vector<Card>& board_cards, const std::vector<Card>& known_dead_cards) {
     DeckBitset dead;
-    dead.mark_cards(hero_hole_cards);
-    dead.mark_cards(board_cards);
-    dead.mark_cards(known_dead_cards);
+    dead.mark_cards_distinct(hero_hole_cards, "hero, board, or dead cards");
+    dead.mark_cards_distinct(board_cards, "hero, board, or dead cards");
+    dead.mark_cards_distinct(known_dead_cards, "hero, board, or dead cards");
     SparseRange filtered;
     filtered.weight_sum = 0.0;
     for (const WeightedHoleCombo& c : prior.combos) {

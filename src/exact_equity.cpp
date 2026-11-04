@@ -125,9 +125,9 @@ double straight_made_flop_to_river_exact_probability(const std::vector<Card>& he
         throw std::invalid_argument("straightMadeFlopToRiverExactProbability: flop must have exactly three cards");
     }
     DeckBitset used;
-    used.mark_cards(hero_hole_cards);
-    used.mark_cards(flop_three_cards);
-    used.mark_cards(known_dead_cards);
+    used.mark_cards_distinct(hero_hole_cards, "hero, flop, or dead cards");
+    used.mark_cards_distinct(flop_three_cards, "hero, flop, or dead cards");
+    used.mark_cards_distinct(known_dead_cards, "hero, flop, or dead cards");
     const std::vector<int> deck = used.unused_indices();
     if (static_cast<int>(deck.size()) < 2) {
         throw std::invalid_argument("straightMadeFlopToRiverExactProbability: need at least two unseen cards");

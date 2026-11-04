@@ -10,7 +10,11 @@ declare namespace api {
   /** Deck id 0..51: `rank * 4 + suit` (rank 0=2 .. 12=A, suit 0=c .. 3=s). */
   export type Card52 = number;
 
-  /** Hole/board/dead card lists: canonical strings or packed bytes (`Card52` per byte). */
+  /**
+   * Hole/board/dead card lists: strings such as `'Ah'` (rank and suit case-insensitive, `'10h'` for
+   * ten, surrounding whitespace ignored, nothing else accepted) or a `Uint8Array` (a Buffer is one)
+   * with one `Card52` per byte. Other typed arrays are rejected.
+   */
   export type CardInput = string[] | Uint8Array;
 
   /** Numeric vector input: `number[]` or `Float64Array`. */
@@ -631,9 +635,10 @@ declare namespace api {
 
   /**
    * No-limit legal actions for one player. `toCall` may exceed the stack (a call is then all-in).
-   * `minRaiseTo` is the current bet plus the last full raise, or all-in when shorter. A player who
-   * already acted and faces less than a full raise (a short all-in) cannot re-raise. Everything is
-   * false once the hand is over or for a folded or all-in player.
+   * `minRaiseTo` is the current bet plus the last full raise, or all-in when shorter. Raising needs
+   * another player still in the hand with chips; against opponents who are all in it is call (or
+   * check) or fold. A player who already acted and faces less than a full raise (a short all-in)
+   * cannot re-raise. Everything is false once the hand is over or for a folded or all-in player.
    */
   export interface LegalActionSummaryResult {
     canFold: boolean;
@@ -693,7 +698,8 @@ declare namespace api {
      */
     evaluateHandStrengthFast(holeCards: CardInput, board: CardInput): number;
     /**
-     * Benchmark legacy vs forge evaluator throughput on random 7-card spots.
+     * Benchmark legacy vs forge evaluator throughput on random 7-card spots. `iterations` is an
+     * integer from 1 to 100000000 (default 200000).
      */
     benchmarkEvaluatorThroughput(iterations?: number): EvaluatorBenchmarkResult;
     /** Same as `benchmarkEvaluatorThroughput`; runs on the libuv thread pool (non-blocking). */
@@ -1017,7 +1023,10 @@ declare namespace api {
       variancePerHand: number,
       targetRor: number
     ): number;
-    /** Wilson score interval for a binomial proportion. */
+    /**
+     * Wilson score interval for a binomial proportion:
+     * `(p + z²/2n ± z sqrt(p(1 − p)/n + z²/4n²)) / (1 + z²/n)` with `p = successes / nTrials`.
+     */
     wilsonScoreInterval(successes: number, nTrials: number, z: number): WilsonScoreInterval;
     /** Agresti–Coull interval; same `{ lower, upper }` shape as Wilson. */
     agrestiCoullInterval(successes: number, nTrials: number, z: number): WilsonScoreInterval;

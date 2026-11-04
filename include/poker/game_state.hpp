@@ -85,9 +85,10 @@ struct LegalActions {
 };
 
 /**
- * No-limit legal actions for `player_index`. A player who already acted this street and now faces
- * less than a full raise (an all-in short raise) may call or fold but not re-raise. Everything is
- * false when `unavailable_actor_reason` is non-null.
+ * No-limit legal actions for `player_index`. Raising needs chips beyond the call and another
+ * player still in the hand with chips (against opponents who are all in, call or fold). A player
+ * who already acted this street and now faces less than a full raise (an all-in short raise) may
+ * call or fold but not re-raise. Everything is false when `unavailable_actor_reason` is non-null.
  */
 [[nodiscard]] LegalActions legal_actions_for(const PokerGameState& state, int player_index);
 

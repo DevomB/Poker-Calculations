@@ -577,13 +577,15 @@ Wilson_interval wilson_score_interval_for_mean(double mean, double n_trials, dou
     if (!std::isfinite(z) || z <= 0.0) {
         throw std::invalid_argument("z must be finite and positive");
     }
+    // Wilson (1927): (p + z²/2n ± z √(p(1−p)/n + z²/4n²)) / (1 + z²/n).
     const double n = n_trials;
     const double p = mean;
     const double z2 = z * z;
     const double denom = 1.0 + z2 / n;
     const double center = (p + z2 / (2.0 * n)) / denom;
-    const double half = z * std::sqrt((p * (1.0 - p) + z2 / (4.0 * n * n)) / n) / denom;
-    return Wilson_interval{clamp01(center - half), clamp01(center + half)};
+    const double half = z * std::sqrt(p * (1.0 - p) / n + z2 / (4.0 * n * n)) / denom;
+    // At p = 0 or 1 one bound is exactly 0 or 1; keep rounding from moving it inside.
+    return Wilson_interval{p <= 0.0 ? 0.0 : clamp01(center - half), p >= 1.0 ? 1.0 : clamp01(center + half)};
 }
 
 Wilson_interval agresti_coull_interval(int successes, int n_trials, double z) {
@@ -1808,9 +1810,9 @@ double made_category_flop_to_river_exact_probability(
         throw std::invalid_argument("flop must have exactly three cards");
     }
     DeckBitset used;
-    used.mark_cards(hero_hole_cards);
-    used.mark_cards(flop_three_cards);
-    used.mark_cards(known_dead_cards);
+    used.mark_cards_distinct(hero_hole_cards, "hero, flop, or dead cards");
+    used.mark_cards_distinct(flop_three_cards, "hero, flop, or dead cards");
+    used.mark_cards_distinct(known_dead_cards, "hero, flop, or dead cards");
     const std::vector<int> deck = used.unused_indices();
     if (static_cast<int>(deck.size()) < 2) {
         throw std::invalid_argument("need at least two unseen cards");

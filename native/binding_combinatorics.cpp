@@ -183,6 +183,9 @@ Napi::Value ExactVillainLeapfrogOutCounts(const Napi::CallbackInfo& info) {
     std::vector<poker::Card> dead;
     if (info.Length() >= 3 && !info[2].IsUndefined()) {
         dead = parse_cards_from_js(env, info[2], &err);
+        if (!err.empty()) {
+            POKER_FAIL_TYPE(env, "knownDead: " + err);
+        }
     }
     POKER_TRY(env, {
         const auto r = poker::exact_villain_leapfrog_out_counts(hero, board, dead);
@@ -213,6 +216,9 @@ Napi::Value ExactHeroCategoryJointFlopToRiver(const Napi::CallbackInfo& info) {
     std::vector<poker::Card> dead;
     if (info.Length() >= 3 && !info[2].IsUndefined()) {
         dead = parse_cards_from_js(env, info[2], &err);
+        if (!err.empty()) {
+            POKER_FAIL_TYPE(env, "knownDead: " + err);
+        }
     }
     POKER_TRY(env, {
         const auto mat = poker::exact_hero_category_joint_flop_to_river(hero, flop, dead);

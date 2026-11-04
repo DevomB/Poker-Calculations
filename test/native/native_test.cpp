@@ -189,6 +189,22 @@ void covering_player_is_not_asked_to_act_alone() {
     CHECK(s.community_cards.size() == 5);
 }
 
+void no_raise_against_a_sole_all_in_opponent() {
+    // Heads-up: the big blind (10 chips) moves all in; the button can call or fold, not raise.
+    GameEngine e(9);
+    PokerGameState s = table({200, 10});
+    e.start_new_hand(s, GameEngineConfig{1, 2, 0});
+    CHECK(act(e, s, 0, Action::Call));
+    CHECK(act(e, s, 1, Action::Raise, 1000));  // all in to 10
+    const int btn = index_of_seat(s, 0);
+    const poker::LegalActions legal = poker::legal_actions_for(s, btn);
+    CHECK(legal.can_call && legal.can_fold && !legal.can_raise);
+    CHECK(!e.apply_action(s, Decision{Action::Raise, 50}));
+    CHECK(act(e, s, 0, Action::Call));
+    CHECK(s.phase == GamePhase::Showdown);
+    CHECK(chips(s) == 210);
+}
+
 void too_few_funded_players_does_not_start_a_hand() {
     GameEngine e(8);
     PokerGameState s = table({100, 0});
@@ -301,6 +317,7 @@ int main() {
     last_player_standing_ends_the_hand();
     all_in_and_call_runs_the_board_out();
     covering_player_is_not_asked_to_act_alone();
+    no_raise_against_a_sole_all_in_opponent();
     too_few_funded_players_does_not_start_a_hand();
     random_play_conserves_chips_and_terminates();
     if (g_failures != 0) {

@@ -91,21 +91,18 @@ bool is_card_input(const Napi::Value& v) {
     if (v.IsArray()) {
         return true;
     }
-    if (v.IsBuffer()) {
-        return true;
-    }
-    if (v.IsTypedArray()) {
-        return v.As<Napi::TypedArray>().TypedArrayType() == napi_uint8_array;
-    }
-    return false;
+    // A Node Buffer is a Uint8Array. IsBuffer() is not used: on current Node it is also true for
+    // other typed arrays and DataViews, whose raw bytes are not deck ids.
+    return v.IsTypedArray() && v.As<Napi::TypedArray>().TypedArrayType() == napi_uint8_array;
 }
 
 bool packed_card_bytes(const Napi::Value& v, const std::uint8_t** data, std::size_t* len, std::string* err) {
-    if (v.IsBuffer()) {
-        const Napi::Buffer<std::uint8_t> buf = v.As<Napi::Buffer<std::uint8_t>>();
-        *data = buf.Data();
-        *len = buf.Length();
-        return true;
+    // Uint8Array (including Node Buffers) only; see is_card_input.
+    if (v.IsDataView()) {
+        if (err) {
+            *err = "packed cards must be Uint8Array (each byte 0..51)";
+        }
+        return false;
     }
     if (v.IsTypedArray()) {
         const Napi::TypedArray ta = v.As<Napi::TypedArray>();
@@ -126,12 +123,19 @@ bool packed_card_bytes(const Napi::Value& v, const std::uint8_t** data, std::siz
 std::vector<poker::Card> parse_cards_from_js(const Napi::Env& env, const Napi::Value& v, std::string* err) {
     const std::uint8_t* data = nullptr;
     std::size_t len = 0;
-    if (packed_card_bytes(v, &data, &len, err)) {
+    std::string packed_err;
+    if (packed_card_bytes(v, &data, &len, &packed_err)) {
         std::vector<poker::Card> out;
         if (!poker::parse_packed_cards(data, len, out, err)) {
             return {};
         }
         return out;
+    }
+    if (!packed_err.empty()) {
+        if (err) {
+            *err = packed_err;
+        }
+        return {};
     }
     if (v.IsArray()) {
         return parse_card_strings(env, v.As<Napi::Array>(), err);

@@ -76,7 +76,8 @@ A trial pays hero `X` in [0, 1]: 1 for a win, `1/k` for a k-way chop, 0 for a lo
 - `se = sqrt(s² / n)`, where `s² = Σ (x - x̄)² / (n - 1)` is the sample variance of the payoffs
   (accumulated with Welford's update). With `n = 1` there is no sample variance and `se = 0.5`,
   the largest standard deviation a [0, 1] payoff can have.
-- `[ciLow, ciHigh]`: the 95% Wilson score interval evaluated at the unrounded mean `x̄`. Any payoff
+- `[ciLow, ciHigh]`: the 95% Wilson score interval evaluated at the unrounded mean `x̄`,
+  `(x̄ + z²/2n ± z √(x̄(1 − x̄)/n + z²/4n²)) / (1 + z²/n)` with `z = 1.96`. Any payoff
   in [0, 1] with mean `μ` has `Var X <= μ (1 - μ)`, the Bernoulli variance the Wilson interval
   assumes, so the interval is conservative for split pots. It deliberately ignores `s²`: when every
   sample is equal (`s² = 0`, for example a board everyone plays) the true outcome distribution can
@@ -121,6 +122,8 @@ equity estimate is applied to every layer hero can win. With a full call `pot' =
 
 - A full raise is at least the last full bet or raise this street (never below the big blind).
   The minimum raise-to is `currentBet + that increment`, or all-in when the stack is shorter.
+- Raising needs another player still in the hand with chips behind. Against opponents who are all
+  in, the choices are call (or check) and fold.
 - An all-in raise short of a full raise keeps the previous increment and does not reopen betting:
   a player who already acted may call or fold, and may raise again only once the bet has grown by
   at least one full raise since their last action (short raises can add up to one).

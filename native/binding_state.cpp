@@ -309,7 +309,7 @@ void resolve_hero_hole(const poker::PokerGameState& state, int hero_seat, std::v
 bool parse_state_input(const Napi::Value& v, poker::PokerGameState& out, std::vector<std::string>& errors) {
     const std::size_t errors_before = errors.size();
     // A Uint8Array is also an object, so check for PKST bytes first.
-    if (v.IsObject() && !v.IsTypedArray() && !v.IsBuffer()) {
+    if (v.IsObject() && !v.IsTypedArray() && !v.IsDataView()) {
         if (!parse_game_state(v.As<Napi::Object>(), out, errors)) {
             return false;
         }

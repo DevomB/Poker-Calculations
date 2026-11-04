@@ -345,8 +345,8 @@ double exact_range_dominated_combo_fraction(const std::vector<Card>& hero_hole_c
         throw std::invalid_argument("villain range must have positive weight");
     }
     DeckBitset used;
-    used.mark_cards(hero_hole_cards);
-    used.mark_cards(board_cards);
+    used.mark_cards_distinct(hero_hole_cards, "hero or board");
+    used.mark_cards_distinct(board_cards, "hero or board");
     const int h0 = deck_index_from_card(hero_hole_cards[0]);
     const int h1 = deck_index_from_card(hero_hole_cards[1]);
     std::uint8_t hero_r[7]{};

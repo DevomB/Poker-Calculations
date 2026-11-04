@@ -1,6 +1,6 @@
 {
   "name": "poker-calculations",
-  "version": "4.1.0",
+  "version": "4.1.1",
   "description": "Poker math for Node.js: Hold'em hand evaluation, Monte Carlo and exact equity, ranges, pot and chip EV, ICM, side pots, push/fold, Omaha, short deck, stud, and 2-7. C++20 core with prebuilt N-API binaries.",
   "main": "index.js",
   "types": "index.d.ts",
