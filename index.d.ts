@@ -648,6 +648,7 @@ declare namespace api {
     evaluateHandStrengthFast(holeCards: CardInput, board: CardInput): number;
     /**
      * Benchmark legacy vs forge evaluator throughput on random 7-card spots.
+     * `iterations` defaults to 200000; it must be a finite number from 1 to 1e9.
      */
     benchmarkEvaluatorThroughput(iterations?: number): EvaluatorBenchmarkResult;
     /** Same as `benchmarkEvaluatorThroughput`; runs on the libuv thread pool (non-blocking). */

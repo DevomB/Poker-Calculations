@@ -51,7 +51,7 @@ Implemented in C++ and registered in [`native/binding_register.cpp`](native/bind
 | | `parallelHandSimulation(holeCards, board, numSimulations, baseSeed, villains, numThreads)` | Same with C++ worker threads and distinct seeds per chunk. |
 | | `parallelHandSimulationAsync(…, options?)` | Same as sync; Promise on libuv thread pool; optional `AbortSignal`. |
 | | `simulateHandOutcomeBatch(specs[])` | Many MC spots → `Float64Array` (`SimBatchSpec` per row). |
-| | `simulateHandOutcomeBatchPacked(holes, boards, boardCards, meta, out?)` | Packed batch MC layout. |
+| | `simulateHandOutcomeBatchPacked(holes, boards, meta, out?)` | Packed batch MC: `holes` 2 bytes per spot, `boards` 5 bytes per spot, `meta` `Uint32Array` `[numSim, seed, villains]` per spot. |
 | | `simulateHandOutcomeDetailed(holeCards, board, numSimulations, seed, villains?)` | `{ estimate, se, ciLow, ciHigh, n }` with Wilson CI. |
 | | `simulateEquityVsRange(heroHoleCards, boardCards, range, numSimulations, seed)` | MC vs weighted villain range. |
 | | `exactHuEquityVsRandomHand(heroHoleCards, boardCards)` | Exact HU equity vs uniform random villain hand; board **empty (preflop) or 3–5** cards. |
@@ -221,8 +221,8 @@ See [API reference](https://poker-calculations.devomb.com/docs/reference/api) fo
 
 | Rule | Detail |
 | --- | --- |
-| Ranks | `2`–`9`, `J`, `Q`, `K`, `A`; ten as `T` or `10` (canonical output uses `T`) |
-| Suits | `c`, `d`, `h`, `s` (case-insensitive rank/suit in parser) |
+| Ranks | `2`–`9`, `T`, `J`, `Q`, `K`, `A` in either case; ten may also be `10` (canonical output uses `T`) |
+| Suits | `c`, `d`, `h`, `s` in either case. Surrounding whitespace is ignored; anything else in the token is invalid |
 | Canonical form | Two characters after parse (`Th`, `Ac`); tens use `T` in canonical output |
 | Lists | Space or concatenation (`AhKh`, `Ah Kh`, `10hKd`); duplicates throw |
 | Compare / MC / exact | Known cards must not overlap; invalid strings throw `Error` with message |

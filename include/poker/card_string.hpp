@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,10 @@ namespace poker {
 
 /// True if any two cards in the list are equal (single-pass deck-index bitmap).
 [[nodiscard]] bool cards_have_duplicate(const std::vector<Card>& cards);
+
+/// Throws `std::invalid_argument("<context>: duplicate card Xx")` if a card appears twice within
+/// or across the lists (hero, board, dead, ...): such a spot cannot be dealt.
+void require_distinct_cards(const char* context, std::initializer_list<const std::vector<Card>*> lists);
 
 /**
  * Parse token at [p, p+n) after ASCII trim; no allocation. Invalid rank/suit LUT entries (255) fail.

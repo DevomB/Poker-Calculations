@@ -13,36 +13,19 @@ const RANKS = '23456789TJQKA';
 const SUITS = 'cdhs';
 
 /**
+ * Same rules as the native parser (`validateCardString`): ASCII whitespace trimmed, then exactly
+ * rank + suit (`Ah`, `td`) or `10` + suit, either case. Anything else throws, so a bad token can
+ * never pack to a valid card.
  * @param {string} s
  * @returns {Card52}
  */
 function cardStringToDeckIndex(s) {
-  const raw = String(s).trim();
-  if (!raw) {
-    throw new Error('invalid card string');
-  }
-  let rank = -1;
-  let i = 0;
-  if (raw.length >= 3 && raw[0] === '1' && raw[1] === '0') {
-    rank = 8;
-    i = 2;
-  } else if (raw.length >= 2) {
-    const r = raw[0].toUpperCase();
-    const idx = RANKS.indexOf(r);
-    if (idx >= 0) {
-      rank = idx;
-    }
-    i = 1;
-  }
-  if (rank < 0 || i >= raw.length) {
+  const m = /^(10|[2-9TJQKA])([CDHS])$/i.exec(String(s).replace(/^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$/g, ''));
+  if (!m) {
     throw new Error(`invalid card string: ${s}`);
   }
-  const su = raw[i].toLowerCase();
-  const suit = SUITS.indexOf(su);
-  if (suit < 0) {
-    throw new Error(`invalid card string: ${s}`);
-  }
-  return rank * 4 + suit;
+  const rank = m[1] === '10' ? 8 : RANKS.indexOf(m[1].toUpperCase());
+  return rank * 4 + SUITS.indexOf(m[2].toLowerCase());
 }
 
 /**

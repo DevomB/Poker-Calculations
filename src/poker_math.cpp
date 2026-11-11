@@ -1798,6 +1798,7 @@ double made_category_flop_to_river_exact_probability(
     if (flop_three_cards.size() != 3) {
         throw std::invalid_argument("flop must have exactly three cards");
     }
+    require_distinct_cards("hero, flop and dead cards", {&hero_hole_cards, &flop_three_cards, &known_dead_cards});
     DeckBitset used;
     used.mark_cards(hero_hole_cards);
     used.mark_cards(flop_three_cards);

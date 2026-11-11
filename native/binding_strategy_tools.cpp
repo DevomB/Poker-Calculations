@@ -265,24 +265,35 @@ double equity_vs_range_safe(const std::vector<poker::Card>& hero, const std::vec
     }
 }
 
-Napi::Object legal_summary_from_state(Napi::Env env, const poker::PokerGameState& state) {
+Napi::Object legal_summary_from_state(Napi::Env env, const poker::PokerGameState& state, int hero_seat = -1) {
     Napi::Object o = Napi::Object::New(env);
     int idx = state.acting_index;
-    if (idx < 0 && !state.players.empty()) {
-        idx = 0;
+    if (hero_seat >= 0) {
+        idx = -1;
+        for (std::size_t i = 0; i < state.players.size(); ++i) {
+            if (state.players[i].seat == hero_seat) {
+                idx = static_cast<int>(i);
+                break;
+            }
+        }
     }
-    const bool valid = idx >= 0 && idx < static_cast<int>(state.players.size());
+    const bool valid = idx >= 0 && idx < static_cast<int>(state.players.size()) &&
+        state.phase != poker::GamePhase::Showdown && state.phase != poker::GamePhase::HandComplete &&
+        !state.players[static_cast<std::size_t>(idx)].folded && state.players[static_cast<std::size_t>(idx)].stack > 0;
     const int committed = valid ? state.players[static_cast<std::size_t>(idx)].committed_this_street : 0;
     const int stack = valid ? state.players[static_cast<std::size_t>(idx)].stack : 0;
-    const int to_call = std::max(0, state.current_bet - committed);
-    const int min_raise = state.current_bet + std::max(state.last_raise_increment, state.big_blind);
-    o.Set("canFold", to_call > 0);
-    o.Set("canCheck", to_call == 0);
-    o.Set("canCall", to_call > 0 && stack > 0);
-    o.Set("canRaise", stack > to_call);
+    const int to_call = valid ? std::max(0, state.current_bet - committed) : 0;
+    const bool can_be_called = valid && std::any_of(state.players.begin(), state.players.end(),
+        [&](const poker::Player& p) { return &p != &state.players[static_cast<std::size_t>(idx)] && !p.folded && p.stack > 0; });
+    const double max_raise = static_cast<double>(committed) + stack;
+    const double min_raise = valid ? std::min(max_raise, static_cast<double>(state.current_bet) + std::max({1, state.last_raise_increment, state.big_blind})) : 0;
+    o.Set("canFold", valid && to_call > 0);
+    o.Set("canCheck", valid && to_call == 0);
+    o.Set("canCall", valid && to_call > 0);
+    o.Set("canRaise", valid && stack > to_call && can_be_called);
     o.Set("toCall", to_call);
     o.Set("minRaiseTo", min_raise);
-    o.Set("maxRaiseTo", committed + stack);
+    o.Set("maxRaiseTo", max_raise);
     o.Set("actingIndex", idx);
     return o;
 }
@@ -876,7 +887,7 @@ Napi::Value DecideActionWithDiagnostics(const Napi::CallbackInfo& info) {
     const auto d = poker::decide_action(parsed.state, parsed.hero_hole, parsed.cfg, opp, parsed.hero_seat);
     Napi::Object o = Napi::Object::New(env);
     o.Set("decision", decision_to_js(env, d));
-    o.Set("legalActions", legal_summary_from_state(env, parsed.state));
+    o.Set("legalActions", legal_summary_from_state(env, parsed.state, parsed.hero_seat));
     o.Set("reason", "rule-based equity and pot-odds decision");
     return o;
 }
@@ -890,6 +901,10 @@ Napi::Value RunBotPolicyBatch(const Napi::CallbackInfo& info) {
         POKER_FAIL_TYPE(env, "config must be an object");
     }
     const poker::BotConfig cfg = poker_bind::parse_bot_config(info[1].As<Napi::Object>());
+    const bool has_models = info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull();
+    if (has_models && (!info[2].IsArray() || info[2].As<Napi::Array>().Length() != states.Length())) {
+        POKER_FAIL_TYPE(env, "opponentModels must be an array with one model or null per state");
+    }
     for (uint32_t i = 0; i < states.Length(); ++i) {
         poker::PokerGameState state;
         std::string err;
@@ -901,7 +916,15 @@ Napi::Value RunBotPolicyBatch(const Napi::CallbackInfo& info) {
         }
         std::vector<poker::Card> hero;
         poker_bind::resolve_hero_hole(state, -1, hero);
-        const auto decision = poker::decide_action(state, hero, cfg, nullptr, -1);
+        std::optional<poker::OpponentModel> opponent;
+        if (has_models) {
+            const Napi::Value model = info[2].As<Napi::Array>().Get(i);
+            if (!model.IsNull()) {
+                if (!model.IsObject() || model.IsArray()) POKER_FAIL_TYPE(env, "opponentModels entries must be objects or null");
+                opponent = poker_bind::parse_opponent_model(model.As<Napi::Object>());
+            }
+        }
+        const auto decision = poker::decide_action(state, hero, cfg, opponent ? &*opponent : nullptr, -1);
         Napi::Object row = Napi::Object::New(env);
         row.Set("decision", decision_to_js(env, decision));
         row.Set("legalActions", legal_summary_from_state(env, state));

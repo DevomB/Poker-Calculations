@@ -10,6 +10,7 @@
 #include "poker/fast_evaluator.hpp"
 #include "poker/monte_carlo.hpp"
 
+#include <cmath>
 #include <random>
 #include <stdexcept>
 
@@ -206,9 +207,11 @@ std::size_t parse_benchmark_iterations(const Napi::CallbackInfo& info, std::stri
     const int opts_idx = poker_bind::trailing_async_options_index(info);
     if (info.Length() >= 1 && info[0].IsNumber()) {
         const double n = info[0].As<Napi::Number>().DoubleValue();
-        if (n < 1.0) {
+        // NaN and Infinity used to reach the size_t cast (undefined; in practice a near-endless loop).
+        constexpr double kMaxIterations = 1e9;
+        if (!std::isfinite(n) || n < 1.0 || n > kMaxIterations) {
             if (err) {
-                *err = "benchmarkEvaluatorThroughput(iterations): iterations must be >= 1";
+                *err = "benchmarkEvaluatorThroughput(iterations): iterations must be a finite number from 1 to 1e9";
             }
             return 0;
         }
@@ -427,6 +430,18 @@ Napi::Value EvaluateHandStrengthFastBatch(const Napi::CallbackInfo& info) {
             if (!poker::parse_packed_cards(boards + i * static_cast<std::size_t>(board_cards),
                                            static_cast<std::size_t>(board_cards), board, &cerr)) {
                 POKER_FAIL_TYPE(env, "spot " + std::to_string(i) + " board: " + cerr);
+            }
+            std::uint64_t seen = 0;
+            bool duplicate = false;
+            for (const std::vector<poker::Card>* list : {&hole, &board}) {
+                for (const poker::Card& c : *list) {
+                    const std::uint64_t bit = std::uint64_t{1} << poker::deck_index_from_card(c);
+                    duplicate = duplicate || (seen & bit) != 0;
+                    seen |= bit;
+                }
+            }
+            if (duplicate) {
+                POKER_FAIL_TYPE(env, "spot " + std::to_string(i) + ": duplicate card");
             }
             out_d[i] = static_cast<double>(poker::evaluate_hand_strength_fast(hole, board));
         }

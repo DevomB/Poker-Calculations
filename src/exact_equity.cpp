@@ -51,6 +51,7 @@ double exact_hu_equity_vs_random_hand(const std::vector<Card>& hero_hole_cards,
         throw std::invalid_argument(
             "exactHuEquityVsRandomHand: board must be empty (preflop) or have 3..5 cards");
     }
+    require_distinct_cards("exactHuEquityVsRandomHand", {&hero_hole_cards, &board_cards});
     DeckBitset used;
     used.mark_cards(hero_hole_cards);
     used.mark_cards(board_cards);
@@ -124,6 +125,8 @@ double straight_made_flop_to_river_exact_probability(const std::vector<Card>& he
     if (flop_three_cards.size() != 3) {
         throw std::invalid_argument("straightMadeFlopToRiverExactProbability: flop must have exactly three cards");
     }
+    require_distinct_cards("straightMadeFlopToRiverExactProbability",
+                           {&hero_hole_cards, &flop_three_cards, &known_dead_cards});
     DeckBitset used;
     used.mark_cards(hero_hole_cards);
     used.mark_cards(flop_three_cards);

@@ -1,5 +1,7 @@
 /**
- * Block `npm publish` / `npm pack` without prebuilt native addons (unless skipped).
+ * Block `npm publish` / `npm pack` unless every supported platform's prebuilt addon is staged.
+ * A package with only the local platform's binary installs everywhere but fails to load on the
+ * rest, so one binary is not enough. The list matches the build matrix in npm-publish.yml.
  */
 const fs = require('fs');
 const path = require('path');
@@ -8,20 +10,26 @@ if (process.env.SKIP_PREBUILD_CHECK === '1') {
   process.exit(0);
 }
 
-const root = path.join(__dirname, '..');
-const pb = path.join(root, 'prebuilds');
-if (!fs.existsSync(pb)) {
-  console.error(`prebuilds/ missing at ${pb}`);
-  console.error('Build binaries in CI or locally: npm run build:native && node scripts/stage-prebuild.js <tuple>');
+const REQUIRED = [
+  'darwin-arm64/node.napi.node',
+  'darwin-x64/node.napi.node',
+  'linux-arm/node.napi.node',
+  'linux-arm64/node.napi.node',
+  'linux-arm64/node.napi.musl.node',
+  'linux-x64/node.napi.node',
+  'linux-x64/node.napi.musl.node',
+  'win32-arm64/node.napi.node',
+  'win32-x64/node.napi.node',
+];
+
+const pb = path.join(__dirname, '..', 'prebuilds');
+const missing = REQUIRED.filter((rel) => !fs.existsSync(path.join(pb, rel)));
+if (missing.length > 0) {
+  console.error(`Missing ${missing.length} of ${REQUIRED.length} prebuilt addons under ${pb}:`);
+  for (const rel of missing) console.error(`  ${rel}`);
+  console.error('Publish through the npm-publish workflow, which builds every target.');
+  console.error('Set SKIP_PREBUILD_CHECK=1 only to pack a local test build.');
   process.exit(1);
 }
 
-const tuples = fs.readdirSync(pb).filter((n) => !n.endsWith('.md'));
-const valid = tuples.some((t) => fs.existsSync(path.join(pb, t, 'node.napi.node')));
-if (!valid) {
-  console.error('No prebuilds/*/node.napi.node found.');
-  console.error('See README → Maintainers: publishing. Set SKIP_PREBUILD_CHECK=1 to force pack (not recommended).');
-  process.exit(1);
-}
-
-console.log('Prebuild check OK:', tuples.join(', '));
+console.log(`Prebuild check OK: all ${REQUIRED.length} targets present.`);

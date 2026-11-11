@@ -191,7 +191,7 @@ Use tuples like `win32-x64`, `linux-x64`, `darwin-arm64`. For Alpine/musl: `node
 
 Publishing is automated via [`.github/workflows/npm-publish.yml`](.github/workflows/npm-publish.yml) on `main` when `package.json` / `package-lock.json` change, using [npm trusted publishing (OIDC)](https://docs.npmjs.com/trusted-publishers). Bump `version` on `main`, keep the lockfile in sync, and let CI build prebuilds and publish when that version is not already on npm.
 
-Trusted publisher settings on npm must match `repository.url` in [`package.json`](package.json) and workflow filename `npm-publish.yml`. Manual publish: stage binaries under `prebuilds/`, then `npm publish` (or set `SKIP_PREBUILD_CHECK=1` only when intentionally publishing without binaries).
+Trusted publisher settings on npm must match `repository.url` in [`package.json`](package.json) and workflow filename `npm-publish.yml`. `npm pack` and `npm publish` refuse to run unless all nine platform binaries are staged under `prebuilds/` (the workflow builds them); `SKIP_PREBUILD_CHECK=1` bypasses that for a local test pack only.
 
 </details>
 

@@ -459,3 +459,43 @@ test('fast and legacy evaluators agree on every two- and three-card hand', () =>
     }
   }
 });
+
+test('benchmark iterations must be finite and bounded', () => {
+  for (const n of [NaN, Infinity, -Infinity, 0, 2e9]) {
+    assert.throws(() => poker.benchmarkEvaluatorThroughput(n), /finite number from 1 to 1e9/, String(n));
+    assert.throws(() => poker.benchmarkEvaluatorThroughputAsync(n), /finite number from 1 to 1e9/, String(n));
+  }
+  assert.ok(poker.benchmarkEvaluatorThroughput(1000).fastEvalsPerSecond > 0);
+});
+
+test('a card dealt twice is rejected, not evaluated', () => {
+  assert.throws(() => poker.evaluateBestHand(['Ah', 'Ah', 'Ah']), /duplicate card/);
+  assert.throws(() => poker.evaluateHandStrength(['Ah', 'Kd'], ['Ah']), /duplicate card/);
+  assert.throws(() => poker.evaluateHandStrengthFast(['Ah', 'Kd'], ['Ah']), /duplicate card/);
+  assert.throws(() => poker.evaluateHandCategory(['Ah', 'Ah'], []), /duplicate card/);
+  assert.throws(() => poker.evaluateHandStrengthFastBatch(new Uint8Array([50, 50]), new Uint8Array(0), 0), /spot 0: duplicate card/);
+  assert.throws(() => poker.exactHuEquityVsRandomHand(['Ah', 'Kd'], ['Ah', '2c', '3d']), /duplicate card Ah/);
+  assert.throws(() => poker.exactHeroRunoutVulnerability(['Ah', 'Kd'], ['Qh', '2c', '3d'], ['Qh']), /duplicate card Qh/);
+  assert.throws(() => poker.flushMadeFlopToRiverExactProbability(['Ah', 'Kh'], ['Qh', '2h', '3d'], ['Kh']), /duplicate card Kh/);
+  assert.throws(() => poker.straightMadeFlopToRiverExactProbability(['Ah', 'Kh'], ['Qh', 'Jh', '3d'], ['Qh']), /duplicate card Qh/);
+  // Distinct cards still evaluate.
+  assert.equal(poker.evaluateBestHand(['Ah', 'Ad', 'Ac']).rank, 'threeOfAKind');
+  assert.deepEqual(Array.from(poker.evaluateHandStrengthFastBatch(new Uint8Array([50, 49]), new Uint8Array(0), 0)), [
+    poker.evaluateHandStrengthFast(['Ah', 'Ac'], []),
+  ]);
+});
+
+test('encode parses exactly the card strings the native parser accepts', () => {
+  const { cardStringToDeckIndex, deckIndexToCardString } = require(path.join(__dirname, '..', 'encode.js'));
+  const tokens = ['Ah', 'ah', 'AH', 'aH', 'Td', 'td', '10d', '10D', ' Kc ', '\tKc\n', 'Ahjunk', 'Ahh', '10hx', '1h', '10',
+    'A', '', 'Xh', 'Ax', '\u00a0Ah', 'A h', '2s', '9c'];
+  for (const t of tokens) {
+    const ok = poker.validateCardString(t);
+    if (ok) {
+      assert.equal(deckIndexToCardString(cardStringToDeckIndex(t)), poker.canonicalCardString(t), JSON.stringify(t));
+    } else {
+      assert.throws(() => cardStringToDeckIndex(t), /invalid card string/, JSON.stringify(t));
+    }
+  }
+  assert.equal(poker.evaluateBestHand(['ah', 'kd', 'qc', 'jh', 'td']).rank, 'straight');
+});

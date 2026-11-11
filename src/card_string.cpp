@@ -21,13 +21,20 @@ constexpr unsigned char ascii_toupper(unsigned char c) noexcept {
     return c;
 }
 
+constexpr unsigned char ascii_tolower(unsigned char c) noexcept {
+    if (c >= 'A' && c <= 'Z') {
+        return static_cast<unsigned char>(c - 'A' + 'a');
+    }
+    return c;
+}
+
 constexpr std::array<std::uint8_t, 256> make_rank_lut() {
     std::array<std::uint8_t, 256> lut{};
     lut.fill(kLutInvalid);
     std::uint8_t rank = 0;
     for (const char ch : std::string_view{"23456789TJQKA"}) {
-        const unsigned char lo = static_cast<unsigned char>(ch);
-        const unsigned char up = ascii_toupper(lo);
+        const unsigned char up = static_cast<unsigned char>(ch);
+        const unsigned char lo = ascii_tolower(up);
         lut[lo] = rank;
         lut[up] = rank;
         ++rank;
@@ -156,6 +163,26 @@ bool cards_have_duplicate(const std::vector<Card>& cards) {
         seen[static_cast<std::size_t>(idx)] = true;
     }
     return false;
+}
+
+void require_distinct_cards(const char* context, std::initializer_list<const std::vector<Card>*> lists) {
+    std::array<bool, 52> seen{};
+    for (const std::vector<Card>* list : lists) {
+        for (const Card& c : *list) {
+            const int idx = deck_index_from_card(c);
+            if (idx < 0 || idx > 51) {
+                continue;
+            }
+            if (seen[static_cast<std::size_t>(idx)]) {
+                constexpr std::string_view kRanks{"23456789TJQKA"};
+                constexpr std::string_view kSuits{"cdhs"};
+                throw std::invalid_argument(std::string(context) + ": duplicate card " +
+                                            kRanks[static_cast<std::size_t>(c.rank())] +
+                                            kSuits[static_cast<std::size_t>(c.suit())]);
+            }
+            seen[static_cast<std::size_t>(idx)] = true;
+        }
+    }
 }
 
 bool parse_card_string_unchecked(const char* p, std::size_t n, Card& out) {

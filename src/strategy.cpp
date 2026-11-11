@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
+#include <stdexcept>
 
 namespace poker {
 
@@ -22,10 +23,7 @@ int resolve_hero_seat(const PokerGameState& state, int hero_seat) {
         state.acting_index < static_cast<int>(state.players.size())) {
         return state.players[static_cast<std::size_t>(state.acting_index)].seat;
     }
-    if (!state.players.empty()) {
-        return state.players[0].seat;
-    }
-    return 0;
+    throw std::invalid_argument("decideAction requires an acting player or an explicit hero seat");
 }
 
 double equity_estimate(const PokerGameState& state, const std::vector<Card>& hole,
@@ -51,8 +49,17 @@ Decision decide_action(const PokerGameState& game_state, const std::vector<Card>
     Decision out{};
     const int seat = resolve_hero_seat(game_state, hero_seat);
     BotView view = make_bot_view(game_state, seat);
+    if (game_state.phase == GamePhase::Showdown || game_state.phase == GamePhase::HandComplete ||
+        view.hero_stack <= 0 || std::none_of(game_state.players.begin(), game_state.players.end(),
+            [seat](const Player& p) { return p.seat == seat && !p.folded; })) {
+        throw std::invalid_argument("decideAction requires a live hero with chips in an unfinished hand");
+    }
 
-    std::mt19937 rng(cfg.rng_seed ^ static_cast<std::uint32_t>(game_state.pot * 1315423911));
+    if (!std::isfinite(cfg.raise_pot_fraction)) {
+        throw std::invalid_argument("raisePotFraction must be finite");
+    }
+    std::mt19937 rng(cfg.rng_seed ^ (static_cast<std::uint32_t>(game_state.pot) * 1315423911U));
+    // ponytail: One-street equity thresholds ignore future betting; upgrade to range-conditioned action EVs.
     double equity = equity_estimate(game_state, player_hand, cfg, rng, should_cancel);
 
     if (opponent_model) {
@@ -62,46 +69,33 @@ Decision decide_action(const PokerGameState& game_state, const std::vector<Card>
     }
 
     const double po = pot_odds_ratio(view.pot, view.to_call);
-    const double ev_call = expected_value_call(equity, view.pot, view.to_call);
     const double risk = std::clamp(static_cast<double>(cfg.risk_tolerance), 0.05, 0.95);
-
-    if (view.to_call == 0) {
-        const double raise_threshold =
-            std::clamp(static_cast<double>(cfg.aggression_threshold), 0.0, 1.0);
-        if (equity >= raise_threshold) {
-            out.action = Action::Raise;
-            const int bb = std::max(1, view.big_blind);
-            out.raise_by = std::max(bb, static_cast<int>(std::round(view.pot * cfg.raise_pot_fraction)));
+    if (view.to_call > 0) {
+        if (expected_value_call(equity, view.pot, view.to_call) < 0.0 || equity + 1e-9 < po * risk) {
+            out.action = Action::Fold;
             return out;
         }
-        out.action = Action::Check;
-        return out;
+        if (equity < po * (risk + 0.1)) {
+            out.action = Action::Call;
+            return out;
+        }
     }
 
-    const double ev_call_now = expected_value_call(equity, view.pot, view.to_call);
-    if (ev_call_now < 0.0) {
-        out.action = Action::Fold;
-        return out;
-    }
-
-    if (equity + 1e-9 < po * risk) {
-        out.action = Action::Fold;
-        return out;
-    }
-
-    if (ev_call_now >= 0.0 && equity < po * (risk + 0.1)) {
-        out.action = Action::Call;
-        return out;
-    }
-
-    if (equity >= static_cast<double>(cfg.aggression_threshold) && view.hero_stack > view.to_call) {
+    const bool can_be_called = std::any_of(game_state.players.begin(), game_state.players.end(),
+        [seat](const Player& p) { return p.seat != seat && !p.folded && p.stack > 0; });
+    if (equity >= std::clamp(static_cast<double>(cfg.aggression_threshold), 0.0, 1.0) &&
+        view.hero_stack > view.to_call && can_be_called) {
         out.action = Action::Raise;
-        const int bb = std::max(1, view.big_blind);
-        out.raise_by = std::max(bb, static_cast<int>(std::round(view.pot * cfg.raise_pot_fraction)));
+        const int maximum = view.hero_stack - view.to_call;
+        // A short all-in may be smaller than a full minimum raise.
+        const int minimum = std::min(maximum, std::max({1, view.big_blind, game_state.last_raise_increment}));
+        out.raise_by = static_cast<int>(std::clamp(
+            std::round(static_cast<double>(view.pot) * cfg.raise_pot_fraction),
+            static_cast<double>(minimum), static_cast<double>(maximum)));
         return out;
     }
 
-    out.action = Action::Call;
+    out.action = view.to_call == 0 ? Action::Check : Action::Call;
     return out;
 }
 

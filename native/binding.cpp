@@ -64,6 +64,9 @@ Napi::Value EvaluateBestHand(const Napi::CallbackInfo& info) {
     if (cards.empty() || cards.size() > 7) {
         POKER_FAIL_TYPE(env, "need 1..7 cards");
     }
+    if (!poker_bind::require_distinct_js_cards(env, "evaluateBestHand", {&cards})) {
+        return env.Null();
+    }
     poker_bind::EvalObjectFormat fmt = poker_bind::EvalObjectFormat::Full;
     if (info.Length() >= 2 && info[1].IsObject()) {
         const Napi::Object opts = info[1].As<Napi::Object>();

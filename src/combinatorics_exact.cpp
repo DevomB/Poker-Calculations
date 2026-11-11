@@ -125,6 +125,7 @@ void validate_board_runout(const std::vector<Card>& hero, const std::vector<Card
 
 DeckBitset dead_from_cards(const std::vector<Card>& hero, const std::vector<Card>& board,
                            const std::vector<Card>& dead) {
+    require_distinct_cards("hero, board and dead cards", {&hero, &board, &dead});
     DeckBitset u;
     u.mark_cards(hero);
     u.mark_cards(board);

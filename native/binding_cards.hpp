@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -35,9 +36,14 @@ enum class EvalObjectFormat { Full, Slim };
 [[nodiscard]] bool try_parse_cards_from_js(Napi::Env env, const Napi::Value& v, std::vector<poker::Card>& out,
                                            std::string* err = nullptr);
 
+/** Parses holeCards and board; TypeError on a parse failure or a card shared between them. */
 [[nodiscard]] bool try_parse_hole_and_board(Napi::Env env, const Napi::CallbackInfo& info,
                                             std::vector<poker::Card>& hole, std::vector<poker::Card>& board,
                                             const char* signature);
+
+/** TypeError "<name>: duplicate card" (name = signature up to '(') if any card repeats across lists. */
+[[nodiscard]] bool require_distinct_js_cards(Napi::Env env, const char* signature,
+                                             std::initializer_list<const std::vector<poker::Card>*> lists);
 
 [[nodiscard]] Napi::Object eval_to_object(Napi::Env env, const poker::HandEvaluation& e,
                                           EvalObjectFormat format = EvalObjectFormat::Full);

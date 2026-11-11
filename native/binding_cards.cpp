@@ -7,6 +7,7 @@
 
 #include <array>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
 
 namespace poker_bind {
@@ -182,6 +183,22 @@ bool try_parse_hole_and_board(Napi::Env env, const Napi::CallbackInfo& info, std
     }
     if (!try_parse_cards_from_js(env, info[1], board)) {
         return false;
+    }
+    return require_distinct_js_cards(env, signature, {&hole, &board});
+}
+
+bool require_distinct_js_cards(Napi::Env env, const char* signature,
+                               std::initializer_list<const std::vector<poker::Card>*> lists) {
+    std::array<bool, 52> seen{};
+    for (const std::vector<poker::Card>* list : lists) {
+        for (const poker::Card& c : *list) {
+            const auto idx = static_cast<std::size_t>(poker::deck_index_from_card(c));
+            if (seen[idx]) {
+                const std::string_view sig{signature};
+                return fail_type(env, std::string(sig.substr(0, sig.find('('))) + ": duplicate card");
+            }
+            seen[idx] = true;
+        }
     }
     return true;
 }
